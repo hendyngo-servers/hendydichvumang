@@ -11,3 +11,6 @@ dist/
 *.pem
 .secrets/
 .cloudflare-output*
+
+.cloudflare-outputs.json
+apps/telegram-worker/wrangler.generated.toml

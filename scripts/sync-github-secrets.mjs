@@ -5,7 +5,14 @@ import { resolve } from "node:path";
 
 const REPOSITORY = "hendyngo-servers/hendydichvumang";
 const REQUIRED = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "BOT_TOKEN"];
-const envPath = resolve(process.cwd(), ".env");
+const OPTIONAL = [
+  "PAYMENT_BANK_CODE",
+  "PAYMENT_BANK_NAME",
+  "PAYMENT_ACCOUNT_NUMBER",
+  "PAYMENT_ACCOUNT_NAME",
+  "PAYMENT_QR_URL",
+  "PAYMENT_TRANSFER_NOTE_PREFIX"
+];
 
 function parseEnv(source) {
   const result = {};
@@ -23,11 +30,15 @@ function parseEnv(source) {
   return result;
 }
 
+function gh(args, input) {
+  return spawnSync("gh", args, { input, encoding: "utf8", windowsHide: true });
+}
+
 let config;
 try {
-  config = parseEnv(readFileSync(envPath, "utf8"));
-} catch (error) {
-  console.error("Không đọc được file .env. Hãy sao chép .env.example thành .env và điền 3 giá trị bí mật.");
+  config = parseEnv(readFileSync(resolve(process.cwd(), ".env"), "utf8"));
+} catch {
+  console.error("Không đọc được file .env. Hãy sao chép .env.example thành .env và điền 3 giá trị bắt buộc.");
   process.exit(1);
 }
 
@@ -37,24 +48,38 @@ if (missing.length) {
   process.exit(1);
 }
 
-const ghCheck = spawnSync("gh", ["auth", "status"], { encoding: "utf8" });
-if (ghCheck.error || ghCheck.status !== 0) {
+const auth = gh(["auth", "status"]);
+if (auth.error || auth.status !== 0) {
   console.error("GitHub CLI chưa đăng nhập. Hãy chạy: gh auth login");
   process.exit(1);
 }
 
 for (const name of REQUIRED) {
-  // Truyền secret qua stdin, tuyệt đối không đưa giá trị vào command line hoặc log.
-  const result = spawnSync("gh", ["secret", "set", name, "--repo", REPOSITORY], {
-    input: config[name] + "\n",
-    encoding: "utf8",
-    windowsHide: true
-  });
+  const result = gh(["secret", "set", name, "--repo", REPOSITORY], config[name] + "\n");
   if (result.error || result.status !== 0) {
-    console.error(`Không thể cập nhật GitHub Secret ${name}. Kiểm tra quyền ghi Actions secrets của GitHub CLI.`);
+    console.error(`Không thể cập nhật GitHub Secret ${name}. Kiểm tra quyền ghi Actions secrets.`);
     if (result.stderr) console.error(result.stderr.trim());
     process.exit(1);
   }
   console.log(`Đã đồng bộ GitHub Secret: ${name}`);
 }
-console.log("Hoàn tất. Workflow sẽ tự tạo WEBHOOK_SECRET và tự khai báo URL Cloudflare khi triển khai.");
+
+for (const name of OPTIONAL) {
+  const value = String(config[name] || "").trim();
+  if (value) {
+    const result = gh(["secret", "set", name, "--repo", REPOSITORY], value + "\n");
+    if (result.error || result.status !== 0) {
+      console.error(`Không thể cập nhật GitHub Secret tùy chọn ${name}.`);
+      if (result.stderr) console.error(result.stderr.trim());
+      process.exit(1);
+    }
+    console.log(`Đã đồng bộ cấu hình thanh toán: ${name}`);
+  } else {
+    // Remove an old optional secret when the corresponding .env value is blank.
+    const result = gh(["secret", "delete", name, "--repo", REPOSITORY]);
+    if (!result.error && result.status === 0) console.log(`Đã xóa cấu hình tùy chọn: ${name}`);
+    else console.log(`Bỏ qua cấu hình tùy chọn chưa đặt: ${name}`);
+  }
+}
+
+console.log("Hoàn tất. Workflow sẽ tự cấu hình Worker, webhook và các thông tin nhận thanh toán tùy chọn.");

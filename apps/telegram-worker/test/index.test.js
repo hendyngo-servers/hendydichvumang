@@ -88,10 +88,13 @@ test("từ chối initData quá hạn", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.error, "expired_or_invalid_auth_date");
 });
-test("health endpoint trả trạng thái Worker", async () => {
-  const response = await worker.fetch(new Request("https://example.workers.dev/health"), {});
+test("health endpoint trả trạng thái Worker khi D1 hoạt động", async () => {
+  const env = { DB: { prepare: () => ({ first: async () => ({ ok: 1 }) }) }, CACHE: {} };
+  const response = await worker.fetch(new Request("https://example.workers.dev/health"), env);
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).status, "healthy");
+  const body = await response.json();
+  assert.equal(body.status, "healthy");
+  assert.equal(body.components.database, "ready");
 });
 test("webhook từ chối secret sai", async () => {
   const request = new Request("https://example.workers.dev/telegram/webhook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ update_id: 1 }) });

@@ -1,8 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { mainKeyboard, screenFor, escapeHtml, constantTimeEqual, validateInitData } from "../src/index.js";
+import { deriveWebhookSecret } from "../../../scripts/generate-webhook-secret.mjs";
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
+
+test("webhook secret được sinh ổn định từ một Bot Token", () => {
+  const token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
+  const first = deriveWebhookSecret(token);
+  assert.equal(first, deriveWebhookSecret(token));
+  assert.match(first, /^[a-f0-9]{64}$/);
+  assert.notEqual(first, deriveWebhookSecret("987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"));
+});
 
 test("menu chính hiển thị các nhóm OTP, Proxy, VIP, Code, Tool và Live", () => {
   const buttons = mainKeyboard({ MINI_APP_URL: "https://example.pages.dev/" }).inline_keyboard.flat();

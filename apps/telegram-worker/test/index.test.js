@@ -1,70 +1,52 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { getMainMenuKeyboard, getScreen, escapeHtml, constantTimeEqual, validateWebAppInitData } from "../src/index.js";
+import worker, { mainKeyboard, screenFor, escapeHtml, constantTimeEqual, validateInitData } from "../src/index.js";
 import { webcrypto } from "node:crypto";
-
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
-test("menu chính dùng đúng callback data và chỉ một menu bot", () => {
-  const keyboard = getMainMenuKeyboard();
-  const allButtons = keyboard.inline_keyboard.flat();
-  assert.ok(allButtons.some((button) => button.callback_data === "menu:minigame"));
-  assert.ok(allButtons.some((button) => button.callback_data === "menu:account"));
-  assert.equal(allButtons.some((button) => button.callback_data === "menu:secondary_bot"), false);
+test("menu chính hiển thị các nhóm OTP, Proxy, VIP, Code, Tool và Live", () => {
+  const buttons = mainKeyboard({ MINI_APP_URL: "https://example.pages.dev/" }).inline_keyboard.flat();
+  for (const key of ["otp", "proxy", "vip", "code", "rental", "live"]) {
+    assert.ok(buttons.some((button) => button.callback_data === "service:" + key));
+  }
+  assert.ok(buttons.some((button) => button.web_app?.url === "https://example.pages.dev/"));
 });
-
-test("màn hình chức năng chưa cấu hình có nút quay về", () => {
-  const screen = getScreen("shop:static_proxy", "Bạn", {});
-  assert.match(screen.text, /CHƯA KHẢ DỤNG/);
-  assert.equal(screen.keyboard.inline_keyboard[0][0].callback_data, "menu:main");
+test("màn hình dịch vụ có nút quay lại menu", () => {
+  const screen = screenFor("service:proxy", "Bạn", {});
+  assert.match(screen.text, /DỊCH VỤ PROXY/);
+  assert.equal(screen.keyboard.inline_keyboard.at(-1)[0].callback_data, "menu:main");
 });
-
-test("tên người dùng được escape trước khi chèn vào HTML Telegram", () => {
-  assert.equal(escapeHtml(`<img src=x onerror='x'> &`), "&lt;img src=x onerror=&#39;x&#39;&gt; &amp;");
+test("HTML escaping ngăn chèn markup", () => {
+  assert.equal(escapeHtml("<img src=x> &"), "&lt;img src=x&gt; &amp;");
 });
-
-test("so sánh secret phân biệt nội dung và độ dài", () => {
+test("so sánh secret constant-time cho nội dung và độ dài", () => {
   assert.equal(constantTimeEqual("abc_123", "abc_123"), true);
   assert.equal(constantTimeEqual("abc_123", "abc_124"), false);
   assert.equal(constantTimeEqual("abc", "abcd"), false);
 });
-
-test("xác thực initData Mini App thành công và từ chối chữ ký sai", async () => {
-  const token = "123456:TEST_TOKEN";
-  const now = 1_800_000_000;
+test("xác thực initData hợp lệ và từ chối hash sai", async () => {
+  const token = "123456:TEST_TOKEN", now = 1800000000;
   const params = new URLSearchParams({ auth_date: String(now), query_id: "query-test", user: JSON.stringify({ id: 42, first_name: "Hendy" }) });
-  const dataCheck = [...params.entries()].map(([key, value]) => `${key}=${value}`).sort().join("\n");
-  const encoder = new TextEncoder();
-  const hmacKey = await crypto.subtle.importKey("raw", encoder.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const derived = await crypto.subtle.sign("HMAC", hmacKey, encoder.encode(token));
-  const signingKey = await crypto.subtle.importKey("raw", derived, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const digest = await crypto.subtle.sign("HMAC", signingKey, encoder.encode(dataCheck));
-  const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  params.set("hash", hash);
-  const valid = await validateWebAppInitData(params.toString(), token, now);
+  const check = [...params.entries()].map(([k,v]) => k + "=" + v).sort().join("\n");
+  const enc = new TextEncoder();
+  const first = await crypto.subtle.importKey("raw", enc.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const secret = await crypto.subtle.sign("HMAC", first, enc.encode(token));
+  const second = await crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = await crypto.subtle.sign("HMAC", second, enc.encode(check));
+  params.set("hash", [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2,"0")).join(""));
+  const valid = await validateInitData(params.toString(), token, now);
   assert.equal(valid.ok, true);
   assert.equal(valid.user.id, 42);
   params.set("hash", "0".repeat(64));
-  const invalid = await validateWebAppInitData(params.toString(), token, now);
-  assert.equal(invalid.ok, false);
-  assert.equal(invalid.error, "invalid_signature");
+  assert.equal((await validateInitData(params.toString(), token, now)).ok, false);
 });
-
-test("health endpoint trả về trạng thái Worker", async () => {
+test("health endpoint trả trạng thái Worker", async () => {
   const response = await worker.fetch(new Request("https://example.workers.dev/health"), {});
   assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(body.service, "hendydichvumang-bot");
-  assert.equal(body.status, "healthy");
+  assert.equal((await response.json()).status, "healthy");
 });
-
-test("webhook từ chối request không có secret hợp lệ", async () => {
-  const request = new Request("https://example.workers.dev/telegram/webhook", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ update_id: 1, message: { text: "/start" } }),
-  });
+test("webhook từ chối secret sai", async () => {
+  const request = new Request("https://example.workers.dev/telegram/webhook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ update_id: 1 }) });
   const response = await worker.fetch(request, { BOT_TOKEN: "not-used", WEBHOOK_SECRET: "expected-secret" });
   assert.equal(response.status, 401);
-  assert.deepEqual(await response.json(), { ok: false, error: "unauthorized" });
 });

@@ -60,7 +60,7 @@ hendydichvumang/
 | POST | /api/payment/config | Trả thông tin STK/QR sau khi xác thực Mini App |
 | GET | /api/services | Danh mục dịch vụ (D1, cache KV 60 giây) |
 | POST | /api/dashboard | Hồ sơ, số dư ví và thống kê đọc từ D1 |
-| POST | /api/tickets | Kiểm tra yêu cầu hỗ trợ; hiện trả 503 đến khi cấu hình kho lưu |
+| POST | /api/tickets | Lưu ticket mới vào D1 sau khi xác thực Telegram |
 
 D1 migration khởi tạo users, wallet_accounts, wallet_ledger, topup_orders, payment_events, orders, proxy_leases, otp_orders, vip_memberships, vip_checkins, tickets và service_catalog. API xác thực tự đồng bộ người dùng vào D1, Dashboard đọc ví/đơn hàng/ticket, Ticket được lưu thực tế vào D1. KV cache danh mục dịch vụ trong 60 giây.
 
@@ -125,7 +125,7 @@ SUPPORT_URL=
 
 Các trường ngân hàng là tùy chọn. Khi có ngân hàng, STK và tên chủ tài khoản, bot `/nap` và Mini App sẽ hiển thị thông tin nhận tiền. Nếu có `PAYMENT_QR_URL`, Worker dùng URL HTTPS đó; nếu không, Worker tạo URL ảnh VietQR từ `PAYMENT_BANK_CODE`, số tài khoản và nội dung chuyển khoản. QR được tạo để điền sẵn thông tin chuyển khoản, không xác nhận việc tiền đã vào tài khoản. Tài liệu SePay mô tả luồng QR cần kết hợp webhook để xác nhận giao dịch: <https://developer.sepay.vn/vi/sepay-webhooks/tao-qr-va-form-thanh-toan>.
 
-**Chưa bật tự động cộng tiền:** repository hiện chưa có D1 wallet/ledger, bảng đơn nạp, endpoint webhook ngân hàng hoặc kiểm tra chữ ký nhà cung cấp. Không được cộng số dư chỉ vì người dùng mở QR hoặc gửi ảnh biên lai. Muốn tự động xác nhận cần đăng ký SePay hoặc API ngân hàng, lấy API key/HMAC secret từ nhà cung cấp, rồi triển khai webhook + D1 transaction chống giao dịch trùng. Những khóa đó không tự sinh được và chỉ nên thêm sau khi kết nối nhà cung cấp.
+**Chưa bật tự động cộng tiền:** D1 đã có bảng ví, wallet ledger, đơn nạp và payment events, nhưng chưa có endpoint webhook ngân hàng, xác thực chữ ký nhà cung cấp hoặc logic đối soát giao dịch. Không được cộng số dư chỉ vì người dùng mở QR hoặc gửi ảnh biên lai. Muốn tự động xác nhận cần đăng ký SePay hoặc API ngân hàng, lấy API key/HMAC secret từ nhà cung cấp rồi triển khai webhook + D1 transaction chống giao dịch trùng. Những khóa đó không tự sinh được và chỉ nên thêm sau khi kết nối nhà cung cấp.
 
 ### Những cấu hình hệ thống tự tạo
 
@@ -149,13 +149,17 @@ Cron Triggers được khai báo trong Wrangler: mỗi 5 phút đánh dấu đơ
 
 Bổ sung tên secret/biến vào workflow bootstrap hoặc khai báo binding trong `wrangler.toml`; workflow sẽ cập nhật trên Cloudflare khi deploy. Chỉ giữ trong GitHub Secrets những giá trị cần bảo mật; các URL/ID công khai có thể được suy ra hoặc ghi trong cấu hình không nhạy cảm.
 
-## Triển khai
+## Triển khai Cloudflare
 
-1. Tạo Cloudflare Pages project tên `hendydichvumang`.
-2. Kiểm tra `MINI_APP_URL` và `MINI_APP_ORIGIN` trong `apps/telegram-worker/wrangler.toml` đúng domain Pages thực tế.
-3. Thêm đủ GitHub Secrets và Variables như trên.
-4. Push lên nhánh `main` hoặc chạy workflow trong tab Actions.
-5. Workflow Worker deploy backend, đặt secret và đăng ký webhook Telegram. Workflow Pages thay placeholder API URL trong HTML rồi deploy frontend.
+1. Tạo file `.env` từ `.env.example`, điền ba cấu hình gốc và các trường thanh toán/CSKH tùy chọn.
+2. Cài GitHub CLI, chạy `gh auth login`, sau đó chạy `npm run secrets:sync` để đồng bộ Secrets lên GitHub.
+3. Tạo Cloudflare API Token có quyền Workers Scripts Read/Write, Pages Read/Write, D1 Read/Write và Workers KV Storage Read/Write.
+4. Push lên nhánh `main` hoặc chạy workflow trong GitHub Actions.
+5. Workflow tự tạo/tìm workers.dev subdomain, Pages project, D1 database và KV namespace; sinh file Wrangler riêng; áp dụng migration D1; deploy Worker; cài Worker Secrets; đăng ký webhook Telegram và danh sách lệnh.
+6. Workflow Pages tự lấy URL Worker và deploy Mini App. Không cần tự điền D1 ID, KV ID, Worker URL hay webhook URL.
+7. Kiểm tra `https://<worker>.workers.dev/health`; hệ thống phải trả HTTP 200 và `components.database = ready`.
+
+Không commit `.env` hoặc file cấu hình sinh tự động. `apps/telegram-worker/wrangler.toml` là mẫu có placeholder; `wrangler.generated.toml` chỉ được tạo trong lúc bootstrap và được Git bỏ qua.
 
 ## Chạy và kiểm tra local
 
@@ -165,16 +169,17 @@ Yêu cầu Node.js 22+:
 npm install
 npm run check
 npm test
+```
+
+Chạy local (cần `.env` có `CLOUDFLARE_API_TOKEN` và `CLOUDFLARE_ACCOUNT_ID`):
+
+```bash
+npm run cloudflare:bootstrap
+npm run db:migrate:local
 npm run dev:worker
 ```
 
-Deploy thủ công:
-
-```bash
-npm run deploy:worker
-npm run deploy:pages
-npm run webhook:set
-```
+Lệnh bootstrap tạo `.cloudflare-outputs.json` và `wrangler.generated.toml`; cả hai đều được Git bỏ qua. Khuyến nghị dùng GitHub Actions để deploy production. Lệnh deploy thủ công yêu cầu chạy bootstrap trước, sau đó `npm run db:migrate`, `npm run deploy:worker` và `npm run deploy:pages`.
 
 ## Lưu ý trạng thái nghiệp vụ
 

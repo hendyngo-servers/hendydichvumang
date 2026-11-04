@@ -1,175 +1,92 @@
 # HENDY DỊCH VỤ MẠNG
-## Telegram Bot đơn + Mini App trên Cloudflare
 
-Repository triển khai **một Telegram Bot duy nhất**. Cloudflare Workers tiếp nhận webhook và xử lý nghiệp vụ bot; Cloudflare Pages phân phối giao diện Mini App tiếng Việt. Bot mở Mini App khi người dùng chọn mục quản lý tài khoản.
+Một Telegram Bot duy nhất chạy trên Cloudflare Workers và Mini App tiếng Việt chạy trên Cloudflare Pages.
 
----
-
-## 1. SƠ ĐỒ HỆ THỐNG VÀ LUỒNG XỬ LÝ
+## Sơ đồ hệ thống
 
 ```text
-                    ┌──────────────────────────┐
-                    │      NGƯỜI DÙNG           │
-                    │ Telegram: nhắn tin / bấm nút│
-                    └────────────┬─────────────┘
-                                 │
-                                 ▼
-                    ┌──────────────────────────┐
-                    │       TELEGRAM API        │
-                    │ Nhận tin nhắn, callback   │
-                    └────────────┬─────────────┘
-                                 │ HTTPS Webhook
-                                 ▼
-┌───────────────────────────────────────────────────────────────┐
-│          CLOUDFLARE WORKERS — TELEGRAM BOT BACKEND             │
-│          Worker: hendydichvumang-bot                           │
-│                                                               │
-│  1. Nhận POST /telegram/webhook                                │
-│  2. Kiểm tra X-Telegram-Bot-Api-Secret-Token                   │
-│  3. Phân tích message / callback_query                         │
-│  4. Xử lý lệnh /start, /menu, /help và điều hướng menu         │
-│  5. Gọi Telegram Bot API để gửi/sửa tin nhắn                   │
-│                                                               │
-│  Inline Keyboard:                                              │
-│   • Minigame Live       • Thuê Tool                            │
-│   • Mua hàng / Proxy    • Nạp tiền                             │
-│   • Kho công cụ         • Quản lý tài khoản                    │
-│   • Giới thiệu / CSKH   • Các nhánh Code và dịch vụ mở rộng    │
-│                                                               │
-│  API xác thực Mini App: POST /api/telegram/auth                │
-│  Kiểm tra chữ ký HMAC và thời hạn Telegram WebApp initData    │
-└───────────────────────┬───────────────────────────────────────┘
-                        │
-             ┌──────────┴───────────┐
-             │                      │
-             ▼                      ▼
-┌────────────────────────┐   ┌────────────────────────────┐
-│ TELEGRAM BOT API       │   │ TÙY CHỌN: MINI APP / WEB CŨ│
-│ sendMessage            │   │ Mini App mở từ nút web_app │
-│ editMessageText        │   │ Web cũ là liên kết mở rộng  │
-│ answerCallbackQuery    │   │ và cần cấu hình riêng       │
-└────────────────────────┘   └──────────────┬─────────────┘
-                                            │
-                                            ▼
-┌───────────────────────────────────────────────────────────────┐
-│       CLOUDFLARE PAGES — MINI APP FRONTEND                     │
-│       https://hendydichvumang.pages.dev                        │
-│                                                               │
-│  • index.html: cấu trúc trang / danh mục dịch vụ               │
-│  • styles.css: giao diện responsive, Dark / Neon               │
-│  • app.js: tương tác giao diện và Telegram WebApp SDK          │
-│  • config.js: địa chỉ API Worker được chèn lúc deploy          │
-│                                                               │
-│  Luồng xác thực:                                                │
-│  Telegram WebApp initData                                      │
-│       → POST Worker /api/telegram/auth                         │
-│       → Worker kiểm tra chữ ký HMAC + auth_date                │
-│       → Trả kết quả xác thực cho Mini App                      │
-│                                                               │
-│  Khu vực có thể phát triển tiếp:                               │
-│  Hồ sơ • Thống kê • Ticket CSKH • Đăng nhập Tool Live           │
-│  Popup / Modal và CAPTCHA cần tích hợp API, chính sách và       │
-│  nhà cung cấp CAPTCHA trước khi đưa vào sử dụng thực tế.       │
-└───────────────────────────────────────────────────────────────┘
+Người dùng Telegram
+       |
+       v
+Cloudflare Workers - Telegram Bot Backend
+  - Telegram webhook và Telegram Bot API
+  - Tin nhắn HTML, Inline Keyboard
+  - Menu OTP / Proxy / VIP / Code / Thuê Tool / Minigame Live
+  - Điều hướng Mini App và liên kết ngoài
+  - Xác thực Telegram WebApp initData bằng HMAC
+       |
+       +----> Cloudflare Pages - Mini App
+                - Giao diện tối ưu mobile
+                - Hồ sơ Telegram và bảng thống kê
+                - Khu vực tạo ticket hỗ trợ
+                - Modal đăng nhập Tool Live / CAPTCHA placeholder
 ```
 
-### Nguyên tắc phân chia
-
-- **Telegram Bot** là điểm tiếp nhận và điều hướng chính; chỉ cấu hình một `BOT_TOKEN`.
-- **Cloudflare Workers** xử lý webhook, kiểm tra secret, xử lý callback và xác thực dữ liệu Telegram Mini App.
-- **Cloudflare Pages** chỉ phân phối frontend tĩnh. Mini App gọi API Worker qua HTTPS; không đặt Bot Token hoặc secret trong JavaScript phía trình duyệt.
-- **Telegram WebApp initData** phải được gửi về Worker để kiểm tra chữ ký. Không dùng `initDataUnsafe` làm bằng chứng xác thực.
-- Các chức năng thanh toán, số dư ví, đơn hàng Proxy, kho VIP, OTP, cấp quyền Tool và ticket cần được kết nối backend nghiệp vụ cùng cơ sở dữ liệu trước khi bật giao dịch thật.
-
-> **Trạng thái mã nguồn hiện tại:** webhook, menu cơ bản, điều hướng Mini App và endpoint kiểm tra Telegram WebApp initData đã có trong Worker. Mini App có giao diện dịch vụ và trạng thái xác thực. Các nghiệp vụ mua bán, nạp tiền, OTP/Proxy/VIP, ticket, CAPTCHA và quản trị dữ liệu chưa có backend hoàn chỉnh; không hiển thị chúng như tính năng đã vận hành.
-
----
-
-## 2. CẤU TRÚC THƯ MỤC (THEO REPOSITORY HIỆN TẠI)
+## Cấu trúc thư mục
 
 ```text
 hendydichvumang/
-│
-├── .github/
-│   └── workflows/
-│       ├── ci.yml                         # Kiểm tra cú pháp và chạy test
-│       ├── deploy-worker.yml              # Deploy Worker, nạp secrets,
-│       │                                  # đăng ký Telegram webhook
-│       └── deploy-pages.yml               # Build cấu hình và deploy Mini App
-│
+├── package.json
+├── .gitignore
+├── README.md
 ├── apps/
-│   │
-│   ├── telegram-worker/                   # BACKEND — CLOUDFLARE WORKERS
+│   ├── telegram-worker/
+│   │   ├── wrangler.toml
 │   │   ├── src/
-│   │   │   └── index.js                   # Webhook, menu, callback,
-│   │   │                                  # Telegram API, xác thực initData
-│   │   ├── scripts/
-│   │   │   └── set-webhook.mjs            # Đăng ký webhook với Telegram
-│   │   ├── test/
-│   │   │   └── index.test.js              # Kiểm thử tự động Worker
-│   │   └── wrangler.toml                  # Tên Worker, entrypoint,
-│   │                                      # biến cấu hình và observability
-│   │
-│   └── mini-app/                          # FRONTEND — CLOUDFLARE PAGES
-│       ├── index.html                     # Khung giao diện tiếng Việt
-│       ├── config.js                      # API URL Worker (được thay
-│       │                                  # bằng GitHub Actions lúc deploy)
-│       ├── styles.css                     # Responsive UI, Dark / Neon
-│       └── app.js                         # Telegram WebApp SDK,
-│                                          # xác thực và tương tác giao diện
-│
-├── .editorconfig                          # Quy tắc định dạng mã nguồn
-├── .gitignore                             # Loại trừ file local / secret
-├── package.json                           # Scripts kiểm tra, test, deploy
-└── README.md                              # Tài liệu kiến trúc và triển khai
+│   │   │   └── index.js
+│   │   └── scripts/
+│   │       └── set-webhook.mjs
+│   └── mini-app/
+│       ├── index.html
+│       ├── styles.css
+│       └── app.js
+└── .github/workflows/   (CI/CD triển khai tự động)
 ```
 
----
+## API Worker
 
-## 3. CẤU HÌNH VÀ TRIỂN KHAI
+| Method | Endpoint | Chức năng |
+|---|---|---|
+| GET | /health | Kiểm tra Worker |
+| POST | /telegram/webhook | Nhận Telegram Update, yêu cầu secret header |
+| POST | /api/telegram/auth | Xác minh Telegram WebApp initData |
+| POST | /api/dashboard | Trả hồ sơ đã xác thực và trạng thái thống kê |
+| POST | /api/tickets | Kiểm tra yêu cầu hỗ trợ; hiện trả 503 đến khi cấu hình kho lưu |
 
-### GitHub Actions Secrets
+Các thống kê số dư/đơn hàng/ticket được để trống có chủ đích cho đến khi kết nối cơ sở dữ liệu. Form ticket, đăng nhập Tool Live và CAPTCHA là giao diện tích hợp; chưa ghi nhận ticket hay xác thực thông tin đăng nhập khi chưa có dịch vụ backend tương ứng.
 
-Tạo trong **Repository → Settings → Secrets and variables → Actions → Secrets**:
+## Cấu hình bí mật
 
-| Secret | Mục đích |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Token Cloudflare có quyền cần thiết để deploy Workers và Pages |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Account ID |
-| `BOT_TOKEN` | Token của Telegram Bot duy nhất |
-| `WEBHOOK_SECRET` | Chuỗi bí mật dùng xác thực webhook Telegram |
+Trong GitHub → Settings → Secrets and variables → Actions → Secrets, tạo:
 
-### GitHub Actions Variables
+- `CLOUDFLARE_API_TOKEN`: quyền deploy Workers và Pages.
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare Account ID.
+- `BOT_TOKEN`: token của bot Telegram duy nhất.
+- `WEBHOOK_SECRET`: chuỗi 1–256 ký tự gồm chữ, số, dấu gạch dưới hoặc gạch ngang.
 
-Tạo trong cùng trang, mục **Variables**:
+Trong Actions → Variables, tạo:
 
-| Variable | Giá trị |
-|---|---|
-| `BOT_WEBHOOK_URL` | URL đầy đủ của Worker, kết thúc bằng `/telegram/webhook` |
-| `WORKER_API_URL` | URL gốc HTTPS của Worker, không thêm đường dẫn API |
+- `BOT_WEBHOOK_URL`: URL Worker kết thúc bằng `/telegram/webhook`.
+- `WORKER_API_URL`: URL gốc HTTPS của Worker, ví dụ `https://hendydichvumang-bot.<subdomain>.workers.dev`.
 
-### Cấu hình Cloudflare
+Không gửi các token này trong chat, không commit vào repository và không đặt chúng trong JavaScript frontend.
 
-1. Tạo Cloudflare Pages project tên `hendydichvumang`, kết nối repository này và dùng nhánh production `main` (hoặc để workflow deploy bằng Wrangler tạo project theo cấu hình tài khoản).
-2. Kiểm tra `MINI_APP_URL` và `MINI_APP_ORIGIN` trong `apps/telegram-worker/wrangler.toml` trỏ đến domain Pages thực tế.
-3. Đặt GitHub Secrets và Variables như bảng trên. Không ghi token vào source code, `config.js`, log hoặc commit.
-4. Push lên `main` hoặc chạy workflow thủ công trong tab **Actions**.
-5. Worker workflow deploy Worker, nạp `BOT_TOKEN` và `WEBHOOK_SECRET` bằng Wrangler Secret rồi gọi script đăng ký webhook.
-6. Pages workflow thay placeholder trong `apps/mini-app/config.js` bằng `WORKER_API_URL`, sau đó deploy thư mục `apps/mini-app`.
+## Triển khai
 
-### Kiểm tra local
+1. Tạo Cloudflare Pages project tên `hendydichvumang`.
+2. Kiểm tra `MINI_APP_URL` và `MINI_APP_ORIGIN` trong `apps/telegram-worker/wrangler.toml` đúng domain Pages thực tế.
+3. Thêm đủ GitHub Secrets và Variables như trên.
+4. Push lên nhánh `main` hoặc chạy workflow trong tab Actions.
+5. Workflow Worker deploy backend, đặt secret và đăng ký webhook Telegram. Workflow Pages thay placeholder API URL trong HTML rồi deploy frontend.
 
-Yêu cầu Node.js 22 trở lên:
+## Chạy và kiểm tra local
+
+Yêu cầu Node.js 22+:
 
 ```bash
 npm install
 npm run check
 npm test
-```
-
-Chạy Worker local:
-
-```bash
 npm run dev:worker
 ```
 
@@ -178,19 +95,9 @@ Deploy thủ công:
 ```bash
 npm run deploy:worker
 npm run deploy:pages
+npm run webhook:set
 ```
 
----
+## Lưu ý trạng thái nghiệp vụ
 
-## 4. BẢO MẬT VÀ VẬN HÀNH
-
-- Chỉ sử dụng **một Telegram Bot Token** trong hệ thống.
-- Không commit `.env`, Bot Token, Cloudflare API Token, webhook secret hoặc thông tin thanh toán.
-- Webhook chỉ chấp nhận request có Telegram secret header khớp `WEBHOOK_SECRET`.
-- Mini App xác thực `initData` ở Worker; thông tin tên hiển thị từ trình duyệt chỉ phục vụ giao diện trước khi xác thực.
-- Chỉ bật giao dịch khi đã có API nghiệp vụ, kiểm tra quyền, lưu trữ dữ liệu và xử lý lỗi tương ứng.
-- Sau mỗi lần deploy, kiểm tra trạng thái workflow tại tab **Actions**, health endpoint của Worker tại `/` hoặc `/health`, và thử mở Mini App từ chính bot Telegram.
-
-## Repository
-
-https://github.com/hendyngo-servers/hendydichvumang
+Bot menu và xác thực Mini App có thể hoạt động sau khi cấu hình secrets. Nghiệp vụ thanh toán, số dư, đơn hàng, OTP, Proxy, VIP, kho Code, lưu ticket và đăng nhập Tool Live cần tích hợp nhà cung cấp, cơ sở dữ liệu, phân quyền và quy trình bảo mật trước khi mở cho người dùng thật.

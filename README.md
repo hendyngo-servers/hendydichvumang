@@ -141,7 +141,7 @@ Workflow cần Cloudflare API Token có quyền **Workers Scripts Read + Write**
 
 ### Tự động tạo tài nguyên và triển khai
 
-Workflow Worker thực hiện theo thứ tự: tạo/tìm workers.dev subdomain, Pages project, D1 database và KV namespace → render ID vào file Wrangler trong runner → áp dụng D1 migration ở chế độ remote → deploy Worker → đặt các Worker Secrets → đăng ký webhook và lệnh Telegram. Workflow Pages tự lấy URL Worker, chèn vào HTML rồi deploy thư mục tĩnh.
+Workflow Cloudflare duy nhất chạy tuần tự: tạo/tìm workers.dev subdomain, Pages project, D1 database và KV namespace → render ID vào file Wrangler sinh tự động → áp dụng D1 migration ở remote → deploy Worker → kiểm tra health → đặt Worker Secrets → đăng ký webhook và lệnh Telegram → chèn Worker API URL vào Mini App → deploy Pages. Cách chạy một luồng giúp tránh hai workflow Worker/Pages hủy lượt deploy của nhau.
 
 Cron Triggers được khai báo trong Wrangler: mỗi 5 phút đánh dấu đơn OTP/nạp tiền quá hạn và Proxy tới hạn; lúc 00:00 giờ Việt Nam (17:00 UTC) cập nhật các gói VIP hết hạn. Proxy hết hạn được đánh dấu `revoke_pending`; việc thu hồi thật từ nhà cung cấp cần tích hợp API nhà cung cấp trước khi bật dịch vụ Proxy.
 

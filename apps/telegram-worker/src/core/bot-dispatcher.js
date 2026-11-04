@@ -131,7 +131,7 @@ export class BotDispatcher {
           keyboard: helpers.mainKeyboard(env)
         });
       }
-      safeLog("info", "bot.callback", { telegramUserId, route: data.slice(0, 80) });
+      safeLog("info", "bot.callback", { telegramUserId, route: typeof entry.pattern === "string" ? entry.pattern.slice(0, 80) : "callback:regex" });
       return entry.handler({
         query, message, messageId, chatId, telegramUserId, data,
         env, db, userIsAdmin, helpers

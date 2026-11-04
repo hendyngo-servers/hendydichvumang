@@ -66,8 +66,14 @@ async function dispatchUpdate(update, env) {
       await sendMessage(env, chatId, "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/nap hoặc /deposit — xem thông tin nạp tiền\n/help — xem hướng dẫn", mainKeyboard(env));
       return;
     }
-    if (command === "/nap" || command === "/deposit") {
-      const view = screenFor("service:deposit", message.from?.first_name, env, message.from?.id);
+    const commandRoutes = {
+      "/nap": "deposit", "/deposit": "deposit", "/topup": "deposit",
+      "/otp": "otp", "/proxy": "proxy", "/vip": "vip",
+      "/code": "code", "/tool": "rental", "/live": "live",
+      "/support": "support"
+    };
+    if (commandRoutes[command]) {
+      const view = screenFor("service:" + commandRoutes[command], message.from?.first_name, env, message.from?.id);
       await sendMessage(env, chatId, view.text, view.keyboard);
       return;
     }

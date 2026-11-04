@@ -10,7 +10,7 @@ const SERVICES = {
   rental: { title: "🧰 THUÊ TOOL", text: "Dịch vụ thuê Tool Live đang được tích hợp. Mở Mini App để xem giao diện đăng nhập." },
   live: { title: "🎮 MINIGAME LIVE", text: "Khu vực Minigame Live đang chờ kết nối dịch vụ." },
   deposit: { title: "💳 NẠP TIỀN", text: "Cổng nạp tiền chưa được cấu hình. Vui lòng liên hệ CSKH để được hướng dẫn. Không chuyển tiền theo thông tin chưa xác nhận." },
-  support: { title: "💬 TRUNG TÂM HỖ TRỢ", text: "Bạn cần hỗ trợ? Hãy tạo yêu cầu trong Mini App hoặc liên hệ quản trị viên." }
+  support: { title: "💬 TRUNG TÂM HỖ TRỢ", text: "Kênh CSKH trực tiếp sẽ được hiển thị khi quản trị viên cấu hình SUPPORT_URL. Ticket chưa được lưu cho tới khi kết nối D1." }
 };
 
 export default {
@@ -68,7 +68,7 @@ async function dispatchUpdate(update, env) {
       return;
     }
     if (command === "/help") {
-      await sendMessage(env, chatId, "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/nap hoặc /deposit — xem thông tin nạp tiền\n/help — xem hướng dẫn", mainKeyboard(env));
+      await sendMessage(env, chatId, "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/nap — thông tin nạp tiền\n/otp, /proxy, /vip, /code — nhóm dịch vụ\n/tool, /live — dịch vụ công cụ và Live\n/support — kênh hỗ trợ\n/help — xem hướng dẫn", mainKeyboard(env));
       return;
     }
     const commandRoutes = {
@@ -124,6 +124,7 @@ function screenFor(action, name, env, telegramUserId) {
   if (action === "menu:main") return { text: mainText(name), keyboard: mainKeyboard(env) };
   const key = action.startsWith("service:") ? action.slice(8) : "";
   if (key === "deposit") return paymentScreen(env, telegramUserId);
+  if (key === "support") return supportScreen(env);
   const service = SERVICES[key];
   if (service) return { text: "<b>" + service.title + "</b>\n\n" + escapeHtml(service.text), keyboard: backKeyboard(env) };
   if (action === "account:open") return { text: "👤 <b>TRUNG TÂM KHÁCH HÀNG</b>\nMở Mini App để xem hồ sơ, thống kê và gửi yêu cầu hỗ trợ.", keyboard: backKeyboard(env) };
@@ -170,6 +171,18 @@ async function handleAuth(request, env) {
   if (!result.ok) return json({ ok: false, error: result.error }, 401, cors);
   return json({ ok: true, user: result.user, authDate: result.authDate }, 200, cors);
 }
+function supportScreen(env) {
+  const supportUrl = String(env.SUPPORT_URL || "").trim();
+  const rows = [];
+  if (isHttps(supportUrl)) rows.push([{ text: "💬 MỞ KÊNH CSKH", url: supportUrl }]);
+  if (isHttps(env.MINI_APP_URL)) rows.push([{ text: "🚀 MỞ TRUNG TÂM KHÁCH HÀNG", web_app: { url: env.MINI_APP_URL } }]);
+  rows.push([{ text: "« MENU CHÍNH", callback_data: "menu:main" }]);
+  const text = isHttps(supportUrl)
+    ? "💬 <b>TRUNG TÂM HỖ TRỢ</b>\n\nBấm nút bên dưới để liên hệ CSKH. Ticket trong Mini App chỉ được bật sau khi kết nối kho dữ liệu."
+    : "💬 <b>TRUNG TÂM HỖ TRỢ</b>\n\nQuản trị viên chưa cấu hình SUPPORT_URL. Ticket sẽ khả dụng sau khi kết nối D1.";
+  return { text, keyboard: { inline_keyboard: rows } };
+}
+
 function paymentDetails(env, telegramUserId) {
   const bankCode = String(env.PAYMENT_BANK_CODE || "").trim();
   const bankName = String(env.PAYMENT_BANK_NAME || bankCode).trim();

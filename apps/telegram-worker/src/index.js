@@ -187,8 +187,9 @@ export async function validateInitData(raw, botToken, now = Math.floor(Date.now(
     if (!Number.isInteger(authDate) || authDate <= 0 || authDate > now + 60 || now - authDate > MAX_INIT_DATA_AGE_SECONDS) return { ok: false, error: "expired_or_invalid_auth_date" };
     const check = [...params.entries()].filter(([key]) => key !== "hash").map(([key, value]) => key + "=" + value).sort().join("\n");
     const encoder = new TextEncoder();
-    const webAppKey = await crypto.subtle.importKey("raw", encoder.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const secret = await crypto.subtle.sign("HMAC", webAppKey, encoder.encode(botToken));
+    // Telegram spec: secret_key = HMAC_SHA256(key=bot_token, message="WebAppData").
+    const botTokenKey = await crypto.subtle.importKey("raw", encoder.encode(botToken), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const secret = await crypto.subtle.sign("HMAC", botTokenKey, encoder.encode("WebAppData"));
     const key = await crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(check));
     const actual = [...new Uint8Array(digest)].map((v) => v.toString(16).padStart(2, "0")).join("");

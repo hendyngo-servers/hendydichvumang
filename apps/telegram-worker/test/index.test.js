@@ -29,16 +29,31 @@ test("xác thực initData hợp lệ và từ chối hash sai", async () => {
   const params = new URLSearchParams({ auth_date: String(now), query_id: "query-test", user: JSON.stringify({ id: 42, first_name: "Hendy" }) });
   const check = [...params.entries()].map(([k,v]) => k + "=" + v).sort().join("\n");
   const enc = new TextEncoder();
-  const first = await crypto.subtle.importKey("raw", enc.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const secret = await crypto.subtle.sign("HMAC", first, enc.encode(token));
+  const first = await crypto.subtle.importKey("raw", enc.encode(token), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const secret = await crypto.subtle.sign("HMAC", first, enc.encode("WebAppData"));
   const second = await crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const digest = await crypto.subtle.sign("HMAC", second, enc.encode(check));
   params.set("hash", [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2,"0")).join(""));
   const valid = await validateInitData(params.toString(), token, now);
   assert.equal(valid.ok, true);
   assert.equal(valid.user.id, 42);
+  assert.equal((await validateInitData(params.toString(), "wrong-token", now)).ok, false);
   params.set("hash", "0".repeat(64));
   assert.equal((await validateInitData(params.toString(), token, now)).ok, false);
+});
+
+test("đối chiếu vector mẫu xác thực do tài liệu Telegram công bố", async () => {
+  const token = "5768337691:AAH5YkoiEuPk8-FZa32hStHTqXiLPtAEhx8";
+  const raw = "query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B%22id%22%3A279058397%2C%22first_name%22%3A%22Vladislav%22%2C%22last_name%22%3A%22Kibenko%22%2C%22username%22%3A%22vdkfrost%22%2C%22language_code%22%3A%22ru%22%2C%22is_premium%22%3Atrue%7D&auth_date=1662771648&hash=c501b71e775f74ce10e377dea85a7ea24ecd640b223ea86dfe453e0eaed2e2b2";
+  const result = await validateInitData(raw, token, 1662771648);
+  assert.equal(result.ok, true);
+  assert.equal(result.user.id, 279058397);
+});
+
+test("từ chối initData quá hạn", async () => {
+  const result = await validateInitData("auth_date=100&hash=" + "a".repeat(64), "token", 100 + 86401);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "expired_or_invalid_auth_date");
 });
 test("health endpoint trả trạng thái Worker", async () => {
   const response = await worker.fetch(new Request("https://example.workers.dev/health"), {});

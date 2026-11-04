@@ -63,7 +63,7 @@ Quy trình HMAC-SHA-256 chính xác theo Telegram:
 
 1. Lấy `hash` và giữ lại để so sánh.
 2. Tạo `data_check_string` từ toàn bộ cặp `key=value` còn lại (loại `hash`), sắp xếp theo tên key tăng dần và nối bằng ký tự LF (`\\n`).
-3. Tạo khóa bí mật: `secret_key = HMAC_SHA256(key=BOT_TOKEN, message="WebAppData")`.
+3. Tạo khóa bí mật theo Telegram: `secret_key = HMAC_SHA256(data=BOT_TOKEN, key="WebAppData")`. Với Web Crypto API, truyền khóa `WebAppData` vào `importKey`, rồi ký dữ liệu là Bot Token.
 4. Tính `calculated_hash = HMAC_SHA256(key=secret_key, message=data_check_string)`, biểu diễn bằng hex chữ thường.
 5. So sánh hash bằng phép so sánh constant-time; từ chối nếu chữ ký sai, thiếu `auth_date`, ngày quá xa trong tương lai hoặc dữ liệu quá hạn.
 

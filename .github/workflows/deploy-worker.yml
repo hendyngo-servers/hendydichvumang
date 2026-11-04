@@ -31,6 +31,7 @@ jobs:
       PAYMENT_ACCOUNT_NAME: ${{ secrets.PAYMENT_ACCOUNT_NAME }}
       PAYMENT_QR_URL: ${{ secrets.PAYMENT_QR_URL }}
       PAYMENT_TRANSFER_NOTE_PREFIX: ${{ secrets.PAYMENT_TRANSFER_NOTE_PREFIX }}
+      SUPPORT_URL: ${{ secrets.SUPPORT_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,7 +65,7 @@ jobs:
           printf '%s' "$BOT_TOKEN" | npx wrangler secret put BOT_TOKEN --config apps/telegram-worker/wrangler.toml
           printf '%s' "$WEBHOOK_SECRET" | npx wrangler secret put WEBHOOK_SECRET --config apps/telegram-worker/wrangler.toml
 
-          for name in PAYMENT_BANK_CODE PAYMENT_BANK_NAME PAYMENT_ACCOUNT_NUMBER PAYMENT_ACCOUNT_NAME PAYMENT_QR_URL PAYMENT_TRANSFER_NOTE_PREFIX; do
+          for name in PAYMENT_BANK_CODE PAYMENT_BANK_NAME PAYMENT_ACCOUNT_NUMBER PAYMENT_ACCOUNT_NAME PAYMENT_QR_URL PAYMENT_TRANSFER_NOTE_PREFIX SUPPORT_URL; do
             value="${!name:-}"
             if [ -n "$value" ]; then
               printf '%s' "$value" | npx wrangler secret put "$name" --config apps/telegram-worker/wrangler.toml

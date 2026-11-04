@@ -1,10 +1,11 @@
-name: Deploy Telegram Worker
+name: Deploy Cloudflare (Worker + Pages)
 
 on:
   push:
     branches: [main]
     paths:
       - 'apps/telegram-worker/**'
+      - 'apps/mini-app/**'
       - 'scripts/**'
       - '.github/workflows/deploy-worker.yml'
       - 'package.json'
@@ -92,12 +93,31 @@ jobs:
           done
       - name: Register Telegram webhook
         run: node apps/telegram-worker/scripts/set-webhook.mjs
+      - name: Configure Mini App API URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path("apps/mini-app/index.html")
+          html = path.read_text()
+          api_url = os.environ["WORKER_API_URL"].rstrip("/")
+          placeholder = "__WORKER_API_URL__"
+          if placeholder not in html:
+              raise SystemExit("Missing Worker API URL placeholder in Mini App index.html")
+          path.write_text(html.replace(placeholder, api_url))
+          PY
+      - name: Deploy Cloudflare Pages
+        run: npx wrangler pages deploy apps/mini-app --project-name hendydichvumang --branch main
       - name: Deployment summary
         run: |
           {
-            echo "### Hendy Telegram Worker"
+            echo "### Hendy Cloudflare Deployment"
             echo "- Worker API: $WORKER_API_URL"
-            echo "- Webhook: $WORKER_API_URL/telegram/webhook"
+            echo "- Telegram webhook: $WORKER_API_URL/telegram/webhook"
             echo "- Mini App: $MINI_APP_URL"
-            echo "- WEBHOOK_SECRET: generated automatically and stored as a Cloudflare Worker Secret"
+            echo "- D1: hendydichvumang"
+            echo "- KV: hendydichvumang-cache"
+            echo "- WEBHOOK_SECRET: generated and stored as a Cloudflare Worker Secret"
           } >> "$GITHUB_STEP_SUMMARY"

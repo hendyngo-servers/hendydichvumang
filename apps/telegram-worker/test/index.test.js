@@ -132,3 +132,11 @@ test("initData validator rejects duplicate hash or repeated fields", async () =>
   assert.equal(result.ok, false);
   assert.equal(result.error, "invalid_hash");
 });
+
+test("health endpoint degrades when D1 is not bound", async () => {
+  const response = await worker.fetch(new Request("https://example.workers.dev/health"), {});
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.status, "degraded");
+  assert.equal(body.components.database, "unavailable");
+});

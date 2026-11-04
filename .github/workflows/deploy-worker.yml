@@ -1,0 +1,50 @@
+name: Deploy Telegram Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/telegram-worker/**'
+      - '.github/workflows/deploy-worker.yml'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler deploy --config apps/telegram-worker/wrangler.toml
+      - name: Configure Worker secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$BOT_TOKEN"
+          test -n "$WEBHOOK_SECRET"
+          printf '%s' "$BOT_TOKEN" | wrangler secret put BOT_TOKEN --config apps/telegram-worker/wrangler.toml
+          printf '%s' "$WEBHOOK_SECRET" | wrangler secret put WEBHOOK_SECRET --config apps/telegram-worker/wrangler.toml
+      - name: Register Telegram webhook
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          BOT_WEBHOOK_URL: ${{ vars.BOT_WEBHOOK_URL }}
+        run: node apps/telegram-worker/scripts/set-webhook.mjs

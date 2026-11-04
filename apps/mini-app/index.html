@@ -39,6 +39,7 @@
       <button class="service-card" data-service="code"><span>🎟️</span><b>Mua Code</b><small>Mã & bản quyền</small></button>
       <button class="service-card" data-service="rental"><span>🧰</span><b>Thuê Tool</b><small>Công cụ dịch vụ</small></button>
       <button class="service-card" data-service="live"><span>🎮</span><b>Minigame Live</b><small>Giải trí trực tuyến</small></button>
+      <button class="service-card" data-service="deposit" id="open-payment"><span>💳</span><b>Nạp tiền</b><small>Chuyển khoản & QR</small></button>
     </section>
 
     <section class="section-title"><div><p class="eyebrow">HỖ TRỢ</p><h2>Trung tâm trợ giúp</h2></div></section>
@@ -53,6 +54,23 @@
 
     <footer>© <span id="year"></span> HENDY · Công nghệ kết nối giá trị thật</footer>
   </main>
+
+  <dialog id="payment-modal" class="modal">
+    <form method="dialog" class="modal-card payment-card">
+      <button class="close-btn" value="cancel" aria-label="Đóng">×</button>
+      <p class="eyebrow">NẠP TIỀN HENDY</p><h2>Chuyển khoản ngân hàng</h2>
+      <p class="hint" id="payment-status">Đang tải thông tin nhận tiền…</p>
+      <img id="payment-qr" class="payment-qr" alt="Mã QR chuyển khoản" hidden>
+      <dl class="payment-details">
+        <div><dt>Ngân hàng</dt><dd id="payment-bank">—</dd></div>
+        <div><dt>Số tài khoản</dt><dd id="payment-account">—</dd></div>
+        <div><dt>Chủ tài khoản</dt><dd id="payment-owner">—</dd></div>
+        <div><dt>Nội dung chuyển khoản</dt><dd id="payment-note">—</dd></div>
+      </dl>
+      <button class="secondary-btn copy-account-btn" type="button" id="copy-account">Sao chép số tài khoản</button>
+      <p class="hint">Chỉ chuyển đúng thông tin do hệ thống hiển thị. QR điền sẵn người nhận và nội dung; nếu chưa bật đối soát webhook, giao dịch chưa tự động cộng vào số dư.</p>
+    </form>
+  </dialog>
 
   <dialog id="ticket-modal" class="modal">
     <form method="dialog" class="modal-card" id="ticket-form">

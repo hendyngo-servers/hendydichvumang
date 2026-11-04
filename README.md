@@ -73,21 +73,48 @@ Sau bước xác thực, nên nâng cấp thành mô hình session: endpoint đ�
 
 Bộ kiểm thử có vector mẫu xác thực được công bố trong tài liệu Telegram để tránh việc test và code cùng mắc một lỗi đảo chiều HMAC.
 
-## Cấu hình bí mật
+## Cấu hình bí mật: chỉ cần 3 giá trị gốc
 
-Trong GitHub → Settings → Secrets and variables → Actions → Secrets, tạo:
+Repository có file mẫu `.env.example`. Tạo file local `.env` từ mẫu và chỉ điền đúng 3 giá trị:
 
-- `CLOUDFLARE_API_TOKEN`: quyền deploy Workers và Pages.
-- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare Account ID.
-- `BOT_TOKEN`: token của bot Telegram duy nhất.
-- `WEBHOOK_SECRET`: chuỗi 1–256 ký tự gồm chữ, số, dấu gạch dưới hoặc gạch ngang.
+```env
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_ACCOUNT_ID=
+BOT_TOKEN=
+```
 
-Trong Actions → Variables, tạo:
+**Không commit file `.env`**. File này đã được `.gitignore` loại trừ; chỉ `.env.example` không chứa dữ liệu bí mật được lưu trong Git.
 
-- `BOT_WEBHOOK_URL`: URL Worker kết thúc bằng `/telegram/webhook`.
-- `WORKER_API_URL`: URL gốc HTTPS của Worker, ví dụ `https://hendydichvumang-bot.<subdomain>.workers.dev`.
+### Đồng bộ 3 giá trị lên GitHub Secrets một lần
 
-Không gửi các token này trong chat, không commit vào repository và không đặt chúng trong JavaScript frontend.
+Cài GitHub CLI (`gh`), đăng nhập tài khoản có quyền cập nhật Actions Secrets của repository, sau đó chạy ở thư mục gốc:
+
+```bash
+gh auth login
+npm run secrets:sync
+```
+
+Script đọc `.env` và gửi từng giá trị qua stdin của `gh secret set`, không đưa giá trị bí mật vào command line hoặc in ra log. Ba GitHub Secrets được tạo/cập nhật tự động:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `BOT_TOKEN`
+
+### Những cấu hình hệ thống tự tạo
+
+Không cần tự tạo GitHub Variables hay GitHub Secret thứ tư:
+
+- `WEBHOOK_SECRET`: sinh ổn định bằng HMAC-SHA-256 từ Bot Token ở mỗi lần deploy; được đưa vào Cloudflare Worker Secret và dùng để đăng ký Telegram webhook.
+- `WORKER_API_URL`: tự lấy Workers account subdomain từ Cloudflare API và ghép với tên Worker.
+- `BOT_WEBHOOK_URL`: tự ghép `WORKER_API_URL/telegram/webhook`.
+- `MINI_APP_URL`: tự suy ra từ Pages project `hendydichvumang`.
+- Pages project: tự tạo nếu chưa tồn tại.
+
+Workflow cần Cloudflare API Token có quyền tài khoản **Workers Scripts Read + Write** và **Pages Read + Write**. Nên giới hạn token trong đúng Cloudflare account đang triển khai. Tài liệu Cloudflare khuyến nghị dùng GitHub Secrets thay vì lưu API Token trong repository. <https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/>
+
+### Khi thêm cấu hình mới trong tương lai
+
+Bổ sung tên secret/biến vào workflow bootstrap hoặc khai báo binding trong `wrangler.toml`; workflow sẽ cập nhật trên Cloudflare khi deploy. Chỉ giữ trong GitHub Secrets những giá trị cần bảo mật; các URL/ID công khai có thể được suy ra hoặc ghi trong cấu hình không nhạy cảm.
 
 ## Triển khai
 

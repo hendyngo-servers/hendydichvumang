@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS telegram_webhook_updates (
   update_id INTEGER PRIMARY KEY,
   status TEXT NOT NULL CHECK (status IN ('processing', 'processed', 'failed')),
+  claim_token TEXT NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 1 CHECK (attempts > 0),
   lock_expires_at INTEGER NOT NULL DEFAULT 0,
   error_code TEXT,

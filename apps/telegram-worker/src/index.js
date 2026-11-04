@@ -103,9 +103,9 @@ async function runScheduledMaintenance(env, cron) {
 
 async function handleWebhook(request, env) {
   if (!env.BOT_TOKEN || !env.WEBHOOK_SECRET) return json({ ok: false, error: "server_not_configured" }, 503);
-  if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503);
   const supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
   if (!constantTimeEqual(supplied, env.WEBHOOK_SECRET)) return json({ ok: false, error: "unauthorized" }, 401);
+  if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503);
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > MAX_BODY_BYTES) return json({ ok: false, error: "payload_too_large" }, 413);
   const raw = await request.text();

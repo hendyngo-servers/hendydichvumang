@@ -182,6 +182,16 @@ npm run dev:worker
 
 Lệnh bootstrap tạo `.cloudflare-outputs.json` và `wrangler.generated.toml`; cả hai đều được Git bỏ qua. Khuyến nghị dùng GitHub Actions để deploy production. Lệnh deploy thủ công yêu cầu chạy bootstrap trước, sau đó `npm run db:migrate`, `npm run deploy:worker` và `npm run deploy:pages`.
 
+## Bảo vệ Bot Token và API Key
+
+- `BOT_TOKEN` không được đặt trong mã nguồn, `wrangler.toml`, HTML, JavaScript của Mini App hoặc biến `[vars]`. Production chỉ nhận token bằng `wrangler secret put BOT_TOKEN`, còn Worker đọc qua `env.BOT_TOKEN`.
+- GitHub Actions không còn truyền Bot Token và Cloudflare API Token ở cấp toàn bộ job. Mỗi credential chỉ được cấp cho bước thực sự cần dùng; bước cài package, kiểm thử và deploy Pages không nhận Bot Token.
+- `.env` và `.dev.vars` được Git bỏ qua. Script tạo `.dev.vars` đặt quyền file chỉ chủ sở hữu đọc/ghi trên hệ thống hỗ trợ POSIX. Không tải các file này lên issue, chat hoặc kho Git.
+- Telegram Bot API bắt buộc đặt Bot Token trong đường dẫn của request HTTPS. Worker và script webhook không in URL, body lỗi thô hoặc exception mạng; log chỉ ghi mã lỗi đã rút gọn. Không tự thêm log request URL, header hoặc object `env`.
+- Chạy `npm run security:check` để quét các file đang được Git theo dõi trước khi push. Kiểm tra này không thể rà soát lịch sử Git cũ hoặc phát hiện mọi loại secret mã hóa.
+
+**Nếu Bot Token từng được gửi trong chat, commit, log hoặc chia sẻ cho người khác, hãy thu hồi token cũ bằng BotFather và tạo token mới ngay cả khi mã nguồn đã được sửa.** Cập nhật token mới trong file `.env`, chạy `npm run secrets:sync`, sau đó chạy lại workflow triển khai để cập nhật Cloudflare Worker Secret và webhook. Không gửi token mới vào cuộc trò chuyện.
+
 ## Lưu ý trạng thái nghiệp vụ
 
 Bot menu và xác thực Mini App có thể hoạt động sau khi cấu hình secrets. Nghiệp vụ thanh toán, số dư, đơn hàng, OTP, Proxy, VIP, kho Code, lưu ticket và đăng nhập Tool Live cần tích hợp nhà cung cấp, cơ sở dữ liệu, phân quyền và quy trình bảo mật trước khi mở cho người dùng thật.

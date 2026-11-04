@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { mainKeyboard, screenFor, paymentDetails, escapeHtml, constantTimeEqual, validateInitData } from "../src/index.js";
+import worker, { mainKeyboard, screenFor, paymentDetails, escapeHtml, constantTimeEqual, validateInitData, redact } from "../src/index.js";
 import { deriveWebhookSecret } from "../../../scripts/generate-webhook-secret.mjs";
 import { spawnSync } from "node:child_process";
 import { webcrypto } from "node:crypto";
@@ -149,4 +149,14 @@ test("health endpoint degrades when D1 is not bound", async () => {
   const body = await response.json();
   assert.equal(body.status, "degraded");
   assert.equal(body.components.database, "unavailable");
+});
+
+test("redact che giấu Bot Token và webhook secret khỏi mọi thông báo lỗi", () => {
+  const token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
+  const webhookSecret = "a".repeat(64);
+  const message = "Fetch failed for https://api.telegram.org/bot" + token + "/sendMessage; secret=" + webhookSecret;
+  const safe = redact(message, { BOT_TOKEN: token, WEBHOOK_SECRET: webhookSecret });
+  assert.equal(safe.includes(token), false);
+  assert.equal(safe.includes(webhookSecret), false);
+  assert.match(safe, /\[REDACTED\]/);
 });

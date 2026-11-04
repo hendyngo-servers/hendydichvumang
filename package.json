@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Hendy Dịch Vụ Mạng - Telegram Bot on Cloudflare Workers and Mini App on Cloudflare Pages",
   "scripts": {
-    "check": "node --check apps/telegram-worker/src/index.js && node --check apps/telegram-worker/scripts/set-webhook.mjs && node --check apps/mini-app/app.js && node --check scripts/sync-github-secrets.mjs && node --check scripts/generate-webhook-secret.mjs && node --check scripts/bootstrap-cloudflare.mjs && node --check scripts/render-cloudflare-config.mjs && node --check scripts/create-dev-vars.mjs",
+    "check": "node --check apps/telegram-worker/src/index.js && node --check apps/telegram-worker/scripts/set-webhook.mjs && node --check apps/mini-app/app.js && node --check scripts/sync-github-secrets.mjs && node --check scripts/generate-webhook-secret.mjs && node --check scripts/bootstrap-cloudflare.mjs && node --check scripts/render-cloudflare-config.mjs && node --check scripts/create-dev-vars.mjs && node --check scripts/check-secrets.mjs",
+    "security:check": "node scripts/check-secrets.mjs",
     "test": "node --test apps/telegram-worker/test/*.test.js",
     "secrets:sync": "node scripts/sync-github-secrets.mjs",
     "cloudflare:bootstrap": "node scripts/bootstrap-cloudflare.mjs && node scripts/render-cloudflare-config.mjs",

@@ -19,7 +19,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install dependencies
+        run: npm install
       - name: Check source syntax
         run: npm run check
+      - name: Scan tracked files for exposed credentials
+        run: npm run security:check
       - name: Run automated tests
         run: npm test

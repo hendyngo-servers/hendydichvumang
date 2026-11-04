@@ -112,7 +112,7 @@ async function handleWebhook(request, env) {
     await dispatchUpdate(update, env);
     return json({ ok: true });
   } catch (error) {
-    console.error("Telegram update error:", redact(error?.message || "unknown"));
+    console.error("Telegram update error:", redact(error?.message || "unknown", env));
     // Telegram should retry transient failures.
     return json({ ok: false, error: "update_failed" }, 500);
   }
@@ -197,16 +197,28 @@ async function sendMessage(env, chatId, text, replyMarkup) {
   return telegramCall(env, "sendMessage", { chat_id: chatId, text, parse_mode: "HTML", reply_markup: replyMarkup, disable_web_page_preview: true });
 }
 async function telegramCall(env, method, payload) {
-  if (!env.BOT_TOKEN) throw new Error("BOT_TOKEN missing");
-  const response = await fetch(TELEGRAM_API + "/bot" + env.BOT_TOKEN + "/" + method, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10000)
-  });
+  const botToken = env.BOT_TOKEN;
+  if (!botToken) throw new Error("Telegram credentials are not configured.");
+
+  // Telegram's Bot API requires the token in the URL path. Never log this URL,
+  // the raw response body, or a network exception that may contain request details.
+  let response;
+  try {
+    response = await fetch(TELEGRAM_API + "/bot" + botToken + "/" + method, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000)
+    });
+  } catch {
+    throw new Error("Telegram API network request failed.");
+  }
+
   const data = await response.json().catch(() => null);
   if (!response.ok || !data?.ok) {
-    const description = data?.description || "HTTP " + response.status;
-    if (method === "editMessageText" && description.includes("message is not modified")) return data;
-    throw new Error("Telegram " + method + ": " + description);
+    if (method === "editMessageText" && data?.description === "Bad Request: message is not modified") return data;
+    const errorCode = Number.isInteger(data?.error_code) ? data.error_code : response.status;
+    throw new Error("Telegram API request failed (code " + errorCode + ").");
   }
   return data;
 }
@@ -234,7 +246,7 @@ async function handleAuth(request, env) {
   if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503, cors);
   try { await ensureUser(env.DB, result.user); }
   catch (error) {
-    console.error("User upsert failed:", redact(error?.message || "database_error"));
+    console.error("User upsert failed:", redact(error?.message || "database_error", env));
     return json({ ok: false, error: "database_error" }, 503, cors);
   }
   return json({ ok: true, user: result.user, authDate: result.authDate }, 200, cors);
@@ -339,7 +351,7 @@ async function handleServices(request, env) {
     if (env.CACHE) await env.CACHE.put(cacheKey, JSON.stringify(services), { expirationTtl: 60 });
     return json({ ok: true, services }, 200, cors);
   } catch (error) {
-    console.error("Service catalog failed:", redact(error?.message || "database_error"));
+    console.error("Service catalog failed:", redact(error?.message || "database_error", env));
     return json({ ok: false, error: "service_catalog_unavailable" }, 503, cors);
   }
 }
@@ -378,7 +390,7 @@ async function handleDashboard(request, env) {
       }
     }, 200, cors);
   } catch (error) {
-    console.error("Dashboard query failed:", redact(error?.message || "database_error"));
+    console.error("Dashboard query failed:", redact(error?.message || "database_error", env));
     return json({ ok: false, error: "database_error" }, 503, cors);
   }
 }
@@ -405,7 +417,7 @@ async function handleTicket(request, env) {
       .bind(ticketId, auth.user.id, subject, message, now, now).run();
     return json({ ok: true, ticket: { id: ticketId, status: "open" } }, 201, cors);
   } catch (error) {
-    console.error("Ticket creation failed:", redact(error?.message || "database_error"));
+    console.error("Ticket creation failed:", redact(error?.message || "database_error", env));
     return json({ ok: false, error: "ticket_create_failed" }, 503, cors);
   }
 }
@@ -450,8 +462,19 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 function isHttps(value) { try { return new URL(value).protocol === "https:"; } catch { return false; } }
-function redact(value) { return String(value).replace(/bot\d+:[A-Za-z0-9_-]+/g, "bot[REDACTED]").slice(0, 300); }
+function redact(value, env = {}) {
+  let output = String(value ?? "unknown");
+  for (const secret of [env.BOT_TOKEN, env.WEBHOOK_SECRET]) {
+    if (typeof secret === "string" && secret.length >= 8) {
+      output = output.split(secret).join("[REDACTED]");
+    }
+  }
+  return output
+    .replace(/bot\d+:[A-Za-z0-9_-]{20,}/gi, "bot[REDACTED]")
+    .replace(/(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,;]+/gi, "$1[REDACTED]")
+    .slice(0, 300);
+}
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers } });
 }
-export { mainKeyboard, screenFor, paymentDetails, paymentScreen, escapeHtml, constantTimeEqual };
+export { mainKeyboard, screenFor, paymentDetails, paymentScreen, escapeHtml, constantTimeEqual, redact };

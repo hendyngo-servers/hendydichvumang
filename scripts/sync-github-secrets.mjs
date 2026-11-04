@@ -59,7 +59,6 @@ for (const name of REQUIRED) {
   const result = gh(["secret", "set", name, "--repo", REPOSITORY], config[name] + "\n");
   if (result.error || result.status !== 0) {
     console.error(`Không thể cập nhật GitHub Secret ${name}. Kiểm tra quyền ghi Actions secrets.`);
-    if (result.stderr) console.error(result.stderr.trim());
     process.exit(1);
   }
   console.log(`Đã đồng bộ GitHub Secret: ${name}`);

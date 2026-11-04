@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { deriveWebhookSecret } from "./generate-webhook-secret.mjs";
 
@@ -34,8 +34,11 @@ try {
     SUPPORT_URL: env.SUPPORT_URL || ""
   };
   const output = Object.entries(values).map(([key, value]) => key + "=" + JSON.stringify(value)).join("\n") + "\n";
-  writeFileSync(resolve(".dev.vars"), output, { mode: 0o600 });
-  console.log("Đã tạo .dev.vars local. File này nằm trong .gitignore, không được commit.");
+  const outputPath = resolve(".dev.vars");
+  writeFileSync(outputPath, output, { mode: 0o600 });
+  // Enforce owner-only permissions even when .dev.vars already existed.
+  try { chmodSync(outputPath, 0o600); } catch { /* Windows ACLs are managed by the OS. */ }
+  console.log("Đã tạo .dev.vars local với quyền truy cập hạn chế. File này nằm trong .gitignore, không được commit.");
 } catch (error) {
   console.error("Không thể tạo .dev.vars: " + error.message);
   process.exit(1);

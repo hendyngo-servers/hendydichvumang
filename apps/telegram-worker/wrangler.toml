@@ -6,6 +6,7 @@ workers_dev = true
 [vars]
 MINI_APP_URL = "https://hendydichvumang.pages.dev/"
 MINI_APP_ORIGIN = "https://hendydichvumang.pages.dev"
+SUPPORT_URL = "https://t.me/"
 
 [observability]
 enabled = true

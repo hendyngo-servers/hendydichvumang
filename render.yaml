@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: hendydichvumang
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: cat app-source.part-*.b64 | base64 -d | tar -xz && npm install && npm run verify
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hendydichvumang-db
+          property: connectionString
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+databases:
+  - name: hendydichvumang-db
+    databaseName: hendydichvumang
+    user: hendydichvumang
+    plan: free
+    region: singapore
+    postgresMajorVersion: "18"

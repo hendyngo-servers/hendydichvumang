@@ -1,16 +1,9 @@
-node_modules/
-.wrangler/
-.dev.vars
+# Runtime and secrets
 .env
 .env.*
 !.env.example
-.DS_Store
+.dev.vars
+node_modules/
 npm-debug.log*
-coverage/
-dist/
-*.pem
-.secrets/
-.cloudflare-output*
-
-.cloudflare-outputs.json
-apps/telegram-worker/wrangler.generated.toml
+*.log
+.DS_Store

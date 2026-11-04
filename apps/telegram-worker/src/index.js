@@ -246,8 +246,8 @@ function supportScreen(env) {
   if (isHttps(env.MINI_APP_URL)) rows.push([{ text: "🚀 MỞ TRUNG TÂM KHÁCH HÀNG", web_app: { url: env.MINI_APP_URL } }]);
   rows.push([{ text: "« MENU CHÍNH", callback_data: "menu:main" }]);
   const text = isHttps(supportUrl)
-    ? "💬 <b>TRUNG TÂM HỖ TRỢ</b>\n\nBấm nút bên dưới để liên hệ CSKH. Ticket trong Mini App chỉ được bật sau khi kết nối kho dữ liệu."
-    : "💬 <b>TRUNG TÂM HỖ TRỢ</b>\n\nQuản trị viên chưa cấu hình SUPPORT_URL. Ticket sẽ khả dụng sau khi kết nối D1.";
+    ? "💬 <b>TRUNG TÂM HỖ TRỢ</b>\n\nBấm nút bên dưới để liên hệ CSKH hoặc mở Mini App để tạo ticket. Ticket được lưu vào D1."
+    : "💬 <b>TRUNG TÂM HỖ TRỢ</b>\n\nQuản trị viên chưa cấu hình SUPPORT_URL. Bạn vẫn có thể mở Mini App để tạo ticket hỗ trợ.";
   return { text, keyboard: { inline_keyboard: rows } };
 }
 

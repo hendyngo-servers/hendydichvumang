@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'apps/telegram-worker/**'
+      - 'scripts/**'
       - '.github/workflows/deploy-worker.yml'
       - 'package.json'
   workflow_dispatch:
@@ -12,9 +13,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cloudflare-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,29 +32,39 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install Wrangler
-        run: npm install --global wrangler@4
-      - name: Deploy Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: wrangler deploy --config apps/telegram-worker/wrangler.toml
-      - name: Configure Worker secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+      - name: Install dependencies
+        run: npm install
+      - name: Validate the three root secrets
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$BOT_TOKEN"
-          test -n "$WEBHOOK_SECRET"
-          printf '%s' "$BOT_TOKEN" | wrangler secret put BOT_TOKEN --config apps/telegram-worker/wrangler.toml
-          printf '%s' "$WEBHOOK_SECRET" | wrangler secret put WEBHOOK_SECRET --config apps/telegram-worker/wrangler.toml
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Thiếu GitHub Secret CLOUDFLARE_API_TOKEN"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Thiếu GitHub Secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+          test -n "$BOT_TOKEN" || { echo "Thiếu GitHub Secret BOT_TOKEN"; exit 1; }
+      - name: Create Cloudflare resources and derive URLs
+        run: node scripts/bootstrap-cloudflare.mjs
+      - name: Generate stable webhook secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$(node scripts/generate-webhook-secret.mjs)"
+          printf 'WEBHOOK_SECRET=%s\n' "$(node scripts/generate-webhook-secret.mjs)" >> "$GITHUB_ENV"
+      - name: Deploy Worker
+        run: npx wrangler deploy --config apps/telegram-worker/wrangler.toml
+      - name: Set Worker secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$BOT_TOKEN" | npx wrangler secret put BOT_TOKEN --config apps/telegram-worker/wrangler.toml
+          printf '%s' "$WEBHOOK_SECRET" | npx wrangler secret put WEBHOOK_SECRET --config apps/telegram-worker/wrangler.toml
       - name: Register Telegram webhook
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
-          BOT_WEBHOOK_URL: ${{ vars.BOT_WEBHOOK_URL }}
         run: node apps/telegram-worker/scripts/set-webhook.mjs
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Hendy Telegram Worker"
+            echo "- Worker API: $WORKER_API_URL"
+            echo "- Webhook: $WORKER_API_URL/telegram/webhook"
+            echo "- Mini App: $MINI_APP_URL"
+            echo "- WEBHOOK_SECRET: generated automatically and stored as a Cloudflare Worker Secret"
+          } >> "$GITHUB_STEP_SUMMARY"

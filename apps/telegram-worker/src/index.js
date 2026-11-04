@@ -97,6 +97,7 @@ async function runScheduledMaintenance(env, cron) {
     await env.DB.prepare(`UPDATE vip_memberships SET status = 'expired', updated_at = ?
       WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= ?`).bind(now, now).run();
     await env.DB.prepare(`DELETE FROM vip_checkins WHERE checkin_date < date('now', '-120 days')`).run();
+    await env.DB.prepare("DELETE FROM telegram_webhook_updates WHERE updated_at < ?").bind(now - 30 * 86400).run();
   }
 }
 

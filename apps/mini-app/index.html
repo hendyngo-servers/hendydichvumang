@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="description" content="Hendy Dịch Vụ Mạng - Mini App" />
+    <title>Hendy Dịch Vụ Mạng</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js?64"></script>
+    <script src="/config.js"></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand-mark">H</div>
+        <div>
+          <p class="eyebrow">HENDY ECOSYSTEM</p>
+          <h1>Hendy Dịch Vụ Mạng</h1>
+        </div>
+        <span class="status-dot" aria-label="Giao diện sẵn sàng"></span>
+      </header>
+      <section class="welcome card">
+        <p class="eyebrow">TRUNG TÂM DỊCH VỤ</p>
+        <h2 id="greeting">Xin chào bạn 👋</h2>
+        <p id="auth-status" class="muted">Đang kiểm tra phiên Telegram…</p>
+        <div class="account-line"><span>Trạng thái phiên</span><strong id="session-state">Đang kiểm tra</strong></div>
+      </section>
+      <section class="section-heading"><div><p class="eyebrow">KHÁM PHÁ</p><h2>Dịch vụ của Hendy</h2></div></section>
+      <section class="service-grid" aria-label="Danh mục dịch vụ">
+        <button class="service-card" data-service="minigame"><span class="service-icon">🎮</span><span>Minigame Live</span><small>Trò chơi & giải trí</small></button>
+        <button class="service-card" data-service="rental"><span class="service-icon">🧰</span><span>Thuê Tool</span><small>Công cụ dịch vụ</small></button>
+        <button class="service-card" data-service="shop"><span class="service-icon">🛒</span><span>Mua hàng</span><small>Proxy & sản phẩm</small></button>
+        <button class="service-card" data-service="deposit"><span class="service-icon">💳</span><span>Nạp tiền</span><small>Ví dịch vụ</small></button>
+        <button class="service-card" data-service="tools"><span class="service-icon">💎</span><span>Kho công cụ</span><small>Tiện ích tài khoản</small></button>
+        <button class="service-card" data-service="support"><span class="service-icon">💬</span><span>CSKH</span><small>Trung tâm hỗ trợ</small></button>
+      </section>
+      <section class="notice card"><strong>Thông tin hệ thống</strong><p>Dịch vụ đang được tích hợp từng phần. Chức năng chưa kết nối sẽ được thông báo rõ ràng; không thực hiện thanh toán qua liên kết không được xác nhận.</p></section>
+      <footer>© <span id="year"></span> HENDY · Công nghệ kết nối giá trị thật</footer>
+    </main>
+  </body>
+</html>

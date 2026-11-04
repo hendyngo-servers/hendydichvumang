@@ -2,7 +2,7 @@ const MAX_DETAILS_BYTES = 2048;
 
 export async function writeAuditLog(
   db,
-  { actorTelegramId = null, action, target = null, details = {}, now = Math.floor(Date.now() / 1000) }
+  { id = crypto.randomUUID(), actorTelegramId = null, action, target = null, details = {}, now = Math.floor(Date.now() / 1000) }
 ) {
   if (!db) throw new Error("D1 database is not configured");
   if (typeof action !== "string" || !/^[a-z][a-z0-9_.-]{1,79}$/.test(action)) {
@@ -23,9 +23,8 @@ export async function writeAuditLog(
     throw new RangeError("Audit details are too large");
   }
 
-  const id = crypto.randomUUID();
   await db.prepare(
-    `INSERT INTO audit_logs
+    `INSERT OR IGNORE INTO audit_logs
       (id, actor_telegram_id, action, target, details_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`
   ).bind(id, actorTelegramId, action, target, serialized, now).run();

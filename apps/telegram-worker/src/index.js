@@ -173,7 +173,7 @@ async function dispatchUpdate(update, env) {
     },
     mainKeyboard,
     isAdmin: (runtimeEnv, telegramUserId) => String(runtimeEnv.ADMIN_IDS || "")
-      .split(/[,;\\s]+/)
+      .split(/[,;\s]+/)
       .map((value) => Number(value.trim()))
       .filter((value) => Number.isSafeInteger(value) && value > 0)
       .includes(Number(telegramUserId))

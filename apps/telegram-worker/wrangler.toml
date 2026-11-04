@@ -1,0 +1,12 @@
+name = "hendydichvumang-bot"
+main = "src/index.js"
+compatibility_date = "2026-11-04"
+workers_dev = true
+
+[vars]
+MINI_APP_URL = "https://hendydichvumang.pages.dev/"
+MINI_APP_ORIGIN = "https://hendydichvumang.pages.dev"
+
+[observability]
+enabled = true
+head_sampling_rate = 1

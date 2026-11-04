@@ -30,11 +30,57 @@ export default {
     }
     if (url.pathname === "/api/telegram/auth") return handleAuth(request, env);
     if (url.pathname === "/api/payment/config") return handlePaymentConfig(request, env);
+    if (url.pathname === "/api/services") return handleServices(request, env);
     if (url.pathname === "/api/dashboard") return handleDashboard(request, env);
     if (url.pathname === "/api/tickets") return handleTicket(request, env);
     return json({ ok: false, error: "not_found" }, 404);
+  },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runScheduledMaintenance(env, controller.cron));
   }
 };
+
+async function ensureUser(db, user) {
+  if (!db || !user || !Number.isSafeInteger(user.id) || user.id <= 0) {
+    throw new Error("database_or_user_unavailable");
+  }
+  const now = Math.floor(Date.now() / 1000);
+  await db.batch([
+    db.prepare(`INSERT INTO users
+      (telegram_user_id, username, first_name, last_name, language_code, is_premium, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(telegram_user_id) DO UPDATE SET
+        username = excluded.username, first_name = excluded.first_name,
+        last_name = excluded.last_name, language_code = excluded.language_code,
+        is_premium = excluded.is_premium, updated_at = excluded.updated_at`)
+      .bind(user.id, user.username || null, user.first_name || null, user.last_name || null,
+        user.language_code || null, user.is_premium ? 1 : 0, now, now),
+    db.prepare(`INSERT OR IGNORE INTO wallet_accounts (telegram_user_id, balance_vnd, updated_at)
+      VALUES (?, 0, ?)`).bind(user.id, now),
+    db.prepare(`INSERT OR IGNORE INTO vip_memberships
+      (telegram_user_id, tier, status, updated_at) VALUES (?, 'free', 'active', ?)`).bind(user.id, now)
+  ]);
+}
+
+async function runScheduledMaintenance(env, cron) {
+  if (!env.DB) throw new Error("D1 binding DB is not configured");
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE topup_orders SET status = 'expired', updated_at = ?
+      WHERE status = 'pending' AND expires_at <= ?`).bind(now, now),
+    env.DB.prepare(`UPDATE otp_orders SET status = 'expired', updated_at = ?
+      WHERE status = 'waiting' AND expires_at <= ?`).bind(now, now),
+    env.DB.prepare(`UPDATE orders SET status = 'expired', updated_at = ?
+      WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ?`).bind(now, now),
+    env.DB.prepare(`UPDATE proxy_leases SET status = 'revoke_pending', updated_at = ?
+      WHERE status = 'active' AND expires_at <= ?`).bind(now, now)
+  ]);
+  if (cron === "0 17 * * *") {
+    await env.DB.prepare(`UPDATE vip_memberships SET status = 'expired', updated_at = ?
+      WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= ?`).bind(now, now).run();
+    await env.DB.prepare(`DELETE FROM vip_checkins WHERE checkin_date < date('now', '-120 days')`).run();
+  }
+}
 
 async function handleWebhook(request, env) {
   if (!env.BOT_TOKEN || !env.WEBHOOK_SECRET) return json({ ok: false, error: "server_not_configured" }, 503);
@@ -169,6 +215,12 @@ async function handleAuth(request, env) {
   if (typeof body?.initData !== "string" || body.initData.length > 16384) return json({ ok: false, error: "invalid_init_data" }, 400, cors);
   const result = await validateInitData(body.initData, env.BOT_TOKEN);
   if (!result.ok) return json({ ok: false, error: result.error }, 401, cors);
+  if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503, cors);
+  try { await ensureUser(env.DB, result.user); }
+  catch (error) {
+    console.error("User upsert failed:", redact(error?.message || "database_error"));
+    return json({ ok: false, error: "database_error" }, 503, cors);
+  }
   return json({ ok: true, user: result.user, authDate: result.authDate }, 200, cors);
 }
 function supportScreen(env) {
@@ -247,8 +299,33 @@ async function handlePaymentConfig(request, env) {
   try { body = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400, cors); }
   const auth = await validateInitData(body?.initData || "", env.BOT_TOKEN || "");
   if (!auth.ok) return json({ ok: false, error: auth.error }, 401, cors);
+  if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503, cors);
+  try { await ensureUser(env.DB, auth.user); }
+  catch { return json({ ok: false, error: "database_error" }, 503, cors); }
   const payment = paymentDetails(env, auth.user?.id);
   return json({ ok: true, ...payment }, 200, cors);
+}
+
+async function handleServices(request, env) {
+  const cors = corsHeaders(request, env);
+  if (request.method === "OPTIONS") return Object.keys(cors).length ? new Response(null, { status: 204, headers: cors }) : json({ ok: false, error: "origin_not_allowed" }, 403);
+  if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
+  const cacheKey = "services:catalog:v1";
+  try {
+    if (env.CACHE) {
+      const cached = await env.CACHE.get(cacheKey, "json");
+      if (cached) return json({ ok: true, services: cached }, 200, cors);
+    }
+    if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503, cors);
+    const result = await env.DB.prepare(`SELECT code, title, description
+      FROM service_catalog WHERE enabled = 1 ORDER BY sort_order ASC`).all();
+    const services = result.results || [];
+    if (env.CACHE) await env.CACHE.put(cacheKey, JSON.stringify(services), { expirationTtl: 60 });
+    return json({ ok: true, services }, 200, cors);
+  } catch (error) {
+    console.error("Service catalog failed:", redact(error?.message || "database_error"));
+    return json({ ok: false, error: "service_catalog_unavailable" }, 503, cors);
+  }
 }
 
 async function handleDashboard(request, env) {
@@ -260,11 +337,34 @@ async function handleDashboard(request, env) {
   try { body = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400, cors); }
   const auth = await validateInitData(body?.initData || "", env.BOT_TOKEN || "");
   if (!auth.ok) return json({ ok: false, error: auth.error }, 401, cors);
-  return json({
-    ok: true, profile: { id: auth.user?.id || null, name: [auth.user?.first_name, auth.user?.last_name].filter(Boolean).join(" ") || "Người dùng", username: auth.user?.username || null },
-    stats: { orders: null, balance: null, tickets: null },
-    notice: "Số liệu sẽ hiển thị sau khi kết nối cơ sở dữ liệu nghiệp vụ."
-  }, 200, cors);
+  if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503, cors);
+  try {
+    await ensureUser(env.DB, auth.user);
+    const userId = auth.user.id;
+    const [wallet, orders, tickets, vip] = await Promise.all([
+      env.DB.prepare("SELECT balance_vnd FROM wallet_accounts WHERE telegram_user_id = ?").bind(userId).first(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM orders WHERE telegram_user_id = ?").bind(userId).first(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM tickets WHERE telegram_user_id = ?").bind(userId).first(),
+      env.DB.prepare("SELECT tier, status, expires_at FROM vip_memberships WHERE telegram_user_id = ?").bind(userId).first()
+    ]);
+    return json({
+      ok: true,
+      profile: {
+        id: userId,
+        name: [auth.user.first_name, auth.user.last_name].filter(Boolean).join(" ") || "Người dùng",
+        username: auth.user.username || null
+      },
+      stats: {
+        balance: Number(wallet?.balance_vnd || 0),
+        orders: Number(orders?.total || 0),
+        tickets: Number(tickets?.total || 0),
+        vip: vip || { tier: "free", status: "active", expires_at: null }
+      }
+    }, 200, cors);
+  } catch (error) {
+    console.error("Dashboard query failed:", redact(error?.message || "database_error"));
+    return json({ ok: false, error: "database_error" }, 503, cors);
+  }
 }
 async function handleTicket(request, env) {
   const cors = corsHeaders(request, env);
@@ -278,8 +378,20 @@ async function handleTicket(request, env) {
   const subject = String(body?.subject || "").trim().slice(0, 100);
   const message = String(body?.message || "").trim().slice(0, 2000);
   if (subject.length < 3 || message.length < 5) return json({ ok: false, error: "invalid_ticket" }, 400, cors);
-  // No database is configured in the requested architecture. Do not claim a ticket was stored.
-  return json({ ok: false, error: "ticket_storage_not_configured", message: "Hệ thống chưa kết nối kho lưu ticket. Vui lòng liên hệ CSKH qua bot." }, 503, cors);
+  if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503, cors);
+  try {
+    await ensureUser(env.DB, auth.user);
+    const now = Math.floor(Date.now() / 1000);
+    const ticketId = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO tickets
+      (id, telegram_user_id, subject, message, category, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'general', 'open', ?, ?)`)
+      .bind(ticketId, auth.user.id, subject, message, now, now).run();
+    return json({ ok: true, ticket: { id: ticketId, status: "open" } }, 201, cors);
+  } catch (error) {
+    console.error("Ticket creation failed:", redact(error?.message || "database_error"));
+    return json({ ok: false, error: "ticket_create_failed" }, 503, cors);
+  }
 }
 
 export async function validateInitData(raw, botToken, now = Math.floor(Date.now() / 1000)) {

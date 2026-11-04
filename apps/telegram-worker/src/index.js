@@ -130,11 +130,12 @@ async function handleWebhook(request, env) {
 
   try {
     await dispatchUpdate(update, env);
-    await finishTelegramUpdate(env.DB, update.update_id, { success: true });
+    await finishTelegramUpdate(env.DB, update.update_id, { claimToken: claim.claimToken, success: true });
     return json({ ok: true });
   } catch (error) {
     try {
       await finishTelegramUpdate(env.DB, update.update_id, {
+        claimToken: claim.claimToken,
         success: false,
         errorCode: "UPDATE_PROCESSING_FAILED"
       });

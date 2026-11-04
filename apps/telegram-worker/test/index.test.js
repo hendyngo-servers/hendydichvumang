@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { mainKeyboard, screenFor, escapeHtml, constantTimeEqual, validateInitData } from "../src/index.js";
+import worker, { mainKeyboard, screenFor, paymentDetails, escapeHtml, constantTimeEqual, validateInitData } from "../src/index.js";
 import { deriveWebhookSecret } from "../../../scripts/generate-webhook-secret.mjs";
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
@@ -20,6 +20,30 @@ test("menu chính hiển thị các nhóm OTP, Proxy, VIP, Code, Tool và Live",
   }
   assert.ok(buttons.some((button) => button.web_app?.url === "https://example.pages.dev/"));
 });
+test("màn hình nạp tiền hiển thị STK, nội dung theo Telegram ID và QR HTTPS", () => {
+  const env = {
+    PAYMENT_BANK_CODE: "MBBank",
+    PAYMENT_BANK_NAME: "MB Bank",
+    PAYMENT_ACCOUNT_NUMBER: "0123456789",
+    PAYMENT_ACCOUNT_NAME: "NGUYEN VAN A",
+    PAYMENT_TRANSFER_NOTE_PREFIX: "HENDY"
+  };
+  const payment = paymentDetails(env, 123456789);
+  assert.equal(payment.configured, true);
+  assert.equal(payment.transferNote, "HENDY123456789");
+  assert.match(payment.qrUrl, /^https:\/\/vietqr\.app\/img\?/);
+  const screen = screenFor("service:deposit", "Hendy", env, 123456789);
+  assert.match(screen.text, /0123456789/);
+  assert.match(screen.text, /HENDY123456789/);
+  assert.ok(screen.keyboard.inline_keyboard[0][0].url.startsWith("https://"));
+});
+
+test("màn hình nạp tiền không tự nhận đã bật đối soát nếu thiếu thông tin ngân hàng", () => {
+  const screen = screenFor("service:deposit", "Bạn", {});
+  assert.match(screen.text, /chưa được cấu hình/i);
+  assert.equal(screen.keyboard.inline_keyboard.at(-1)[0].callback_data, "menu:main");
+});
+
 test("màn hình dịch vụ có nút quay lại menu", () => {
   const screen = screenFor("service:proxy", "Bạn", {});
   assert.match(screen.text, /DỊCH VỤ PROXY/);

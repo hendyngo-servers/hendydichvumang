@@ -29,8 +29,8 @@ test("xác thực initData hợp lệ và từ chối hash sai", async () => {
   const params = new URLSearchParams({ auth_date: String(now), query_id: "query-test", user: JSON.stringify({ id: 42, first_name: "Hendy" }) });
   const check = [...params.entries()].map(([k,v]) => k + "=" + v).sort().join("\n");
   const enc = new TextEncoder();
-  const first = await crypto.subtle.importKey("raw", enc.encode(token), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const secret = await crypto.subtle.sign("HMAC", first, enc.encode("WebAppData"));
+  const first = await crypto.subtle.importKey("raw", enc.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const secret = await crypto.subtle.sign("HMAC", first, enc.encode(token));
   const second = await crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const digest = await crypto.subtle.sign("HMAC", second, enc.encode(check));
   params.set("hash", [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2,"0")).join(""));

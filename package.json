@@ -1,12 +1,14 @@
 {
   "name": "hendydichvumang",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
-  "description": "Hendy Dịch Vụ Mạng - một Telegram Bot trên Cloudflare Workers và Mini App trên Cloudflare Pages",
+  "description": "Hendy Dịch Vụ Mạng - Telegram Bot on Cloudflare Workers and Mini App on Cloudflare Pages",
   "scripts": {
-    "check": "node --check apps/telegram-worker/src/index.js && node --check apps/telegram-worker/scripts/set-webhook.mjs && node --check apps/mini-app/app.js",
+    "check": "node --check apps/telegram-worker/src/index.js && node --check apps/telegram-worker/scripts/set-webhook.mjs && node --check apps/mini-app/app.js && node --check scripts/sync-github-secrets.mjs && node --check scripts/generate-webhook-secret.mjs && node --check scripts/bootstrap-cloudflare.mjs",
     "test": "node --test apps/telegram-worker/test/*.test.js",
+    "secrets:sync": "node scripts/sync-github-secrets.mjs",
+    "cloudflare:bootstrap": "node scripts/bootstrap-cloudflare.mjs",
     "dev:worker": "wrangler dev --config apps/telegram-worker/wrangler.toml",
     "deploy:worker": "wrangler deploy --config apps/telegram-worker/wrangler.toml",
     "deploy:pages": "wrangler pages deploy apps/mini-app --project-name hendydichvumang --branch main",

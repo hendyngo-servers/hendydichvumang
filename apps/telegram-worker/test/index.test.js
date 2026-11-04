@@ -98,3 +98,37 @@ test("webhook từ chối secret sai", async () => {
   const response = await worker.fetch(request, { BOT_TOKEN: "not-used", WEBHOOK_SECRET: "expected-secret" });
   assert.equal(response.status, 401);
 });
+
+test("API endpoints answer CORS preflight only for the configured Mini App origin", async () => {
+  const allowed = await worker.fetch(new Request("https://example.workers.dev/api/dashboard", {
+    method: "OPTIONS",
+    headers: { Origin: "https://hendydichvumang.pages.dev", "Access-Control-Request-Method": "POST" }
+  }), { MINI_APP_ORIGIN: "https://hendydichvumang.pages.dev" });
+  assert.equal(allowed.status, 204);
+  assert.equal(allowed.headers.get("Access-Control-Allow-Origin"), "https://hendydichvumang.pages.dev");
+
+  const denied = await worker.fetch(new Request("https://example.workers.dev/api/dashboard", {
+    method: "OPTIONS",
+    headers: { Origin: "https://evil.example", "Access-Control-Request-Method": "POST" }
+  }), { MINI_APP_ORIGIN: "https://hendydichvumang.pages.dev" });
+  assert.equal(denied.status, 403);
+});
+
+test("API rate limiter can reject requests before business logic", async () => {
+  const response = await worker.fetch(new Request("https://example.workers.dev/api/dashboard", {
+    method: "POST",
+    headers: { "content-type": "application/json", "CF-Connecting-IP": "192.0.2.10" },
+    body: JSON.stringify({})
+  }), {
+    API_RATE_LIMITER: { limit: async ({ key }) => ({ success: false, key }) }
+  });
+  assert.equal(response.status, 429);
+  assert.deepEqual(await response.json(), { ok: false, error: "rate_limited" });
+});
+
+test("initData validator rejects duplicate hash or repeated fields", async () => {
+  const duplicatedHash = "auth_date=1800000000&hash=" + "a".repeat(64) + "&hash=" + "b".repeat(64);
+  const result = await validateInitData(duplicatedHash, "token", 1800000000);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "invalid_hash");
+});

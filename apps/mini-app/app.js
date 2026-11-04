@@ -76,11 +76,55 @@
 
   document.querySelectorAll("[data-service]").forEach((button) => {
     button.addEventListener("click", () => {
-      const message = serviceText[button.dataset.service] || "Dịch vụ đang cập nhật.";
+      const service = button.dataset.service;
+      if (service === "deposit") {
+        openPayment();
+        return;
+      }
+      const message = serviceText[service] || "Dịch vụ đang cập nhật.";
       if (tg?.showAlert) tg.showAlert(message); else toast(message);
     });
   });
+
+  async function openPayment() {
+    if (!authenticated) {
+      toast("Bạn cần mở Mini App từ Telegram và xác thực trước.");
+      return;
+    }
+    $("#payment-status").textContent = "Đang tải thông tin nhận tiền…";
+    $("#payment-modal").showModal();
+    $("#payment-qr").hidden = true;
+    try {
+      const payment = await post("/api/payment/config", { initData });
+      if (!payment.configured) {
+        $("#payment-status").textContent = "Chưa cấu hình tài khoản nhận tiền. Vui lòng liên hệ CSKH.";
+        return;
+      }
+      $("#payment-bank").textContent = payment.bankName || payment.bankCode || "—";
+      $("#payment-account").textContent = payment.accountNumber || "—";
+      $("#payment-owner").textContent = payment.accountName || "—";
+      $("#payment-note").textContent = payment.transferNote || "—";
+      if (payment.qrUrl && /^https:\/\//i.test(payment.qrUrl)) {
+        $("#payment-qr").src = payment.qrUrl;
+        $("#payment-qr").hidden = false;
+      }
+      $("#payment-status").textContent = "Thông tin nhận tiền đã được tải từ máy chủ.";
+    } catch (error) {
+      $("#payment-status").textContent = "Không tải được thông tin thanh toán: " + error.message;
+    }
+  }
+
   $("#open-ticket").addEventListener("click", () => $("#ticket-modal").showModal());
+  $("#copy-account").addEventListener("click", async () => {
+    const account = $("#payment-account").textContent;
+    if (!account || account === "—") return;
+    try {
+      await navigator.clipboard.writeText(account);
+      toast("Đã sao chép số tài khoản.");
+    } catch {
+      toast("Không thể sao chép tự động. Vui lòng chọn và sao chép số tài khoản.");
+    }
+  });
   $("#open-tool").addEventListener("click", () => $("#tool-modal").showModal());
   $("#ticket-form").addEventListener("submit", async (event) => {
     event.preventDefault();

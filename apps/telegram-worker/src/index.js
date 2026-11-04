@@ -22,7 +22,23 @@ export default {
       if (!rate.success) return json({ ok: false, error: "rate_limited" }, 429, { "retry-after": "60" });
     }
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
-      return json({ ok: true, service: "hendydichvumang-bot", status: "healthy", version: "2.0.0" });
+      let database = "unavailable";
+      if (env.DB) {
+        try {
+          await env.DB.prepare("SELECT 1 AS ok").first();
+          database = "ready";
+        } catch {
+          database = "error";
+        }
+      }
+      const ready = database === "ready";
+      return json({
+        ok: ready,
+        service: "hendydichvumang-bot",
+        status: ready ? "healthy" : "degraded",
+        version: "2.2.0",
+        components: { database, cache: env.CACHE ? "bound" : "not_configured" }
+      }, ready ? 200 : 503);
     }
     if (url.pathname === "/telegram/webhook") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -199,7 +215,7 @@ function corsHeaders(request, env) {
   const origin = request.headers.get("Origin") || "";
   const allowed = env.MINI_APP_ORIGIN || "";
   if (origin && allowed && origin === allowed) return {
-    "Access-Control-Allow-Origin": allowed, "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Origin": allowed, "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization", "Vary": "Origin"
   };
   return {};

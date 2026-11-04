@@ -1,5 +1,21 @@
 #!/usr/bin/env node
 
+import { readFileSync, writeFileSync } from "node:fs";
+
+function loadDotEnv() {
+  try {
+    const source = readFileSync(".env", "utf8");
+    for (const line of source.split(/\\r?\\n/)) {
+      const match = line.trim().match(/^([A-Z][A-Z0-9_]*)\\s*=\\s*(.*)$/);
+      if (!match || process.env[match[1]]) continue;
+      let value = match[2].trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+      process.env[match[1]] = value;
+    }
+  } catch {}
+}
+loadDotEnv();
+
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 const workerName = "hendydichvumang-bot";
@@ -73,7 +89,6 @@ async function ensureD1Database() {
   const created = await cloudflare(base, "POST", {
     name: databaseName,
     primary_location_hint: "apac",
-    read_replication: { mode: "auto" }
   });
   if (!created?.uuid) throw new Error("Cloudflare did not return a D1 database UUID.");
   console.log("Created Cloudflare D1 database.");
@@ -127,6 +142,7 @@ try {
     }
   }
 
+  writeFileSync(".cloudflare-outputs.json", JSON.stringify(outputs, null, 2) + "\n");
   if (process.env.GITHUB_ENV) {
     const { appendFileSync } = await import("node:fs");
     appendFileSync(process.env.GITHUB_ENV, Object.entries(outputs).map(([k, v]) => `${k}=${v}`).join("\n") + "\n");

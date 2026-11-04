@@ -53,7 +53,7 @@ jobs:
       - name: Render deployment bindings
         run: node scripts/render-cloudflare-config.mjs
       - name: Apply D1 migrations
-        run: npx wrangler d1 migrations apply hendydichvumang --remote --config apps/telegram-worker/wrangler.toml
+        run: npx wrangler d1 migrations apply hendydichvumang --remote --config apps/telegram-worker/wrangler.generated.toml
       - name: Generate stable webhook secret
         shell: bash
         run: |
@@ -61,7 +61,7 @@ jobs:
           echo "::add-mask::$(node scripts/generate-webhook-secret.mjs)"
           printf 'WEBHOOK_SECRET=%s\n' "$(node scripts/generate-webhook-secret.mjs)" >> "$GITHUB_ENV"
       - name: Deploy Worker
-        run: npx wrangler deploy --config apps/telegram-worker/wrangler.toml
+        run: npx wrangler deploy --config apps/telegram-worker/wrangler.generated.toml
       - name: Verify Worker health
         shell: bash
         run: |
@@ -79,15 +79,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$BOT_TOKEN" | npx wrangler secret put BOT_TOKEN --config apps/telegram-worker/wrangler.toml
-          printf '%s' "$WEBHOOK_SECRET" | npx wrangler secret put WEBHOOK_SECRET --config apps/telegram-worker/wrangler.toml
+          printf '%s' "$BOT_TOKEN" | npx wrangler secret put BOT_TOKEN --config apps/telegram-worker/wrangler.generated.toml
+          printf '%s' "$WEBHOOK_SECRET" | npx wrangler secret put WEBHOOK_SECRET --config apps/telegram-worker/wrangler.generated.toml
 
           for name in PAYMENT_BANK_CODE PAYMENT_BANK_NAME PAYMENT_ACCOUNT_NUMBER PAYMENT_ACCOUNT_NAME PAYMENT_QR_URL PAYMENT_TRANSFER_NOTE_PREFIX SUPPORT_URL; do
             value="${!name:-}"
             if [ -n "$value" ]; then
-              printf '%s' "$value" | npx wrangler secret put "$name" --config apps/telegram-worker/wrangler.toml
+              printf '%s' "$value" | npx wrangler secret put "$name" --config apps/telegram-worker/wrangler.generated.toml
             else
-              npx wrangler secret delete "$name" --config apps/telegram-worker/wrangler.toml || true
+              npx wrangler secret delete "$name" --config apps/telegram-worker/wrangler.generated.toml || true
             fi
           done
       - name: Register Telegram webhook

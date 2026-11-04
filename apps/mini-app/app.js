@@ -132,8 +132,8 @@
     const subject = $("#ticket-subject").value.trim();
     const message = $("#ticket-message").value.trim();
     try {
-      await post("/api/tickets", { initData, subject, message });
-      toast("Đã gửi yêu cầu.");
+      const result = await post("/api/tickets", { initData, subject, message });
+      toast("Đã gửi ticket #" + (result.ticket?.id || "") + " thành công.");
       $("#ticket-modal").close();
     } catch (error) {
       toast(error.message);

@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS users (
   telegram_user_id INTEGER PRIMARY KEY,
   username TEXT,

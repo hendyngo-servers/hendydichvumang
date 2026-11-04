@@ -30,11 +30,21 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$WORKER_API_URL" ]; then
-            echo "Thiếu GitHub Repository Variable WORKER_API_URL (URL workers.dev HTTPS)."
+            echo "Thiếu GitHub Repository Variable WORKER_API_URL."
             exit 1
           fi
           case "$WORKER_API_URL" in https://*) ;; *) echo "WORKER_API_URL phải là HTTPS"; exit 1 ;; esac
-          sed -i "s|__WORKER_API_URL__|${WORKER_API_URL%/}|g" apps/mini-app/config.js
+          export WORKER_API_URL
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path("apps/mini-app/index.html")
+          html = path.read_text()
+          url = os.environ["WORKER_API_URL"].rstrip("/")
+          if "__WORKER_API_URL__" not in html:
+              raise SystemExit("Không tìm thấy placeholder WORKER_API_URL trong index.html")
+          path.write_text(html.replace("__WORKER_API_URL__", url))
+          PY
       - name: Deploy Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -35,7 +35,7 @@
     $("#auth-status").textContent = status;
   }
   async function post(path, payload) {
-    if (!apiBase) throw new Error("WORKER_API_URL chưa được cấu hình.");
+    if (!apiBase || apiBase.includes("__WORKER_API_URL__")) throw new Error("WORKER_API_URL chưa được cấu hình.");
     const response = await fetch(apiBase + path, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload)
     });

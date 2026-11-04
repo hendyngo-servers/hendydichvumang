@@ -5,15 +5,24 @@ on:
     branches: [main]
     paths:
       - 'apps/mini-app/**'
+      - 'scripts/bootstrap-cloudflare.mjs'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: cloudflare-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,32 +30,38 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install Wrangler
-        run: npm install --global wrangler@4
-      - name: Configure Worker API URL
-        env:
-          WORKER_API_URL: ${{ vars.WORKER_API_URL }}
+      - name: Install dependencies
+        run: npm install
+      - name: Validate Cloudflare secrets
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "$WORKER_API_URL" ]; then
-            echo "Thiếu GitHub Repository Variable WORKER_API_URL."
-            exit 1
-          fi
-          case "$WORKER_API_URL" in https://*) ;; *) echo "WORKER_API_URL phải là HTTPS"; exit 1 ;; esac
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Thiếu GitHub Secret CLOUDFLARE_API_TOKEN"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Thiếu GitHub Secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+      - name: Create Cloudflare resources and derive URLs
+        run: node scripts/bootstrap-cloudflare.mjs
+      - name: Configure Worker API URL
+        shell: bash
+        run: |
+          set -euo pipefail
           export WORKER_API_URL
           python - <<'PY'
           import os
           from pathlib import Path
           path = Path("apps/mini-app/index.html")
           html = path.read_text()
-          url = os.environ["WORKER_API_URL"].rstrip("/")
-          if "__WORKER_API_URL__" not in html:
+          api_url = os.environ["WORKER_API_URL"].rstrip("/")
+          placeholder = '__WORKER_API_URL__'
+          if placeholder not in html:
               raise SystemExit("Không tìm thấy placeholder WORKER_API_URL trong index.html")
-          path.write_text(html.replace("__WORKER_API_URL__", url))
+          path.write_text(html.replace(placeholder, api_url))
           PY
       - name: Deploy Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: wrangler pages deploy apps/mini-app --project-name hendydichvumang --branch main
+        run: npx wrangler pages deploy apps/mini-app --project-name hendydichvumang --branch main
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Hendy Mini App"
+            echo "- Mini App: $MINI_APP_URL"
+            echo "- Worker API: $WORKER_API_URL"
+          } >> "$GITHUB_STEP_SUMMARY"

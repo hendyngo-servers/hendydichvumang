@@ -67,7 +67,7 @@ async function dispatchUpdate(update, env) {
       return;
     }
     if (command === "/nap" || command === "/deposit") {
-      const view = screenFor("service:deposit", name, env, message.from?.id);
+      const view = screenFor("service:deposit", message.from?.first_name, env, message.from?.id);
       await sendMessage(env, chatId, view.text, view.keyboard);
       return;
     }
@@ -179,7 +179,7 @@ function paymentDetails(env, telegramUserId) {
     qrUrl = "https://vietqr.app/img?" + params.toString();
   }
   return {
-    configured: Boolean(bankCode && accountNumber && accountName),
+    configured: Boolean(bankName && accountNumber && accountName),
     bankCode,
     bankName,
     accountNumber,

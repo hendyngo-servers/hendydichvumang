@@ -1,25 +1,40 @@
 # Tích hợp chọn lọc từ Hendy Server PRO
 
-Tài liệu này ghi lại phạm vi đã đối chiếu giữa:
+Repository đích: https://github.com/hendyngo-servers/hendydichvumang
 
-- Nguồn tham khảo: https://github.com/ngogiaidy56-eng/Hendy-Server-PRO
-- Repository đích: https://github.com/hendyngo-servers/hendydichvumang
+Nguồn tham khảo: https://github.com/ngogiaidy56-eng/Hendy-Server-PRO
 
-## Đã tích hợp trong nhánh này
+## Đã tích hợp
 
-- Cơ chế idempotency cho Telegram webhook bằng D1: mỗi update_id chỉ được nhận xử lý khi chưa hoàn tất; bản gửi lặp đã xử lý sẽ được ACK mà không gửi lại tin nhắn.
-- Khóa xử lý có thời hạn 60 giây để tránh hai lần Telegram delivery chạy song song. Bản xử lý lỗi hoặc lease hết hạn có thể được thử lại.
-- Chỉ lưu mã lỗi đã chuẩn hóa, trạng thái và metadata tối thiểu; không lưu nội dung message hoặc callback payload.
-- Thêm migration D1 riêng, không sửa hoặc ghi đè migration dữ liệu hiện hữu.
-- Làm sạch .env.example: chỉ giữ placeholder trống, không giữ credential.
+- Bộ điều phối lệnh Telegram, callback và hội thoại theo trạng thái (`BotDispatcher`), tách logic định tuyến khỏi transport.
+- Kho phiên hội thoại D1 có TTL, giới hạn kích thước JSON và tự xóa phiên hết hạn hoặc dữ liệu lỗi.
+- Luồng tạo ticket hỗ trợ trực tiếp trong Telegram: nhập tiêu đề, nhập nội dung, ghi ticket vào bảng `tickets`, xóa phiên sau khi hoàn tất.
+- Audit log lưu metadata tối thiểu cho sự kiện tạo ticket; không ghi nội dung hội thoại, token hoặc payload webhook.
+- Logger có allowlist trường và loại bỏ dữ liệu message/callback tùy ý.
+- Migration mới `0003_sessions_and_audit_logs.sql` chỉ thêm `user_sessions` và `audit_logs`; không thay thế bảng người dùng, ví, ledger, thanh toán hoặc `telegram_webhook_updates`.
+- Tác vụ Cron dọn phiên hội thoại hết hạn.
 
-## Không chép nguyên trạng
+## Chủ động không chép nguyên trạng
 
-- Không chép src/bot.js hoặc schema thanh toán của dự án tham khảo vì cấu trúc bảng khác với D1 hiện tại (đích dùng wallet_accounts, topup_orders, wallet_ledger).
-- Không chép Admin Dashboard tham khảo vì nó nhận token qua query string và lưu token trong localStorage; cần thiết kế lại phiên quản trị an toàn trước khi tích hợp.
-- Không chép .dev.vars.example tham khảo do file đó có các giá trị giống credential thật.
-- Chưa bật Queues, Durable Objects hoặc R2 từ dự án tham khảo vì workflow hiện tại chưa bootstrap các tài nguyên đó. Bật binding trước khi có migration hạ tầng tương ứng sẽ làm deployment thất bại.
+- Không nhập migration ví, payment, webhook hoặc user schema của dự án nguồn vì không tương thích với D1 hiện tại.
+- Không chép Admin Dashboard nguồn: cơ chế token qua query string và lưu token trong localStorage không đạt yêu cầu bảo mật. Chưa mở endpoint quản trị mới trong đợt này.
+- Không chép `.dev.vars.example` nguồn vì trước đây có các giá trị mang hình dạng credential; chỉ sử dụng GitHub Secrets và Cloudflare Worker Secrets.
+- Không chép `telegram.js` nguồn: lớp Telegram API hiện tại đã có `redirect: "error"`, timeout và lỗi đã chuẩn hóa, an toàn hơn bản nguồn.
+- Không bật Durable Objects, Queues hoặc R2 chỉ bằng cách thêm binding. Các tài nguyên này cần workflow bootstrap, luồng xử lý thực tế và kiểm thử riêng.
 
-## Giới hạn xử lý
+## Lược đồ và triển khai
 
-Idempotency ngăn xử lý trùng khi update đã được ghi nhận hoàn tất và hạn chế cạnh tranh khi Telegram retry. Nó không biến side effect bên ngoài (ví dụ Telegram sendMessage) thành giao dịch exactly-once: nếu request bên ngoài thành công nhưng Worker chết trước khi ghi trạng thái hoàn tất, update có thể được thử lại sau khi lease hết hạn.
+Workflow triển khai hiện có áp dụng D1 migrations trước khi deploy Worker. Vì vậy, migration 0003 được chạy trước khi mã Worker mới sử dụng kho phiên và audit log. Các truy vấn dọn phiên chỉ chạy sau khi migration đã được áp dụng.
+
+## Bảo mật vận hành
+
+- Giữ `BOT_TOKEN` trong GitHub Secret/Cloudflare Worker Secret, không đưa vào source code, Mini App, URL hoặc log.
+- Không dùng `?token=` để xác thực Admin Dashboard.
+- Không ghi nội dung message, callback data, thông tin ngân hàng hoặc dữ liệu phiên vào log.
+- Nếu credential từng được commit ở repository nguồn, hãy xoay vòng credential đó trước khi dùng lại ở production.
+
+## Giới hạn còn lại
+
+- Ticket tạo từ bot hiện được lưu trong D1; giao diện quản trị để phân công/xử lý ticket là hạng mục riêng.
+- Chưa tích hợp trực tiếp các nhà cung cấp OTP/Proxy, cổng đối soát ngân hàng hoặc Core Backend.
+- WebSocket/DO, Queue/DLQ và R2 sẽ chỉ được bật ở các thay đổi độc lập sau khi có binding, migration hạ tầng, retry policy và kiểm thử tương ứng.

@@ -14,10 +14,10 @@ if (missing.length) {
   process.exit(1);
 }
 
-const databaseId = process.env.D1_DATABASE_ID;
-const namespaceId = process.env.KV_NAMESPACE_ID;
-const miniAppUrl = String(process.env.MINI_APP_URL).replace(/\/$/, "");
-const workerApiUrl = String(process.env.WORKER_API_URL || "").replace(/\/$/, "");
+const databaseId = value("D1_DATABASE_ID");
+const namespaceId = value("KV_NAMESPACE_ID");
+const miniAppUrl = String(value("MINI_APP_URL")).replace(/\/$/, "");
+const workerApiUrl = String(value("WORKER_API_URL")).replace(/\/$/, "");
 
 if (!/^[a-f0-9-]{36}$/i.test(databaseId)) {
   console.error("D1_DATABASE_ID is not a valid UUID.");

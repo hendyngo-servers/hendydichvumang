@@ -10,6 +10,7 @@ if (listing.error || listing.status !== 0) {
 
 const knownPublicTestFixtures = new Set([
   "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+  "987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
   "5768337691:AAH5YkoiEuPk8-FZa32hStHTqXiLPtAEhx8"
 ]);
 const findings = [];

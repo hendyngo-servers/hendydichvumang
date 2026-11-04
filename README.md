@@ -100,6 +100,23 @@ Script đọc `.env` và gửi từng giá trị qua stdin của `gh secret set`
 - `CLOUDFLARE_ACCOUNT_ID`
 - `BOT_TOKEN`
 
+### Thông tin ngân hàng/QR tùy chọn
+
+Có thể cấu hình trong chính file `.env` và đồng bộ như các bí mật khác:
+
+```env
+PAYMENT_BANK_CODE=
+PAYMENT_BANK_NAME=
+PAYMENT_ACCOUNT_NUMBER=
+PAYMENT_ACCOUNT_NAME=
+PAYMENT_QR_URL=
+PAYMENT_TRANSFER_NOTE_PREFIX=HENDY
+```
+
+Các trường ngân hàng là tùy chọn. Khi có ngân hàng, STK và tên chủ tài khoản, bot `/nap` và Mini App sẽ hiển thị thông tin nhận tiền. Nếu có `PAYMENT_QR_URL`, Worker dùng URL HTTPS đó; nếu không, Worker tạo URL ảnh VietQR từ `PAYMENT_BANK_CODE`, số tài khoản và nội dung chuyển khoản. QR được tạo để điền sẵn thông tin chuyển khoản, không xác nhận việc tiền đã vào tài khoản. Tài liệu SePay mô tả luồng QR cần kết hợp webhook để xác nhận giao dịch: <https://developer.sepay.vn/vi/sepay-webhooks/tao-qr-va-form-thanh-toan>.
+
+**Chưa bật tự động cộng tiền:** repository hiện chưa có D1 wallet/ledger, bảng đơn nạp, endpoint webhook ngân hàng hoặc kiểm tra chữ ký nhà cung cấp. Không được cộng số dư chỉ vì người dùng mở QR hoặc gửi ảnh biên lai. Muốn tự động xác nhận cần đăng ký SePay hoặc API ngân hàng, lấy API key/HMAC secret từ nhà cung cấp, rồi triển khai webhook + D1 transaction chống giao dịch trùng. Những khóa đó không tự sinh được và chỉ nên thêm sau khi kết nối nhà cung cấp.
+
 ### Những cấu hình hệ thống tự tạo
 
 Không cần tự tạo GitHub Variables hay GitHub Secret thứ tư:

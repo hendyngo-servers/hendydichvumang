@@ -185,15 +185,17 @@ const botDispatcher = createBotDispatcher();
 function createBotDispatcher() {
   const registry = new BotDispatcher();
 
-  const openMainMenu = ({ chatId, message, env }) =>
-    sendMessage(env, chatId, mainText(message.from?.first_name), mainKeyboard(env));
+  const openMainMenu = async ({ chatId, message, env, telegramUserId, db }) => {
+    await clearUserSession(db, telegramUserId);
+    return sendMessage(env, chatId, mainText(message.from?.first_name), mainKeyboard(env));
+  };
 
   registry.command("start", openMainMenu);
   registry.command("menu", openMainMenu);
   registry.command("help", ({ chatId, env }) => sendMessage(
     env,
     chatId,
-    "ℹ️ <b>TRỢ GIÚP HENDY</b>\\n/start hoặc /menu — mở menu dịch vụ\\n/nap — thông tin nạp tiền\\n/otp, /proxy, /vip, /code — nhóm dịch vụ\\n/tool, /live — dịch vụ công cụ và Live\\n/support — kênh hỗ trợ\\n/cancel — hủy thao tác đang nhập\\n/help — xem hướng dẫn",
+    "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/nap — thông tin nạp tiền\n/otp, /proxy, /vip, /code — nhóm dịch vụ\n/tool, /live — dịch vụ công cụ và Live\n/support — kênh hỗ trợ\n/cancel — hủy thao tác đang nhập\n/help — xem hướng dẫn",
     mainKeyboard(env)
   ));
 
@@ -228,7 +230,7 @@ function createBotDispatcher() {
     await setUserSession(db, telegramUserId, { action: "support:subject" }, 900);
     return helpers.editOrSend({
       chatId, messageId, env,
-      text: "✍️ <b>TẠO YÊU CẦU HỖ TRỢ</b>\\n\\nVui lòng nhập tiêu đề yêu cầu (3–100 ký tự). Phiên nhập có hiệu lực trong 15 phút.",
+      text: "✍️ <b>TẠO YÊU CẦU HỖ TRỢ</b>\n\nVui lòng nhập tiêu đề yêu cầu (3–100 ký tự). Phiên nhập có hiệu lực trong 15 phút.",
       keyboard: { inline_keyboard: [[{ text: "✖️ HỦY", callback_data: "support:cancel" }]] }
     });
   });
@@ -244,7 +246,8 @@ function createBotDispatcher() {
     if (subject.length < 3 || subject.length > 100) {
       return sendMessage(env, chatId, "Tiêu đề cần có từ 3 đến 100 ký tự. Vui lòng nhập lại hoặc dùng /cancel để hủy.");
     }
-    await setUserSession(db, telegramUserId, { action: "support:message", subject }, 900);
+    const ticketId = crypto.randomUUID();
+    await setUserSession(db, telegramUserId, { action: "support:message", subject, ticketId }, 900);
     return sendMessage(env, chatId, "📝 Đã nhận tiêu đề. Vui lòng mô tả vấn đề (5–2.000 ký tự). Dùng /cancel để hủy.");
   });
 
@@ -260,23 +263,29 @@ function createBotDispatcher() {
     }
 
     const now = Math.floor(Date.now() / 1000);
-    const ticketId = crypto.randomUUID();
-    await db.prepare(`INSERT INTO tickets
+    const ticketId = typeof session.ticketId === "string" && session.ticketId ? session.ticketId : crypto.randomUUID();
+    await db.prepare(`INSERT OR IGNORE INTO tickets
       (id, telegram_user_id, subject, message, category, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'general', 'open', ?, ?)`)
       .bind(ticketId, telegramUserId, session.subject, messageText, now, now).run();
-    await writeAuditLog(db, {
-      actorTelegramId: telegramUserId,
-      action: "ticket.created",
-      target: ticketId,
-      details: { category: "general" },
-      now
-    });
+    try {
+      await writeAuditLog(db, {
+        id: "ticket.created:" + ticketId,
+        actorTelegramId: telegramUserId,
+        action: "ticket.created",
+        target: ticketId,
+        details: { category: "general" },
+        now
+      });
+    } catch {
+      // Ticket creation is idempotent; an audit outage must not create duplicate tickets.
+      console.error("Ticket audit event could not be persisted.");
+    }
     await clearUserSession(db, telegramUserId);
     return sendMessage(
       env,
       chatId,
-      "✅ <b>ĐÃ TẠO YÊU CẦU HỖ TRỢ</b>\\nMã ticket: <code>" + escapeHtml(ticketId) + "</code>\\nĐội ngũ CSKH sẽ tiếp nhận yêu cầu của bạn.",
+      "✅ <b>ĐÃ TẠO YÊU CẦU HỖ TRỢ</b>\nMã ticket: <code>" + escapeHtml(ticketId) + "</code>\nĐội ngũ CSKH sẽ tiếp nhận yêu cầu của bạn.",
       mainKeyboard(env)
     );
   });

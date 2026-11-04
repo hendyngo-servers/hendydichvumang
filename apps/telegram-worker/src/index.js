@@ -1,3 +1,5 @@
+import { claimTelegramUpdate, finishTelegramUpdate } from "./webhook-idempotency.js";
+
 const TELEGRAM_API = "https://api.telegram.org";
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_INIT_DATA_AGE_SECONDS = 86400;
@@ -100,6 +102,7 @@ async function runScheduledMaintenance(env, cron) {
 
 async function handleWebhook(request, env) {
   if (!env.BOT_TOKEN || !env.WEBHOOK_SECRET) return json({ ok: false, error: "server_not_configured" }, 503);
+  if (!env.DB) return json({ ok: false, error: "database_not_configured" }, 503);
   const supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
   if (!constantTimeEqual(supplied, env.WEBHOOK_SECRET)) return json({ ok: false, error: "unauthorized" }, 401);
   const contentLength = Number(request.headers.get("content-length") || 0);
@@ -108,12 +111,37 @@ async function handleWebhook(request, env) {
   if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) return json({ ok: false, error: "payload_too_large" }, 413);
   let update;
   try { update = JSON.parse(raw); } catch { return json({ ok: false, error: "invalid_json" }, 400); }
+  if (!update || !Number.isSafeInteger(update.update_id) || update.update_id < 0) {
+    return json({ ok: false, error: "invalid_update_id" }, 400);
+  }
+
+  let claim;
+  try {
+    claim = await claimTelegramUpdate(env.DB, update.update_id);
+  } catch {
+    console.error("Telegram webhook idempotency claim failed.");
+    return json({ ok: false, error: "webhook_state_unavailable" }, 503, { "retry-after": "5" });
+  }
+  if (claim.duplicate) return json({ ok: true, duplicate: true });
+  if (!claim.claimed) {
+    return json({ ok: false, error: "update_in_progress" }, 503, { "retry-after": "2" });
+  }
+
   try {
     await dispatchUpdate(update, env);
+    await finishTelegramUpdate(env.DB, update.update_id, { success: true });
     return json({ ok: true });
   } catch (error) {
+    try {
+      await finishTelegramUpdate(env.DB, update.update_id, {
+        success: false,
+        errorCode: "UPDATE_PROCESSING_FAILED"
+      });
+    } catch {
+      console.error("Telegram webhook state finalization failed.");
+    }
     console.error("Telegram update error:", redact(error?.message || "unknown", env));
-    // Telegram should retry transient failures.
+    // Telegram retries transient failures; the D1 row remains retryable.
     return json({ ok: false, error: "update_failed" }, 500);
   }
 }

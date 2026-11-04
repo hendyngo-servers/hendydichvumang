@@ -1,65 +1,99 @@
 (() => {
-  const telegram = window.Telegram?.WebApp;
-  const config = window.HENDY_CONFIG || {};
+  "use strict";
+  const tg = window.Telegram?.WebApp;
   const $ = (selector) => document.querySelector(selector);
+  const apiBase = document.querySelector('meta[name="worker-api-url"]')?.content?.trim().replace(/\/$/, "") || "";
+  const serviceText = {
+    otp: "Dịch vụ OTP chưa kết nối nhà cung cấp.",
+    proxy: "Proxy tĩnh và Proxy xoay đang chờ cấu hình.",
+    vip: "Kho VIP chưa kết nối hệ thống cấp quyền.",
+    code: "Kho Code chưa kết nối dữ liệu sản phẩm.",
+    rental: "Thuê Tool đang chờ kết nối dịch vụ.",
+    live: "Minigame Live đang chờ tích hợp."
+  };
+  let authenticated = false;
+  let initData = "";
+  let toastTimer;
 
-  if (telegram) {
-    telegram.ready();
-    telegram.expand();
-    telegram.setHeaderColor?.("#0b1020");
-    telegram.setBackgroundColor?.("#0b1020");
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor?.("#080d1c");
+    tg.setBackgroundColor?.("#080d1c");
   }
-
   $("#year").textContent = String(new Date().getFullYear());
 
+  function toast(message) {
+    const node = $("#toast");
+    node.textContent = message;
+    node.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => node.classList.remove("show"), 2600);
+  }
+  function setSession(label, status) {
+    $("#session-state").textContent = label;
+    $("#auth-status").textContent = status;
+  }
+  async function post(path, payload) {
+    if (!apiBase) throw new Error("WORKER_API_URL chưa được cấu hình.");
+    const response = await fetch(apiBase + path, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.message || data.error || "Yêu cầu không thành công.");
+    return data;
+  }
   async function authenticate() {
-    const initData = telegram?.initData || "";
+    initData = tg?.initData || "";
     if (!initData) {
-      $("#auth-status").textContent = "Hãy mở Mini App từ bot Telegram để xác thực tài khoản.";
-      $("#session-state").textContent = "Chưa xác thực";
+      setSession("Chưa xác thực", "Vui lòng mở Mini App từ bot Telegram để xác thực tài khoản.");
       return;
     }
-    const previewUser = telegram?.initDataUnsafe?.user;
-    if (previewUser?.first_name) $("#greeting").textContent = `Xin chào ${previewUser.first_name} 👋`;
-
-    const apiBase = String(config.API_BASE_URL || "").trim().replace(/\/$/, "");
-    if (!apiBase || apiBase.includes("__WORKER_API_URL__")) {
-      $("#auth-status").textContent = "Mini App đã mở trong Telegram. Quản trị viên cần cấu hình WORKER_API_URL để bật xác thực máy chủ.";
-      $("#session-state").textContent = "Chờ cấu hình API";
-      return;
+    const preview = tg?.initDataUnsafe?.user;
+    if (preview) {
+      $("#greeting").textContent = "Xin chào " + (preview.first_name || "bạn") + " 👋";
+      $("#avatar").textContent = (preview.first_name || "H").slice(0, 1).toUpperCase();
     }
-
     try {
-      const response = await fetch(`${apiBase}/api/telegram/auth`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ initData }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error || "Không thể xác thực phiên.");
-      $("#greeting").textContent = `Xin chào ${result.user?.first_name || "bạn"} 👋`;
-      $("#auth-status").textContent = "Tài khoản Telegram đã được máy chủ xác thực.";
-      $("#session-state").textContent = "Đã xác thực";
+      const auth = await post("/api/telegram/auth", { initData });
+      authenticated = true;
+      const user = auth.user || {};
+      $("#greeting").textContent = "Xin chào " + (user.first_name || "bạn") + " 👋";
+      $("#telegram-id").textContent = user.id ? String(user.id) : "Đã xác thực";
+      setSession("Đã xác thực", "Tài khoản Telegram đã được máy chủ xác minh chữ ký.");
+      try {
+        const dashboard = await post("/api/dashboard", { initData });
+        if (dashboard.profile?.id) $("#telegram-id").textContent = String(dashboard.profile.id);
+        if (dashboard.stats?.balance !== null && dashboard.stats?.balance !== undefined) $("#stat-balance").textContent = String(dashboard.stats.balance);
+        if (dashboard.stats?.orders !== null && dashboard.stats?.orders !== undefined) $("#stat-orders").textContent = String(dashboard.stats.orders);
+        if (dashboard.stats?.tickets !== null && dashboard.stats?.tickets !== undefined) $("#stat-tickets").textContent = String(dashboard.stats.tickets);
+      } catch (error) { console.warn("Dashboard chưa sẵn sàng:", error.message); }
     } catch (error) {
-      $("#auth-status").textContent = `Xác thực chưa thành công: ${error.message}`;
-      $("#session-state").textContent = "Không hợp lệ";
+      authenticated = false;
+      setSession("Không hợp lệ", "Xác thực thất bại: " + error.message);
     }
   }
 
-  const serviceMessages = {
-    minigame: "Minigame Live hiện chưa kết nối hệ thống dịch vụ.",
-    rental: "Danh mục thuê Tool đang chờ cấu hình sản phẩm.",
-    shop: "Danh mục Proxy và sản phẩm đang chờ kết nối đơn hàng.",
-    deposit: "Cổng nạp tiền chưa được cấu hình. Vui lòng liên hệ CSKH.",
-    tools: "Kho công cụ đang được tích hợp từng phần.",
-    support: "Vui lòng mở bot và chọn mục Giới thiệu & Hỗ trợ để liên hệ quản trị viên.",
-  };
   document.querySelectorAll("[data-service]").forEach((button) => {
     button.addEventListener("click", () => {
-      const message = serviceMessages[button.getAttribute("data-service")] || "Chức năng đang được cập nhật.";
-      if (telegram?.showAlert) telegram.showAlert(message);
-      else window.alert(message);
+      const message = serviceText[button.dataset.service] || "Dịch vụ đang cập nhật.";
+      if (tg?.showAlert) tg.showAlert(message); else toast(message);
     });
+  });
+  $("#open-ticket").addEventListener("click", () => $("#ticket-modal").showModal());
+  $("#open-tool").addEventListener("click", () => $("#tool-modal").showModal());
+  $("#ticket-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!authenticated) { toast("Bạn cần mở Mini App từ Telegram và xác thực trước."); return; }
+    const subject = $("#ticket-subject").value.trim();
+    const message = $("#ticket-message").value.trim();
+    try {
+      await post("/api/tickets", { initData, subject, message });
+      toast("Đã gửi yêu cầu.");
+      $("#ticket-modal").close();
+    } catch (error) {
+      toast(error.message);
+    }
   });
   authenticate();
 })();

@@ -50,6 +50,7 @@ hendydichvumang/
 | GET | /health | Kiểm tra Worker |
 | POST | /telegram/webhook | Nhận Telegram Update, yêu cầu secret header |
 | POST | /api/telegram/auth | Xác minh Telegram WebApp initData |
+| POST | /api/payment/config | Trả thông tin STK/QR sau khi xác thực Mini App |
 | POST | /api/dashboard | Trả hồ sơ đã xác thực và trạng thái thống kê |
 | POST | /api/tickets | Kiểm tra yêu cầu hỗ trợ; hiện trả 503 đến khi cấu hình kho lưu |
 
@@ -111,6 +112,7 @@ PAYMENT_ACCOUNT_NUMBER=
 PAYMENT_ACCOUNT_NAME=
 PAYMENT_QR_URL=
 PAYMENT_TRANSFER_NOTE_PREFIX=HENDY
+SUPPORT_URL=
 ```
 
 Các trường ngân hàng là tùy chọn. Khi có ngân hàng, STK và tên chủ tài khoản, bot `/nap` và Mini App sẽ hiển thị thông tin nhận tiền. Nếu có `PAYMENT_QR_URL`, Worker dùng URL HTTPS đó; nếu không, Worker tạo URL ảnh VietQR từ `PAYMENT_BANK_CODE`, số tài khoản và nội dung chuyển khoản. QR được tạo để điền sẵn thông tin chuyển khoản, không xác nhận việc tiền đã vào tài khoản. Tài liệu SePay mô tả luồng QR cần kết hợp webhook để xác nhận giao dịch: <https://developer.sepay.vn/vi/sepay-webhooks/tao-qr-va-form-thanh-toan>.

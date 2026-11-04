@@ -55,6 +55,24 @@ hendydichvumang/
 
 Các thống kê số dư/đơn hàng/ticket được để trống có chủ đích cho đến khi kết nối cơ sở dữ liệu. Form ticket, đăng nhập Tool Live và CAPTCHA là giao diện tích hợp; chưa ghi nhận ticket hay xác thực thông tin đăng nhập khi chưa có dịch vụ backend tương ứng.
 
+## Bảo mật Telegram Mini App (initData)
+
+Mini App chỉ gửi `Telegram.WebApp.initData` nguyên bản tới Worker. Không dùng `initDataUnsafe` để xác thực và không gửi Telegram Bot Token xuống trình duyệt.
+
+Quy trình HMAC-SHA-256 chính xác theo Telegram:
+
+1. Lấy `hash` và giữ lại để so sánh.
+2. Tạo `data_check_string` từ toàn bộ cặp `key=value` còn lại (loại `hash`), sắp xếp theo tên key tăng dần và nối bằng ký tự LF (`\\n`).
+3. Tạo khóa bí mật: `secret_key = HMAC_SHA256(key=BOT_TOKEN, message="WebAppData")`.
+4. Tính `calculated_hash = HMAC_SHA256(key=secret_key, message=data_check_string)`, biểu diễn bằng hex chữ thường.
+5. So sánh hash bằng phép so sánh constant-time; từ chối nếu chữ ký sai, thiếu `auth_date`, ngày quá xa trong tương lai hoặc dữ liệu quá hạn.
+
+**Lưu ý:** `initData` được ký, không được mã hóa. HTTPS bảo vệ đường truyền; HMAC bảo vệ tính toàn vẹn và nguồn gốc dữ liệu. Worker giữ Bot Token dưới dạng Secret. Không tin Telegram ID, username, số dư hoặc role do client tự gửi.
+
+Sau bước xác thực, nên nâng cấp thành mô hình session: endpoint đăng nhập xác thực `initData` một lần, cấp bearer token ngẫu nhiên ngắn hạn; chỉ lưu SHA-256 của token trong D1 cùng `user_id`, `expires_at`, `revoked_at`. API nhạy cảm chỉ đọc người dùng từ session đã xác thực. Dùng D1 unique constraint với fingerprint của `initData` để chặn dùng lại cùng dữ liệu đăng nhập; không dùng KV làm khóa chống replay/ghi sổ giao dịch vì KV có eventual consistency. Không ghi `initData`, token phiên, Bot Token hoặc thông tin thanh toán vào log.
+
+Bộ kiểm thử có vector mẫu xác thực được công bố trong tài liệu Telegram để tránh việc test và code cùng mắc một lỗi đảo chiều HMAC.
+
 ## Cấu hình bí mật
 
 Trong GitHub → Settings → Secrets and variables → Actions → Secrets, tạo:

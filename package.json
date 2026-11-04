@@ -1,18 +1,22 @@
 {
   "name": "hendydichvumang",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "description": "Hendy Dịch Vụ Mạng - Telegram Bot on Cloudflare Workers and Mini App on Cloudflare Pages",
   "scripts": {
-    "check": "node --check apps/telegram-worker/src/index.js && node --check apps/telegram-worker/scripts/set-webhook.mjs && node --check apps/mini-app/app.js && node --check scripts/sync-github-secrets.mjs && node --check scripts/generate-webhook-secret.mjs && node --check scripts/bootstrap-cloudflare.mjs",
+    "check": "node --check apps/telegram-worker/src/index.js && node --check apps/telegram-worker/scripts/set-webhook.mjs && node --check apps/mini-app/app.js && node --check scripts/sync-github-secrets.mjs && node --check scripts/generate-webhook-secret.mjs && node --check scripts/bootstrap-cloudflare.mjs && node --check scripts/render-cloudflare-config.mjs",
     "test": "node --test apps/telegram-worker/test/*.test.js",
     "secrets:sync": "node scripts/sync-github-secrets.mjs",
-    "cloudflare:bootstrap": "node scripts/bootstrap-cloudflare.mjs",
+    "cloudflare:bootstrap": "node scripts/bootstrap-cloudflare.mjs && node scripts/render-cloudflare-config.mjs",
     "dev:worker": "wrangler dev --config apps/telegram-worker/wrangler.toml",
     "deploy:worker": "wrangler deploy --config apps/telegram-worker/wrangler.toml",
     "deploy:pages": "wrangler pages deploy apps/mini-app --project-name hendydichvumang --branch main",
-    "webhook:set": "node apps/telegram-worker/scripts/set-webhook.mjs"
+    "webhook:set": "node apps/telegram-worker/scripts/set-webhook.mjs",
+    "db:migrate": "wrangler d1 migrations apply hendydichvumang --remote --config apps/telegram-worker/wrangler.toml",
+    "db:migrate:local": "wrangler d1 migrations apply hendydichvumang --local --config apps/telegram-worker/wrangler.toml",
+    "cloudflare:render": "node scripts/render-cloudflare-config.mjs",
+    "check:all": "npm run check && npm test"
   },
   "devDependencies": {
     "wrangler": "^4.45.0"

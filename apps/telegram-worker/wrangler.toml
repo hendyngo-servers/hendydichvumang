@@ -32,3 +32,7 @@ crons = ["*/5 * * * *", "0 17 * * *"]
 [observability]
 enabled = true
 head_sampling_rate = 0.1
+
+# Never persist outbound Bot API request traces that could include tokenized URLs.
+[observability.traces]
+enabled = false

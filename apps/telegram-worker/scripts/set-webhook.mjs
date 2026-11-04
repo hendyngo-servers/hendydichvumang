@@ -34,6 +34,7 @@ async function telegramRequest(method, payload) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
+      redirect: "error",
       signal: AbortSignal.timeout(10000)
     });
   } catch {

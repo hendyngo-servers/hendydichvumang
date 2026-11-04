@@ -1,4 +1,7 @@
 import { claimTelegramUpdate, finishTelegramUpdate } from "./webhook-idempotency.js";
+import { BotDispatcher } from "./core/bot-dispatcher.js";
+import { getUserSession, setUserSession, clearUserSession } from "./core/session-store.js";
+import { writeAuditLog } from "./core/audit-log.js";
 
 const TELEGRAM_API = "https://api.telegram.org";
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -38,7 +41,7 @@ export default {
         ok: ready,
         service: "hendydichvumang-bot",
         status: ready ? "healthy" : "degraded",
-        version: "2.2.0",
+        version: "2.4.0",
         components: { database, cache: env.CACHE ? "bound" : "not_configured" }
       }, ready ? 200 : 503);
     }
@@ -91,7 +94,8 @@ async function runScheduledMaintenance(env, cron) {
     env.DB.prepare(`UPDATE orders SET status = 'expired', updated_at = ?
       WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ?`).bind(now, now),
     env.DB.prepare(`UPDATE proxy_leases SET status = 'revoke_pending', updated_at = ?
-      WHERE status = 'active' AND expires_at <= ?`).bind(now, now)
+      WHERE status = 'active' AND expires_at <= ?`).bind(now, now),
+    env.DB.prepare("DELETE FROM user_sessions WHERE expires_at <= ?").bind(now)
   ]);
   if (cron === "0 17 * * *") {
     await env.DB.prepare(`UPDATE vip_memberships SET status = 'expired', updated_at = ?
@@ -149,46 +153,147 @@ async function handleWebhook(request, env) {
 }
 
 async function dispatchUpdate(update, env) {
-  if (update?.message) {
-    const message = update.message;
-    const chatId = message.chat?.id;
-    if (!chatId) return;
-    const text = typeof message.text === "string" ? message.text.trim() : "";
-    const command = text.split(/\s+/, 1)[0].split("@")[0].toLowerCase();
-    if (command === "/start" || command === "/menu") {
-      await sendMessage(env, chatId, mainText(message.from?.first_name), mainKeyboard(env));
-      return;
-    }
-    if (command === "/help") {
-      await sendMessage(env, chatId, "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/nap — thông tin nạp tiền\n/otp, /proxy, /vip, /code — nhóm dịch vụ\n/tool, /live — dịch vụ công cụ và Live\n/support — kênh hỗ trợ\n/help — xem hướng dẫn", mainKeyboard(env));
-      return;
-    }
-    const commandRoutes = {
-      "/nap": "deposit", "/deposit": "deposit", "/topup": "deposit",
-      "/otp": "otp", "/proxy": "proxy", "/vip": "vip",
-      "/code": "code", "/tool": "rental", "/live": "live",
-      "/support": "support"
-    };
-    if (commandRoutes[command]) {
-      const view = screenFor("service:" + commandRoutes[command], message.from?.first_name, env, message.from?.id);
-      await sendMessage(env, chatId, view.text, view.keyboard);
-      return;
-    }
-    if (text) await sendMessage(env, chatId, "Mình chưa nhận diện được yêu cầu. Bạn hãy chọn chức năng trong menu nhé.", mainKeyboard(env));
-    return;
-  }
-  if (update?.callback_query) {
-    const q = update.callback_query;
-    await telegramCall(env, "answerCallbackQuery", { callback_query_id: q.id });
-    const chatId = q.message?.chat?.id;
-    const messageId = q.message?.message_id;
-    if (!chatId || !messageId) return;
-    const view = screenFor(q.data || "", q.from?.first_name, env, q.from?.id);
-    await telegramCall(env, "editMessageText", {
-      chat_id: chatId, message_id: messageId, text: view.text, parse_mode: "HTML",
-      reply_markup: view.keyboard, disable_web_page_preview: true
+  return botDispatcher.dispatch(update, env, env.DB, {
+    ensureUser,
+    getSession: getUserSession,
+    setSession: setUserSession,
+    clearSession: clearUserSession,
+    sendMessage: (chatId, text, keyboard) => sendMessage(env, chatId, text, keyboard),
+    answerCallbackQuery: (query) => telegramCall(env, "answerCallbackQuery", { callback_query_id: query.id }),
+    editOrSend: ({ chatId, messageId, text, keyboard }) => {
+      if (!messageId) return sendMessage(env, chatId, text, keyboard);
+      return telegramCall(env, "editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: keyboard,
+        disable_web_page_preview: true
+      });
+    },
+    mainKeyboard,
+    isAdmin: (runtimeEnv, telegramUserId) => String(runtimeEnv.ADMIN_IDS || "")
+      .split(/[,;\s]+/)
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isSafeInteger(value) && value > 0)
+      .includes(Number(telegramUserId))
+  });
+}
+
+const botDispatcher = createBotDispatcher();
+
+function createBotDispatcher() {
+  const registry = new BotDispatcher();
+
+  const openMainMenu = async ({ chatId, message, env, telegramUserId, db }) => {
+    await clearUserSession(db, telegramUserId);
+    return sendMessage(env, chatId, mainText(message.from?.first_name), mainKeyboard(env));
+  };
+
+  registry.command("start", openMainMenu);
+  registry.command("menu", openMainMenu);
+  registry.command("help", ({ chatId, env }) => sendMessage(
+    env,
+    chatId,
+    "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/nap — thông tin nạp tiền\n/otp, /proxy, /vip, /code — nhóm dịch vụ\n/tool, /live — dịch vụ công cụ và Live\n/support — kênh hỗ trợ\n/cancel — hủy thao tác đang nhập\n/help — xem hướng dẫn",
+    mainKeyboard(env)
+  ));
+
+  const serviceCommands = {
+    nap: "deposit", deposit: "deposit", topup: "deposit",
+    otp: "otp", proxy: "proxy", vip: "vip", code: "code",
+    tool: "rental", live: "live", support: "support"
+  };
+  for (const [command, service] of Object.entries(serviceCommands)) {
+    registry.command(command, ({ chatId, message, env, telegramUserId }) => {
+      const view = screenFor("service:" + service, message.from?.first_name, env, telegramUserId);
+      return sendMessage(env, chatId, view.text, view.keyboard);
     });
   }
+
+  registry.command("cancel", async ({ chatId, env, telegramUserId, db }) => {
+    await clearUserSession(db, telegramUserId);
+    return sendMessage(env, chatId, "✅ Đã hủy thao tác đang thực hiện.", mainKeyboard(env));
+  });
+
+  registry.callback("menu:main", ({ chatId, messageId, message, env, telegramUserId, helpers }) => {
+    const view = screenFor("menu:main", message?.chat?.first_name || message?.from?.first_name, env, telegramUserId);
+    return helpers.editOrSend({ chatId, messageId, env, text: view.text, keyboard: view.keyboard });
+  });
+
+  registry.callback("service:*", ({ chatId, messageId, message, data, env, telegramUserId, helpers }) => {
+    const view = screenFor(data, message?.chat?.first_name || message?.from?.first_name, env, telegramUserId);
+    return helpers.editOrSend({ chatId, messageId, env, text: view.text, keyboard: view.keyboard });
+  });
+
+  registry.callback("support:new", async ({ chatId, messageId, env, telegramUserId, helpers, db }) => {
+    await setUserSession(db, telegramUserId, { action: "support:subject" }, 900);
+    return helpers.editOrSend({
+      chatId, messageId, env,
+      text: "✍️ <b>TẠO YÊU CẦU HỖ TRỢ</b>\n\nVui lòng nhập tiêu đề yêu cầu (3–100 ký tự). Phiên nhập có hiệu lực trong 15 phút.",
+      keyboard: { inline_keyboard: [[{ text: "✖️ HỦY", callback_data: "support:cancel" }]] }
+    });
+  });
+
+  registry.callback("support:cancel", async ({ chatId, messageId, env, telegramUserId, helpers, db }) => {
+    await clearUserSession(db, telegramUserId);
+    const view = { text: mainText("bạn"), keyboard: mainKeyboard(env) };
+    return helpers.editOrSend({ chatId, messageId, env, text: view.text, keyboard: view.keyboard });
+  });
+
+  registry.session("support:subject", async ({ chatId, telegramUserId, text, env, db }) => {
+    const subject = text.trim();
+    if (subject.length < 3 || subject.length > 100) {
+      return sendMessage(env, chatId, "Tiêu đề cần có từ 3 đến 100 ký tự. Vui lòng nhập lại hoặc dùng /cancel để hủy.");
+    }
+    const ticketId = crypto.randomUUID();
+    await setUserSession(db, telegramUserId, { action: "support:message", subject, ticketId }, 900);
+    return sendMessage(env, chatId, "📝 Đã nhận tiêu đề. Vui lòng mô tả vấn đề (5–2.000 ký tự). Dùng /cancel để hủy.");
+  });
+
+  registry.session("support:message", async ({ chatId, telegramUserId, text, env, db }) => {
+    const messageText = text.trim();
+    if (messageText.length < 5 || messageText.length > 2000) {
+      return sendMessage(env, chatId, "Nội dung cần có từ 5 đến 2.000 ký tự. Vui lòng nhập lại hoặc dùng /cancel để hủy.");
+    }
+    const session = await getUserSession(db, telegramUserId);
+    if (!session?.subject) {
+      await clearUserSession(db, telegramUserId);
+      return sendMessage(env, chatId, "Phiên hỗ trợ đã hết hạn. Hãy chọn lại Trung tâm hỗ trợ.", mainKeyboard(env));
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const ticketId = typeof session.ticketId === "string" && session.ticketId ? session.ticketId : crypto.randomUUID();
+    await db.prepare(`INSERT OR IGNORE INTO tickets
+      (id, telegram_user_id, subject, message, category, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'general', 'open', ?, ?)`)
+      .bind(ticketId, telegramUserId, session.subject, messageText, now, now).run();
+    try {
+      await writeAuditLog(db, {
+        id: "ticket.created:" + ticketId,
+        actorTelegramId: telegramUserId,
+        action: "ticket.created",
+        target: ticketId,
+        details: { category: "general" },
+        now
+      });
+    } catch {
+      // Ticket creation is idempotent; an audit outage must not create duplicate tickets.
+      console.error("Ticket audit event could not be persisted.");
+    }
+    await clearUserSession(db, telegramUserId);
+    return sendMessage(
+      env,
+      chatId,
+      "✅ <b>ĐÃ TẠO YÊU CẦU HỖ TRỢ</b>\nMã ticket: <code>" + escapeHtml(ticketId) + "</code>\nĐội ngũ CSKH sẽ tiếp nhận yêu cầu của bạn.",
+      mainKeyboard(env)
+    );
+  });
+
+  registry.fallback(({ chatId, env }) =>
+    sendMessage(env, chatId, "Mình chưa nhận diện được yêu cầu. Bạn hãy chọn chức năng trong menu nhé.", mainKeyboard(env))
+  );
+  return registry;
 }
 
 function mainText(firstName) {
@@ -287,6 +392,7 @@ function supportScreen(env) {
   const rows = [];
   if (isHttps(supportUrl)) rows.push([{ text: "💬 MỞ KÊNH CSKH", url: supportUrl }]);
   if (isHttps(env.MINI_APP_URL)) rows.push([{ text: "🚀 MỞ TRUNG TÂM KHÁCH HÀNG", web_app: { url: env.MINI_APP_URL } }]);
+  rows.push([{ text: "✍️ TẠO TICKET HỖ TRỢ", callback_data: "support:new" }]);
   rows.push([{ text: "« MENU CHÍNH", callback_data: "menu:main" }]);
   const text = isHttps(supportUrl)
     ? "💬 <b>TRUNG TÂM HỖ TRỢ</b>\n\nBấm nút bên dưới để liên hệ CSKH hoặc mở Mini App để tạo ticket. Ticket được lưu vào D1."

@@ -4,15 +4,20 @@ compatibility_date = "2026-11-04"
 workers_dev = true
 
 [vars]
-MINI_APP_URL = "https://hendydichvumang.pages.dev/"
-MINI_APP_ORIGIN = "https://hendydichvumang.pages.dev"
+MINI_APP_URL = "__MINI_APP_URL__/"
+MINI_APP_ORIGIN = "__MINI_APP_URL__"
 
-[observability]
-enabled = true
-head_sampling_rate = 1
+[[d1_databases]]
+binding = "DB"
+database_name = "hendydichvumang"
+database_id = "__D1_DATABASE_ID__"
+migrations_dir = "migrations"
 
-# Cloudflare Rate Limiting binding: approximate per-location limit.
-# Keep this as a first layer; high-value transactions also need D1/DO idempotency.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "__KV_NAMESPACE_ID__"
+
+# API-level abuse protection; high-value operations must also be guarded by D1 idempotency.
 [[ratelimits]]
 name = "API_RATE_LIMITER"
 namespace_id = "8732461"
@@ -20,3 +25,10 @@ namespace_id = "8732461"
 [ratelimits.simple]
 limit = 60
 period = 60
+
+[triggers]
+crons = ["*/5 * * * *", "0 17 * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1

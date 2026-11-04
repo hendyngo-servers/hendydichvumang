@@ -5,8 +5,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 function loadDotEnv() {
   try {
     const source = readFileSync(".env", "utf8");
-    for (const line of source.split(/\\r?\\n/)) {
-      const match = line.trim().match(/^([A-Z][A-Z0-9_]*)\\s*=\\s*(.*)$/);
+    for (const line of source.split(/\r?\n/)) {
+      const match = line.trim().match(/^([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
       if (!match || process.env[match[1]]) continue;
       let value = match[2].trim();
       if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);

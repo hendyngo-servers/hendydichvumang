@@ -24,6 +24,7 @@ export default {
       return handleWebhook(request, env);
     }
     if (url.pathname === "/api/telegram/auth") return handleAuth(request, env);
+    if (url.pathname === "/api/payment/config") return handlePaymentConfig(request, env);
     if (url.pathname === "/api/dashboard") return handleDashboard(request, env);
     if (url.pathname === "/api/tickets") return handleTicket(request, env);
     return json({ ok: false, error: "not_found" }, 404);
@@ -34,6 +35,8 @@ async function handleWebhook(request, env) {
   if (!env.BOT_TOKEN || !env.WEBHOOK_SECRET) return json({ ok: false, error: "server_not_configured" }, 503);
   const supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
   if (!constantTimeEqual(supplied, env.WEBHOOK_SECRET)) return json({ ok: false, error: "unauthorized" }, 401);
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > MAX_BODY_BYTES) return json({ ok: false, error: "payload_too_large" }, 413);
   const raw = await request.text();
   if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) return json({ ok: false, error: "payload_too_large" }, 413);
   let update;
@@ -60,7 +63,12 @@ async function dispatchUpdate(update, env) {
       return;
     }
     if (command === "/help") {
-      await sendMessage(env, chatId, "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/help — xem hướng dẫn", mainKeyboard(env));
+      await sendMessage(env, chatId, "ℹ️ <b>TRỢ GIÚP HENDY</b>\n/start hoặc /menu — mở menu dịch vụ\n/nap hoặc /deposit — xem thông tin nạp tiền\n/help — xem hướng dẫn", mainKeyboard(env));
+      return;
+    }
+    if (command === "/nap" || command === "/deposit") {
+      const view = screenFor("service:deposit", name, env, message.from?.id);
+      await sendMessage(env, chatId, view.text, view.keyboard);
       return;
     }
     if (text) await sendMessage(env, chatId, "Mình chưa nhận diện được yêu cầu. Bạn hãy chọn chức năng trong menu nhé.", mainKeyboard(env));
@@ -72,7 +80,7 @@ async function dispatchUpdate(update, env) {
     const chatId = q.message?.chat?.id;
     const messageId = q.message?.message_id;
     if (!chatId || !messageId) return;
-    const view = screenFor(q.data || "", q.from?.first_name, env);
+    const view = screenFor(q.data || "", q.from?.first_name, env, q.from?.id);
     await telegramCall(env, "editMessageText", {
       chat_id: chatId, message_id: messageId, text: view.text, parse_mode: "HTML",
       reply_markup: view.keyboard, disable_web_page_preview: true
@@ -101,9 +109,10 @@ function backKeyboard(env) {
   rows.push([{ text: "« MENU CHÍNH", callback_data: "menu:main" }]);
   return { inline_keyboard: rows };
 }
-function screenFor(action, name, env) {
+function screenFor(action, name, env, telegramUserId) {
   if (action === "menu:main") return { text: mainText(name), keyboard: mainKeyboard(env) };
   const key = action.startsWith("service:") ? action.slice(8) : "";
+  if (key === "deposit") return paymentScreen(env, telegramUserId);
   const service = SERVICES[key];
   if (service) return { text: "<b>" + service.title + "</b>\n\n" + escapeHtml(service.text), keyboard: backKeyboard(env) };
   if (action === "account:open") return { text: "👤 <b>TRUNG TÂM KHÁCH HÀNG</b>\nMở Mini App để xem hồ sơ, thống kê và gửi yêu cầu hỗ trợ.", keyboard: backKeyboard(env) };
@@ -116,7 +125,8 @@ async function sendMessage(env, chatId, text, replyMarkup) {
 async function telegramCall(env, method, payload) {
   if (!env.BOT_TOKEN) throw new Error("BOT_TOKEN missing");
   const response = await fetch(TELEGRAM_API + "/bot" + env.BOT_TOKEN + "/" + method, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload)
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10000)
   });
   const data = await response.json().catch(() => null);
   if (!response.ok || !data?.ok) {
@@ -132,7 +142,7 @@ function corsHeaders(request, env) {
   const allowed = env.MINI_APP_ORIGIN || "";
   if (origin && allowed && origin === allowed) return {
     "Access-Control-Allow-Origin": allowed, "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin"
+    "Access-Control-Allow-Headers": "Content-Type, Authorization", "Vary": "Origin"
   };
   return {};
 }
@@ -149,8 +159,77 @@ async function handleAuth(request, env) {
   if (!result.ok) return json({ ok: false, error: result.error }, 401, cors);
   return json({ ok: true, user: result.user, authDate: result.authDate }, 200, cors);
 }
+function paymentDetails(env, telegramUserId) {
+  const bankCode = String(env.PAYMENT_BANK_CODE || "").trim();
+  const bankName = String(env.PAYMENT_BANK_NAME || bankCode).trim();
+  const accountNumber = String(env.PAYMENT_ACCOUNT_NUMBER || "").trim();
+  const accountName = String(env.PAYMENT_ACCOUNT_NAME || "").trim();
+  const prefix = String(env.PAYMENT_TRANSFER_NOTE_PREFIX || "HENDY")
+    .trim().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 12) || "HENDY";
+  const transferNote = prefix + (telegramUserId ? String(telegramUserId) : "");
+  let qrUrl = "";
+  if (isHttps(env.PAYMENT_QR_URL)) {
+    qrUrl = env.PAYMENT_QR_URL;
+  } else if (bankCode && accountNumber) {
+    const params = new URLSearchParams({
+      acc: accountNumber,
+      bank: bankCode,
+      des: transferNote
+    });
+    qrUrl = "https://vietqr.app/img?" + params.toString();
+  }
+  return {
+    configured: Boolean(bankCode && accountNumber && accountName),
+    bankCode,
+    bankName,
+    accountNumber,
+    accountName,
+    transferNote,
+    qrUrl
+  };
+}
+
+function paymentScreen(env, telegramUserId) {
+  const payment = paymentDetails(env, telegramUserId);
+  if (!payment.configured) {
+    return {
+      text: "💳 <b>NẠP TIỀN</b>\n\nThông tin ngân hàng chưa được cấu hình. Vui lòng liên hệ CSKH. Không chuyển khoản theo thông tin không được bot xác nhận.",
+      keyboard: backKeyboard(env)
+    };
+  }
+  const lines = [
+    "💳 <b>THÔNG TIN CHUYỂN KHOẢN</b>",
+    "",
+    "Ngân hàng: <b>" + escapeHtml(payment.bankName) + "</b>",
+    "Số tài khoản: <code>" + escapeHtml(payment.accountNumber) + "</code>",
+    "Chủ tài khoản: <b>" + escapeHtml(payment.accountName) + "</b>",
+    "Nội dung chuyển khoản: <code>" + escapeHtml(payment.transferNote) + "</code>",
+    "",
+    "Vui lòng nhập đúng nội dung chuyển khoản. Hiện tại hệ thống mới hiển thị thông tin nhận tiền; đối soát và cộng số dư tự động chưa được bật."
+  ];
+  const rows = [];
+  if (payment.qrUrl) rows.push([{ text: "📷 MỞ MÃ QR CHUYỂN KHOẢN", url: payment.qrUrl }]);
+  if (isHttps(env.MINI_APP_URL)) rows.push([{ text: "🚀 MỞ TRUNG TÂM KHÁCH HÀNG", web_app: { url: env.MINI_APP_URL } }]);
+  rows.push([{ text: "« MENU CHÍNH", callback_data: "menu:main" }]);
+  return { text: lines.join("\n"), keyboard: { inline_keyboard: rows } };
+}
+
+async function handlePaymentConfig(request, env) {
+  const cors = corsHeaders(request, env);
+  if (request.method === "OPTIONS") return Object.keys(cors).length ? new Response(null, { status: 204, headers: cors }) : json({ ok: false, error: "origin_not_allowed" }, 403);
+  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
+  if (request.headers.get("Origin") && !Object.keys(cors).length) return json({ ok: false, error: "origin_not_allowed" }, 403);
+  let body;
+  try { body = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400, cors); }
+  const auth = await validateInitData(body?.initData || "", env.BOT_TOKEN || "");
+  if (!auth.ok) return json({ ok: false, error: auth.error }, 401, cors);
+  const payment = paymentDetails(env, auth.user?.id);
+  return json({ ok: true, ...payment }, 200, cors);
+}
+
 async function handleDashboard(request, env) {
   const cors = corsHeaders(request, env);
+  if (request.method === "OPTIONS") return Object.keys(cors).length ? new Response(null, { status: 204, headers: cors }) : json({ ok: false, error: "origin_not_allowed" }, 403);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
   if (request.headers.get("Origin") && !Object.keys(cors).length) return json({ ok: false, error: "origin_not_allowed" }, 403);
   let body;
@@ -165,6 +244,7 @@ async function handleDashboard(request, env) {
 }
 async function handleTicket(request, env) {
   const cors = corsHeaders(request, env);
+  if (request.method === "OPTIONS") return Object.keys(cors).length ? new Response(null, { status: 204, headers: cors }) : json({ ok: false, error: "origin_not_allowed" }, 403);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
   if (request.headers.get("Origin") && !Object.keys(cors).length) return json({ ok: false, error: "origin_not_allowed" }, 403);
   let body;
@@ -216,4 +296,4 @@ function redact(value) { return String(value).replace(/bot\d+:[A-Za-z0-9_-]+/g, 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers } });
 }
-export { mainKeyboard, screenFor, escapeHtml, constantTimeEqual };
+export { mainKeyboard, screenFor, paymentDetails, paymentScreen, escapeHtml, constantTimeEqual };

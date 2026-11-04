@@ -6,14 +6,15 @@ export async function claimTelegramUpdate(db, updateId, now = Math.floor(Date.no
     return { claimed: false, invalid: true };
   }
 
-  // D1 executes this insert/update atomically. A live processing lease prevents
-  // concurrent deliveries; failed or expired leases can be retried by Telegram.
+  const claimToken = crypto.randomUUID();
+  // The unique claim token prevents an expired worker from finalizing a newer retry.
   const claimed = await db.prepare(
     `INSERT INTO telegram_webhook_updates
-      (update_id, status, attempts, lock_expires_at, created_at, updated_at)
-    VALUES (?, 'processing', 1, ?, ?, ?)
+      (update_id, status, claim_token, attempts, lock_expires_at, created_at, updated_at)
+    VALUES (?, 'processing', ?, 1, ?, ?, ?)
     ON CONFLICT(update_id) DO UPDATE SET
       status = 'processing',
+      claim_token = excluded.claim_token,
       attempts = telegram_webhook_updates.attempts + 1,
       lock_expires_at = excluded.lock_expires_at,
       error_code = NULL,
@@ -24,9 +25,9 @@ export async function claimTelegramUpdate(db, updateId, now = Math.floor(Date.no
          AND telegram_webhook_updates.lock_expires_at <= ?
        )
     RETURNING update_id`
-  ).bind(updateId, now + CLAIM_LEASE_SECONDS, now, now, now).first();
+  ).bind(updateId, claimToken, now + CLAIM_LEASE_SECONDS, now, now, now).first();
 
-  if (claimed) return { claimed: true };
+  if (claimed) return { claimed: true, claimToken };
 
   const existing = await db.prepare(
     `SELECT status, lock_expires_at
@@ -45,13 +46,14 @@ export async function claimTelegramUpdate(db, updateId, now = Math.floor(Date.no
 }
 
 export async function finishTelegramUpdate(db, updateId, {
+  claimToken,
   success,
   errorCode = "UPDATE_PROCESSING_FAILED",
   now = Math.floor(Date.now() / 1000)
 } = {}) {
   if (!db?.prepare) throw new Error("database_not_configured");
-  if (!Number.isSafeInteger(updateId) || updateId < 0) {
-    throw new Error("invalid_update_id");
+  if (!Number.isSafeInteger(updateId) || updateId < 0 || !claimToken) {
+    throw new Error("invalid_update_claim");
   }
 
   const status = success ? "processed" : "failed";
@@ -66,12 +68,13 @@ export async function finishTelegramUpdate(db, updateId, {
          error_code = ?,
          processed_at = ?,
          updated_at = ?
-     WHERE update_id = ?`
+     WHERE update_id = ? AND claim_token = ? AND status = 'processing'`
   ).bind(
     status,
     success ? null : safeErrorCode,
     success ? now : null,
     now,
-    updateId
+    updateId,
+    claimToken
   ).run();
 }

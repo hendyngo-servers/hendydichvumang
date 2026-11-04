@@ -32,15 +32,22 @@ hendydichvumang/
 ├── apps/
 │   ├── telegram-worker/
 │   │   ├── wrangler.toml
+│   │   ├── migrations/
+│   │   │   └── 0001_initial_schema.sql  # D1: users, wallets, orders, OTP, Proxy, VIP, tickets
 │   │   ├── src/
-│   │   │   └── index.js
+│   │   │   └── index.js                # Webhook, API, D1/KV, Cron
 │   │   └── scripts/
 │   │       └── set-webhook.mjs
 │   └── mini-app/
 │       ├── index.html
 │       ├── styles.css
 │       └── app.js
-└── .github/workflows/   (CI/CD triển khai tự động)
+├── scripts/
+│   ├── bootstrap-cloudflare.mjs        # Tự tạo Worker subdomain, Pages, D1, KV
+│   ├── render-cloudflare-config.mjs    # Gắn IDs tài nguyên vào Wrangler
+│   ├── generate-webhook-secret.mjs
+│   └── sync-github-secrets.mjs
+└── .github/workflows/                  # CI/CD triển khai tự động
 ```
 
 ## API Worker
@@ -51,10 +58,11 @@ hendydichvumang/
 | POST | /telegram/webhook | Nhận Telegram Update, yêu cầu secret header |
 | POST | /api/telegram/auth | Xác minh Telegram WebApp initData |
 | POST | /api/payment/config | Trả thông tin STK/QR sau khi xác thực Mini App |
-| POST | /api/dashboard | Trả hồ sơ đã xác thực và trạng thái thống kê |
+| GET | /api/services | Danh mục dịch vụ (D1, cache KV 60 giây) |
+| POST | /api/dashboard | Hồ sơ, số dư ví và thống kê đọc từ D1 |
 | POST | /api/tickets | Kiểm tra yêu cầu hỗ trợ; hiện trả 503 đến khi cấu hình kho lưu |
 
-Các thống kê số dư/đơn hàng/ticket được để trống có chủ đích cho đến khi kết nối cơ sở dữ liệu. Form ticket, đăng nhập Tool Live và CAPTCHA là giao diện tích hợp; chưa ghi nhận ticket hay xác thực thông tin đăng nhập khi chưa có dịch vụ backend tương ứng.
+D1 migration khởi tạo users, wallet_accounts, wallet_ledger, topup_orders, payment_events, orders, proxy_leases, otp_orders, vip_memberships, vip_checkins, tickets và service_catalog. API xác thực tự đồng bộ người dùng vào D1, Dashboard đọc ví/đơn hàng/ticket, Ticket được lưu thực tế vào D1. KV cache danh mục dịch vụ trong 60 giây.
 
 ## Bảo mật Telegram Mini App (initData)
 
@@ -129,7 +137,13 @@ Không cần tự tạo GitHub Variables hay GitHub Secret thứ tư:
 - `MINI_APP_URL`: tự suy ra từ Pages project `hendydichvumang`.
 - Pages project: tự tạo nếu chưa tồn tại.
 
-Workflow cần Cloudflare API Token có quyền tài khoản **Workers Scripts Read + Write** và **Pages Read + Write**. Nên giới hạn token trong đúng Cloudflare account đang triển khai. Tài liệu Cloudflare khuyến nghị dùng GitHub Secrets thay vì lưu API Token trong repository. <https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/>
+Workflow cần Cloudflare API Token có quyền **Workers Scripts Read + Write**, **Pages Read + Write**, **D1 Read + Write** và **Workers KV Storage Read + Write**. Nên giới hạn token trong đúng Cloudflare account đang triển khai. <https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/>
+
+### Tự động tạo tài nguyên và triển khai
+
+Workflow Worker thực hiện theo thứ tự: tạo/tìm workers.dev subdomain, Pages project, D1 database và KV namespace → render ID vào file Wrangler trong runner → áp dụng D1 migration ở chế độ remote → deploy Worker → đặt các Worker Secrets → đăng ký webhook và lệnh Telegram. Workflow Pages tự lấy URL Worker, chèn vào HTML rồi deploy thư mục tĩnh.
+
+Cron Triggers được khai báo trong Wrangler: mỗi 5 phút đánh dấu đơn OTP/nạp tiền quá hạn và Proxy tới hạn; lúc 00:00 giờ Việt Nam (17:00 UTC) cập nhật các gói VIP hết hạn. Proxy hết hạn được đánh dấu `revoke_pending`; việc thu hồi thật từ nhà cung cấp cần tích hợp API nhà cung cấp trước khi bật dịch vụ Proxy.
 
 ### Khi thêm cấu hình mới trong tương lai
 

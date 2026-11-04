@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { mainKeyboard, screenFor, paymentDetails, escapeHtml, constantTimeEqual, validateInitData } from "../src/index.js";
 import { deriveWebhookSecret } from "../../../scripts/generate-webhook-secret.mjs";
+import { spawnSync } from "node:child_process";
 import { webcrypto } from "node:crypto";
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
@@ -11,6 +12,12 @@ test("webhook secret được sinh ổn định từ một Bot Token", () => {
   assert.equal(first, deriveWebhookSecret(token));
   assert.match(first, /^[a-f0-9]{64}$/);
   assert.notEqual(first, deriveWebhookSecret("987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"));
+  const cli = spawnSync(process.execPath, ["scripts/generate-webhook-secret.mjs"], {
+    encoding: "utf8",
+    env: { ...process.env, BOT_TOKEN: token }
+  });
+  assert.equal(cli.status, 0);
+  assert.equal(cli.stdout.trim(), first);
 });
 
 test("menu chính hiển thị các nhóm OTP, Proxy, VIP, Code, Tool và Live", () => {

@@ -195,3 +195,10 @@ Lệnh bootstrap tạo `.cloudflare-outputs.json` và `wrangler.generated.toml`;
 ## Lưu ý trạng thái nghiệp vụ
 
 Bot menu và xác thực Mini App có thể hoạt động sau khi cấu hình secrets. Nghiệp vụ thanh toán, số dư, đơn hàng, OTP, Proxy, VIP, kho Code, lưu ticket và đăng nhập Tool Live cần tích hợp nhà cung cấp, cơ sở dữ liệu, phân quyền và quy trình bảo mật trước khi mở cho người dùng thật.
+
+
+## Tích hợp chọn lọc từ Hendy Server PRO
+
+Webhook Telegram dùng bảng D1 riêng để ghi nhận update_id, khóa xử lý 60 giây, chống giao hàng trùng và cho phép retry khi lỗi. Bản ghi webhook được dọn theo chu kỳ bảo trì. Cơ chế này giảm xử lý lặp nhưng không bảo đảm side effect bên ngoài exactly-once.
+
+Phạm vi tích hợp, schema/binding không tương thích và các module được hoãn được ghi tại docs/HENDY-SERVER-PRO-INTEGRATION.md.

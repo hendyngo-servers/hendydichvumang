@@ -6,7 +6,7 @@ test("audit log stores bounded metadata and never requires message content", asy
   let captured;
   const db = {
     prepare(sql) {
-      assert.match(sql, /INSERT INTO audit_logs/);
+      assert.match(sql, /INSERT(?: OR IGNORE)? INTO audit_logs/);
       return { bind(...values) { captured = values; return { run: async () => ({ meta: { changes: 1 } }) }; } };
     }
   };

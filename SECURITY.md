@@ -1,21 +1,22 @@
-# Security Policy
+# Chính sách bảo mật
 
-## Supported Versions
+## Báo cáo lỗ hổng
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Không đăng Bot Token, API key, webhook secret, ảnh chụp màn hình có thông tin xác thực hoặc file .env vào GitHub Issues, Pull Requests hay cuộc trò chuyện công khai. Khi phát hiện lỗ hổng, hãy liên hệ chủ repository qua kênh riêng và mô tả đường dẫn, tác động, bước tái hiện tối thiểu.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Xử lý khi credential bị lộ
 
-## Reporting a Vulnerability
+1. Thu hồi Bot Token đã lộ bằng BotFather và tạo token mới.
+2. Thu hồi Cloudflare API Token đã lộ trong Cloudflare Dashboard và tạo token mới với quyền tối thiểu.
+3. Thay các khóa webhook, quản trị và dịch vụ bên ngoài liên quan.
+4. Cập nhật GitHub Secrets và Cloudflare Worker Secrets; không đưa giá trị mới vào file mẫu hoặc commit.
+5. Kiểm tra Git history, GitHub Actions logs, deployment logs và các máy chủ cũ có thể đang giữ credential.
 
-Use this section to tell people how to report a vulnerability.
+Xóa một giá trị khỏi commit mới không làm credential cũ mất hiệu lực và không xóa nó khỏi lịch sử Git. Luôn thu hồi credential trước, sau đó mới cân nhắc làm sạch lịch sử repository.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+## Quy tắc mã nguồn
+
+- File .env.example chỉ chứa placeholder trống; .env thực tế không được commit.
+- Production secrets chỉ được cấp qua GitHub Secrets hoặc Cloudflare Worker Secrets.
+- Không ghi Bot Token, Authorization header, webhook secret hay URL Bot API có token vào log.
+- Chạy npm run security:check trước khi push.

@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/mini-app/**'
       - 'scripts/bootstrap-cloudflare.mjs'
+      - 'scripts/render-cloudflare-config.mjs'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 

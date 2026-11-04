@@ -1,0 +1,42 @@
+name: Deploy Mini App to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mini-app/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+      - name: Configure Worker API URL
+        env:
+          WORKER_API_URL: ${{ vars.WORKER_API_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$WORKER_API_URL" ]; then
+            echo "Thiếu GitHub Repository Variable WORKER_API_URL (URL workers.dev HTTPS)."
+            exit 1
+          fi
+          case "$WORKER_API_URL" in https://*) ;; *) echo "WORKER_API_URL phải là HTTPS"; exit 1 ;; esac
+          sed -i "s|__WORKER_API_URL__|${WORKER_API_URL%/}|g" apps/mini-app/config.js
+      - name: Deploy Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler pages deploy apps/mini-app --project-name hendydichvumang --branch main

@@ -26,9 +26,9 @@
 
     <section class="section-title"><div><p class="eyebrow">TỔNG QUAN</p><h2>Bảng điều khiển</h2></div><span class="muted tiny">Dữ liệu tài khoản</span></section>
     <section class="stats-grid">
-      <article class="stat panel"><span class="stat-icon">💳</span><small>Số dư</small><strong id="stat-balance">—</strong><em>Chờ kết nối dữ liệu</em></article>
-      <article class="stat panel"><span class="stat-icon">📦</span><small>Đơn hàng</small><strong id="stat-orders">—</strong><em>Chờ kết nối dữ liệu</em></article>
-      <article class="stat panel"><span class="stat-icon">🎫</span><small>Ticket</small><strong id="stat-tickets">—</strong><em>Chờ kết nối dữ liệu</em></article>
+      <article class="stat panel"><span class="stat-icon">💳</span><small>Số dư</small><strong id="stat-balance">—</strong><em>Dữ liệu từ D1</em></article>
+      <article class="stat panel"><span class="stat-icon">📦</span><small>Đơn hàng</small><strong id="stat-orders">—</strong><em>Dữ liệu từ D1</em></article>
+      <article class="stat panel"><span class="stat-icon">🎫</span><small>Ticket</small><strong id="stat-tickets">—</strong><em>Dữ liệu từ D1</em></article>
     </section>
 
     <section class="section-title"><div><p class="eyebrow">DỊCH VỤ</p><h2>Khám phá hệ sinh thái</h2></div></section>
@@ -44,9 +44,9 @@
 
     <section class="section-title"><div><p class="eyebrow">HỖ TRỢ</p><h2>Trung tâm trợ giúp</h2></div></section>
     <section class="support-panel panel">
-      <div><span class="support-icon">💬</span><div><b>Gửi yêu cầu hỗ trợ</b><p class="muted">Mô tả vấn đề để đội ngũ CSKH tiếp nhận khi hệ thống ticket được kết nối.</p></div></div>
+      <div><span class="support-icon">💬</span><div><b>Gửi yêu cầu hỗ trợ</b><p class="muted">Mô tả vấn đề để đội ngũ CSKH tiếp nhận và xử lý.</p></div></div>
       <button class="primary-btn" id="open-ticket">Tạo ticket</button>
-      <p class="hint" id="ticket-hint">Lưu ticket chưa khả dụng khi chưa cấu hình cơ sở dữ liệu.</p>
+      <p class="hint" id="ticket-hint">Ticket được lưu trực tiếp vào cơ sở dữ liệu Hendy.</p>
     </section>
 
     <section class="section-title"><div><p class="eyebrow">TOOL LIVE</p><h2>Đăng nhập công cụ</h2></div></section>
@@ -78,7 +78,7 @@
       <p class="eyebrow">CHĂM SÓC KHÁCH HÀNG</p><h2>Tạo yêu cầu hỗ trợ</h2>
       <label for="ticket-subject">Tiêu đề</label><input id="ticket-subject" maxlength="100" required placeholder="Ví dụ: Tôi cần hỗ trợ đơn hàng">
       <label for="ticket-message">Nội dung</label><textarea id="ticket-message" maxlength="2000" required placeholder="Mô tả chi tiết vấn đề..."></textarea>
-      <p class="hint">Biểu mẫu giao diện đã sẵn sàng; máy chủ chưa có kho lưu ticket nên yêu cầu chưa thể gửi.</p>
+      <p class="hint">Yêu cầu hỗ trợ sẽ được lưu vào hệ thống Hendy để đội ngũ CSKH xử lý.</p>
       <button class="primary-btn" id="ticket-submit" type="submit">Kiểm tra gửi yêu cầu</button>
     </form>
   </dialog>

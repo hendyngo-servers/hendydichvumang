@@ -176,6 +176,7 @@ Chạy local (cần `.env` có `CLOUDFLARE_API_TOKEN` và `CLOUDFLARE_ACCOUNT_ID
 ```bash
 npm run cloudflare:bootstrap
 npm run db:migrate:local
+npm run local:prepare
 npm run dev:worker
 ```
 

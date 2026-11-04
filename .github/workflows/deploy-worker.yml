@@ -62,6 +62,19 @@ jobs:
           printf 'WEBHOOK_SECRET=%s\n' "$(node scripts/generate-webhook-secret.mjs)" >> "$GITHUB_ENV"
       - name: Deploy Worker
         run: npx wrangler deploy --config apps/telegram-worker/wrangler.toml
+      - name: Verify Worker health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..10}; do
+            if curl --fail --silent "$WORKER_API_URL/health" -o /tmp/hendy-health.json; then
+              cat /tmp/hendy-health.json
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Worker health check failed after deployment."
+          exit 1
       - name: Set Worker secrets
         shell: bash
         run: |

@@ -16,6 +16,11 @@ const SERVICES = {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/") && env.API_RATE_LIMITER) {
+      const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+      const rate = await env.API_RATE_LIMITER.limit({ key: clientIp + ":" + url.pathname });
+      if (!rate.success) return json({ ok: false, error: "rate_limited" }, 429, { "retry-after": "60" });
+    }
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
       return json({ ok: true, service: "hendydichvumang-bot", status: "healthy", version: "2.0.0" });
     }
@@ -267,11 +272,16 @@ async function handleTicket(request, env) {
 export async function validateInitData(raw, botToken, now = Math.floor(Date.now() / 1000)) {
   try {
     const params = new URLSearchParams(raw);
-    const hash = params.get("hash");
+    const hashes = params.getAll("hash");
+    if (hashes.length !== 1 || !/^[a-f0-9]{64}$/i.test(hashes[0])) return { ok: false, error: "invalid_hash" };
+    const entries = [...params.entries()];
+    const keys = entries.map(([key]) => key);
+    if (new Set(keys).size !== keys.length) return { ok: false, error: "duplicate_fields" };
+    const hash = hashes[0];
     const authDate = Number(params.get("auth_date"));
-    if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) return { ok: false, error: "invalid_hash" };
+    if (!Number.isInteger(authDate) || authDate <= 0) return { ok: false, error: "expired_or_invalid_auth_date" };
     if (!Number.isInteger(authDate) || authDate <= 0 || authDate > now + 60 || now - authDate > MAX_INIT_DATA_AGE_SECONDS) return { ok: false, error: "expired_or_invalid_auth_date" };
-    const check = [...params.entries()].filter(([key]) => key !== "hash").map(([key, value]) => key + "=" + value).sort().join("\n");
+    const check = entries.filter(([key]) => key !== "hash").map(([key, value]) => key + "=" + value).sort().join("\n");
     const encoder = new TextEncoder();
     // Telegram derivation: HMAC-SHA256(data=BOT_TOKEN, key="WebAppData").
     // Web Crypto takes the HMAC key first, then the data to sign.
@@ -284,6 +294,7 @@ export async function validateInitData(raw, botToken, now = Math.floor(Date.now(
     const userText = params.get("user");
     let user = null;
     if (userText) user = JSON.parse(userText);
+    if (!user || !Number.isSafeInteger(user.id) || user.id <= 0) return { ok: false, error: "invalid_user" };
     return { ok: true, user, authDate };
   } catch { return { ok: false, error: "invalid_init_data" }; }
 }

@@ -37,9 +37,54 @@ jobs:
           cat app-source.part-*.b64 > /tmp/hendy-source.tar.gz
           gzip -t /tmp/hendy-source.tar.gz
           tar -tzf /tmp/hendy-source.tar.gz >/tmp/hendy-source-files.txt
-          grep -q '^src/server.js$' /tmp/hendy-source-files.txt
-          grep -q '^public/admin.js$' /tmp/hendy-source-files.txt
-          tar -xzf /tmp/hendy-source.tar.gz
+          grep -Eq '(^|/)src/server.js
+
+      - name: Install and verify application
+        run: |
+          npm install --no-audit --no-fund
+          npm run verify
+
+      - name: Commit materialized source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Source tree is already materialized."
+            exit 0
+          fi
+          git commit -m "Materialize complete Render application source tree"
+          git push origin HEAD:main
+ /tmp/hendy-source-files.txt
+          grep -Eq '(^|/)public/admin.js
+
+      - name: Install and verify application
+        run: |
+          npm install --no-audit --no-fund
+          npm run verify
+
+      - name: Commit materialized source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Source tree is already materialized."
+            exit 0
+          fi
+          git commit -m "Materialize complete Render application source tree"
+          git push origin HEAD:main
+ /tmp/hendy-source-files.txt
+          mkdir -p /tmp/hendy-extract
+          tar -xzf /tmp/hendy-source.tar.gz -C /tmp/hendy-extract
+          server_file="$(find /tmp/hendy-extract -type f -path '*/src/server.js' -print -quit)"
+          test -n "$server_file"
+          source_root="${server_file%/src/server.js}"
+          cp -a "$source_root"/. .
 
       - name: Install and verify application
         run: |

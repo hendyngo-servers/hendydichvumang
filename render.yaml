@@ -10,6 +10,9 @@ services:
       - type: rewrite
         source: /admin
         destination: /admin.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
     headers:
       - path: /*
         name: X-Content-Type-Options

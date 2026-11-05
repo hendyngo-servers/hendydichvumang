@@ -64,9 +64,11 @@ Không tự tạo số dư, đơn hàng hoặc giao dịch giả. Việc cộng 
 
 ### Lưu ý gói Free
 
-Web Service Free có thể ngủ khi không có truy cập. Bộ hẹn giờ trong API sẽ tạm dừng trong thời gian service ngủ, nên tác vụ có thể chạy trễ; không dùng Free để cam kết SLA hoặc thông báo đúng phút.
+- Render Free Web Service tự spin down sau 15 phút không nhận HTTP/WebSocket traffic; lần truy cập kế tiếp cần chờ service khởi động lại (thường khoảng một phút). Bộ hẹn giờ trong API dừng theo process, nên các automation có thể chạy trễ.
+- Render PostgreSQL Free giới hạn 1 GB, tự hết hạn sau 30 ngày và không có backup tự động. Không dùng database Free này để lưu ví, thanh toán hoặc dữ liệu khách hàng production lâu dài.
+- Render Cron Job không có gói Free. Muốn chạy Cron trực tiếp trên Render cần chọn gói trả phí; lựa chọn khác là dùng scheduler bên ngoài gọi lệnh bên dưới.
 
-Khi cần chạy định kỳ ổn định, cấu hình Render Cron Job hoặc scheduler bên ngoài để chạy:
+Khi cần chạy định kỳ ổn định, cấu hình Render Cron Job (trả phí) hoặc scheduler bên ngoài để chạy:
 
 ```bash
 npm run automation:run

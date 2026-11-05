@@ -65,6 +65,13 @@ class HendyApiClient:
     async def health(self) -> dict[str, Any]:
         return await self._request("GET", "/healthz")
 
+    async def get_menu_config(self, bot_key: str = "aiogram") -> dict[str, Any]:
+        if bot_key not in {"grammy", "aiogram"}:
+            raise ValueError("Bot key không hợp lệ.")
+        result = await self._request("GET", f"/internal/bot/menu/{bot_key}")
+        menu = result.get("menu", {})
+        return menu if isinstance(menu, dict) else {}
+
     async def get_primary_bot_identity(self) -> dict[str, Any]:
         return await self._request("GET", "/internal/bot/primary-identity")
 

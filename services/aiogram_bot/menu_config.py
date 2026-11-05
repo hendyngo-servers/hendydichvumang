@@ -27,7 +27,7 @@ def normalize_menu_config(value: Any) -> dict[str, Any]:
     raw_order = value.get("buttonOrder", value.get("button_order", DEFAULT_MENU_ORDER))
     order = [
         action for action in raw_order
-        if isinstance(raw_order, list) and action in BOT_MENU_ACTIONS
+        if isinstance(action, str) and action in BOT_MENU_ACTIONS
     ] if isinstance(raw_order, list) else list(DEFAULT_MENU_ORDER)
     if "customer" not in order:
         order.insert(0, "customer")

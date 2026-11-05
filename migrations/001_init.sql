@@ -79,7 +79,4 @@ CREATE INDEX IF NOT EXISTS audit_logs_created_idx ON audit_logs(created_at DESC)
 
 -- Remove placeholder rows from the previous starter build. Admin can add real catalog entries.
 DELETE FROM service_catalog
-WHERE code IN ('tool-live', 'proxy', 'vip', 'source-code')
-  AND description LIKE 'Liên hệ quản trị viên%' OR
-      code IN ('tool-live', 'proxy', 'vip', 'source-code')
-  AND description LIKE 'Dịch vụ % sẽ được kích hoạt%';
+WHERE code IN ('tool-live', 'proxy', 'vip', 'source-code');

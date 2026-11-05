@@ -102,6 +102,9 @@ async def on_startup(
             web_app=WebAppInfo(url=settings.public_app_url),
         )
     )
+    runtime = dispatcher.get("runtime_status")
+    if isinstance(runtime, dict):
+        runtime.update({"webhook_ready": True, "bot_id": str(me.id)})
     logger.info("Aiogram webhook đã sẵn sàng tại %s; bot_id=%s", settings.webhook_path, me.id)
 
 
@@ -113,9 +116,17 @@ async def health(request: web.Request) -> web.Response:
     except Exception:
         logger.exception("PostgreSQL health check failed")
         return web.json_response({"status": "error", "database": "unavailable"}, status=503)
+    runtime = request.app["runtime_status"]
+    if not runtime.get("webhook_ready"):
+        return web.json_response(
+            {"status": "starting", "database": "ready", "webhook": "not_ready"},
+            status=503,
+        )
     return web.json_response({
         "status": "ok",
         "database": "ready",
+        "webhook": "ready",
+        "bot_id": runtime.get("bot_id"),
         "framework": "aiogram",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
@@ -124,8 +135,10 @@ async def health(request: web.Request) -> web.Response:
 async def close_resources(app: web.Application) -> None:
     api: HendyApiClient = app["hendy_api"]
     pool: asyncpg.Pool = app["db_pool"]
-    await api.close()
-    await pool.close()
+    try:
+        await api.close()
+    finally:
+        await pool.close()
 
 
 async def create_app(settings: Settings) -> web.Application:
@@ -138,10 +151,10 @@ async def create_app(settings: Settings) -> web.Application:
         dispatcher = Dispatcher(storage=storage, events_isolation=isolation)
         dispatcher["api"] = api
         dispatcher["settings"] = settings
+        dispatcher["runtime_status"] = {"webhook_ready": False, "bot_id": None}
 
-        common_router.message.outer_middleware(EnsureCustomerMiddleware(api))
-        customer_router.message.outer_middleware(EnsureCustomerMiddleware(api))
-        support_router.message.outer_middleware(EnsureCustomerMiddleware(api))
+        # One profile sync per private message before the router tree is traversed.
+        dispatcher.message.outer_middleware(EnsureCustomerMiddleware(api))
 
         dispatcher.include_routers(common_router, customer_router, support_router)
         dispatcher.include_router(error_router)
@@ -156,6 +169,7 @@ async def create_app(settings: Settings) -> web.Application:
         app["hendy_api"] = api
         app["dispatcher"] = dispatcher
         app["bot"] = bot
+        app["runtime_status"] = dispatcher["runtime_status"]
         app.router.add_get("/healthz", health)
 
         SimpleRequestHandler(

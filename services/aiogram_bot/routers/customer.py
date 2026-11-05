@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-from aiogram import F, Router
+from aiogram import F, Router, html
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -15,7 +15,6 @@ from aiogram.types import (
 from services.aiogram_bot.api_client import HendyApiClient
 from services.aiogram_bot.config import Settings
 from services.aiogram_bot.routers.common import main_menu
-from aiogram.utils import html
 
 customer_router = Router(name="hendy-customer")
 
@@ -59,6 +58,15 @@ async def send_customer_center(message: Message, settings: Settings) -> None:
         reply_markup=customer_center_keyboard(settings),
     )
 
+
+@customer_router.callback_query(F.data == "customer:home")
+async def customer_home(callback: CallbackQuery, settings: Settings) -> None:
+    await callback.answer("Đã mở menu chính.")
+    if callback.message:
+        await callback.message.answer(
+            "💠 Menu chính HENDY. Chọn chức năng bạn cần:",
+            reply_markup=main_menu(settings),
+        )
 
 @customer_router.message(Command("customer"), F.chat.type == "private")
 async def customer_command(message: Message, settings: Settings) -> None:

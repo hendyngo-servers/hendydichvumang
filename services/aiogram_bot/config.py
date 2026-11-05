@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
+import re
 from dataclasses import dataclass
 from typing import Mapping
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -104,8 +105,12 @@ class Settings:
             raise ValueError("AIOGRAM_FSM_TTL_HOURS phải nằm trong khoảng 1–168.")
 
         webhook_path = str(source.get("AIOGRAM_WEBHOOK_PATH", "/telegram/webhook")).strip()
-        if not webhook_path.startswith("/") or ".." in webhook_path:
-            raise ValueError("AIOGRAM_WEBHOOK_PATH không hợp lệ.")
+        if (
+            not re.fullmatch(r"/[A-Za-z0-9/_-]{1,120}", webhook_path)
+            or "//" in webhook_path
+            or any(part in {".", ".."} for part in webhook_path.split("/"))
+        ):
+            raise ValueError("AIOGRAM_WEBHOOK_PATH phải là đường dẫn tuyệt đối đơn giản, không có query hoặc traversal.")
 
         return cls(
             bot_token=token,

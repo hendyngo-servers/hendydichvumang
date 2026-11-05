@@ -48,6 +48,14 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "token"):
             Settings.from_env(env)
 
+    def test_webhook_path_rejects_query_and_traversal(self) -> None:
+        env = self.valid_env()
+        env["AIOGRAM_WEBHOOK_PATH"] = "/telegram/webhook?token=secret"
+        with self.assertRaisesRegex(ValueError, "đường dẫn"):
+            Settings.from_env(env)
+        env["AIOGRAM_WEBHOOK_PATH"] = "/telegram/../webhook"
+        with self.assertRaisesRegex(ValueError, "đường dẫn"):
+            Settings.from_env(env)
     def test_invalid_fsm_ttl_is_rejected(self) -> None:
         env = self.valid_env()
         env["AIOGRAM_FSM_TTL_HOURS"] = "0"

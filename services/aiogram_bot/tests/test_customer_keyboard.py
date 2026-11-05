@@ -41,3 +41,17 @@ class CustomerKeyboardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_return_button_has_callback_data(self) -> None:
+        settings = Settings.from_env({
+            "AIOGRAM_BOT_TOKEN": "123456:test",
+            "AIOGRAM_WEBHOOK_SECRET": "secret",
+            "RENDER_EXTERNAL_URL": "https://bot.example.com",
+            "HENDY_API_BASE_URL": "https://api.example.com",
+            "HENDY_BOT_SERVICE_KEY": "x" * 40,
+            "DATABASE_URL": "postgresql://user:pass@db.example.com/hendy",
+            "PUBLIC_APP_URL": "https://app.example.com",
+            "PGSSLMODE": "require",
+        })
+        keyboard = customer_center_keyboard(settings)
+        self.assertEqual(keyboard.inline_keyboard[-1][0].callback_data, "customer:home")

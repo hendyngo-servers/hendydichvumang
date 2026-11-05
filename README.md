@@ -20,7 +20,9 @@ Static Site chỉ chứa tài nguyên frontend, không giữ secret và không k
 
 ```text
 .
-├── .github/workflows/ci.yml
+├── .github/workflows/
+│   ├── ci.yml
+│   └── render-live-check.yml
 ├── migrations/
 │   ├── 001_init.sql
 │   ├── 002_remove_placeholders.sql
@@ -32,7 +34,8 @@ Static Site chỉ chứa tài nguyên frontend, không giữ secret và không k
 │   ├── api_client.py
 │   ├── fsm_storage.py
 │   ├── middlewares.py
-│   └── routers/
+│   ├── routers/
+│   └── tests/
 ├── docs/AIOGRAM-INTEGRATION.md
 ├── public/
 │   ├── index.html
@@ -41,16 +44,9 @@ Static Site chỉ chứa tài nguyên frontend, không giữ secret và không k
 │   ├── app.js
 │   ├── admin.js
 │   └── styles.css
-├── services/aiogram_bot/
-│   ├── main.py
-│   ├── config.py
-│   ├── api_client.py
-│   ├── fsm_storage.py
-│   ├── middlewares.py
-│   └── routers/
-├── docs/AIOGRAM-INTEGRATION.md
 ├── scripts/
 │   ├── build-static.js
+│   ├── render-live-check.js
 │   └── run-automations.js
 ├── src/
 │   ├── automation.js
@@ -65,7 +61,6 @@ Static Site chỉ chứa tài nguyên frontend, không giữ secret và không k
 ├── package.json
 └── render.yaml
 ```
-
 ## 3. Tự động hóa
 
 Trong Admin Dashboard, mục **Điều phối tác vụ hệ thống** hỗ trợ bật/tắt từng tác vụ, chọn chu kỳ chạy, xem lần chạy gần nhất/trạng thái và bấm **Chạy ngay**.
@@ -124,7 +119,6 @@ Blueprint khai báo ba dịch vụ, không tạo database:
 - `hendydichvumang-api`: Node.js Web Service, Node 22, health check `/healthz`.
 - `hendydichvumang-site`: Static Site, build ra `dist-site`, CDN, route `/admin` đến trang quản trị.
 - `hendydichvumang-aiogram-bot`: Python Web Service thử nghiệm, chạy bot aiogram độc lập với grammY.
-- `hendydichvumang-aiogram-bot`: Python Web Service thử nghiệm, độc lập với grammY.
 
 Sau khi tạo:
 
@@ -136,8 +130,7 @@ Sau khi tạo:
 6. Giữ `TELEGRAM_WEBHOOK_SECRET` do Blueprint tự sinh. Khi API có HTTPS và BOT_TOKEN, webhook tự đăng ký vào API URL; Mini App sử dụng URL Static Site.
 7. Kiểm tra `https://<api-url>/healthz`, cần có `status: ok` và `database: ready`.
 8. Mở `https://<static-site-url>/` và `https://<static-site-url>/admin`. Đặt URL Static Site làm Mini App URL trong BotFather.
-9. Nếu bật aiogram pilot, nhập `AIOGRAM_BOT_TOKEN` của một bot thử nghiệm khác grammY. Giữ `AIOGRAM_WEBHOOK_SECRET` do Render tự sinh và đặt `PUBLIC_APP_URL` về Static Site. Triển khai API/migration trước khi bật bot Python.
-9. Nếu bật aiogram pilot, nhập `AIOGRAM_BOT_TOKEN` của một bot thử nghiệm khác grammY, để `AIOGRAM_WEBHOOK_SECRET` do Render sinh tự động, đặt URL Static Site vào `PUBLIC_APP_URL` của dịch vụ Python. Chỉ triển khai bot này sau khi API và migration PostgreSQL đã Live.
+9. Nếu bật aiogram pilot, nhập `AIOGRAM_BOT_TOKEN` của một bot thử nghiệm khác grammY; giữ `AIOGRAM_WEBHOOK_SECRET` do Render tự sinh; đặt `PUBLIC_APP_URL` về Static Site. Chỉ deploy Python service sau khi API và migration PostgreSQL đã Live.
 
 Biến API cần khai báo:
 
@@ -259,10 +252,9 @@ Trạng thái deployment live chỉ là một điều kiện. Lệnh còn gọi 
 
 ## Aiogram — bot Python thử nghiệm
 
-Phân tích module, kiến trúc tích hợp, biến môi trường, bảo mật và hướng dẫn thử nghiệm nằm tại [docs/AIOGRAM-INTEGRATION.md](docs/AIOGRAM-INTEGRATION.md). Aiogram chạy thành dịch vụ Python riêng với token khác grammY; Node.js API và PostgreSQL vẫn quản lý dữ liệu nghiệp vụ. Không dùng chung Bot Token giữa hai framework.
+Phân tích source upstream, quyết định module, kiến trúc tích hợp, bảo mật và hướng dẫn thử nghiệm nằm tại [docs/AIOGRAM-INTEGRATION.md](docs/AIOGRAM-INTEGRATION.md). Aiogram chạy thành dịch vụ Python riêng với token khác grammY; Node.js API và PostgreSQL vẫn quản lý dữ liệu nghiệp vụ. Không dùng chung Bot Token giữa hai framework.
 
 Biến cần cấu hình cho dịch vụ Python: `AIOGRAM_BOT_TOKEN` (token bot thử nghiệm riêng), `AIOGRAM_WEBHOOK_SECRET` (Render tự sinh), `HENDY_API_BASE_URL`, `HENDY_BOT_SERVICE_KEY`, `DATABASE_URL`, `PGSSLMODE`, `PUBLIC_APP_URL` và `AIOGRAM_FSM_TTL_HOURS`. Blueprint liên kết API key và PostgreSQL từ API Web Service; không đưa secrets vào frontend.
 
-Các biến của dịch vụ Python: `AIOGRAM_BOT_TOKEN` (token thử nghiệm riêng), `AIOGRAM_WEBHOOK_SECRET` (Render tự sinh), `HENDY_API_BASE_URL`, `HENDY_BOT_SERVICE_KEY`, `DATABASE_URL`, `PGSSLMODE`, `PUBLIC_APP_URL` và `AIOGRAM_FSM_TTL_HOURS`. Blueprint liên kết API key và PostgreSQL từ API Web Service; không đưa secrets vào frontend.
 
 

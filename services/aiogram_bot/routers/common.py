@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram import F, Router
+from aiogram import F, Router, html
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     KeyboardButton,
@@ -9,7 +9,6 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 
-from aiogram.utils import html
 
 from services.aiogram_bot.config import Settings
 

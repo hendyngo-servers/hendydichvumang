@@ -38,7 +38,7 @@ Mã nguồn thay thế cho phiên bản Cloudflare cũ. Ứng dụng gồm Teleg
 
 1. Mở <https://dashboard.render.com/blueprint/new?repo=https://github.com/hendyngo-servers/hendydichvumang>.
 2. Chọn repository `hendyngo-servers/hendydichvumang`, nhánh `main`, sau đó Apply.
-3. Blueprint tạo một Web Service `hendydichvumang` gói Free và một PostgreSQL `hendydichvumang-db` gói Free cùng khu vực Singapore.
+3. Blueprint tạo một **Web Service Node.js** `hendydichvumang` gói Free và một PostgreSQL `hendydichvumang-db` gói Free cùng khu vực Singapore. Web Service phục vụ cả API, trang khách hàng, Admin và Telegram webhook; không tạo Static Site riêng.
 4. Khi Render yêu cầu các biến có `sync: false`, nhập:
    - `BOT_TOKEN`: token BotFather mới. Không gửi token qua GitHub/README/chat.
    - `ADMIN_USERNAME`: tên đăng nhập quản trị khác tên mặc định nếu có thể.

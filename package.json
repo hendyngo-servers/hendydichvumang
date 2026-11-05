@@ -1,11 +1,11 @@
 {
   "name": "hendydichvumang-render",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "HENDY Dịch Vụ Mạng - Telegram bot, customer portal and admin API on Render + PostgreSQL",
+  "description": "HENDY Dịch Vụ Mạng - Telegram Bot, Mini App, customer center and admin on Render Web Service + PostgreSQL",
   "engines": {
-    "node": ">=22"
+    "node": ">=22 <25"
   },
   "scripts": {
     "start": "node src/server.js",
@@ -17,11 +17,11 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
     "grammy": "^1.38.3",
     "helmet": "^8.1.0",
-    "pg": "^8.16.3",
-    "dotenv": "^16.6.1",
-    "express-rate-limit": "^8.1.0"
+    "pg": "^8.16.3"
   }
 }

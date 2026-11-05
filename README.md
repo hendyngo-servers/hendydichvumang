@@ -1,19 +1,21 @@
-# HENDY DỊCH VỤ MẠNG — Render + PostgreSQL
+# HENDY DỊCH VỤ MẠNG — Render Web Service
 
-Mã nguồn thay thế cho phiên bản Cloudflare cũ. Ứng dụng gồm Telegram Bot (grammY), REST API, Telegram Mini App/trung tâm khách hàng, trang quản trị và PostgreSQL.
+Mã nguồn triển khai tập trung trên **một Render Web Service**. Node.js/Express phục vụ API, Telegram webhook, Telegram Mini App, trang khách hàng và Admin Dashboard. PostgreSQL lưu dữ liệu nghiệp vụ.
 
-## Thành phần
+## 1. Kiến trúc
 
-- Node.js 22 + Express 5: một Web Service duy nhất, phù hợp triển khai thử nghiệm trên Render Free.
-- PostgreSQL: lưu người dùng, ví, giao dịch ví, danh mục dịch vụ, ticket, phiên đăng nhập và audit log.
-- Telegram Bot: Reply Keyboard tiếng Việt, lệnh `/start`, `/help`, `/services`, `/balance`, `/support`, webhook có secret header.
-- Mini App: xác minh `Telegram.WebApp.initData` bằng HMAC-SHA-256 phía máy chủ; không tin `initDataUnsafe` để xác thực.
-- Admin: quản lý danh mục dịch vụ và trạng thái ticket. Đăng nhập bằng thông tin cấu hình riêng trên Render.
+- **Render Web Service (Free):** Node.js 22, Express 5, grammY, REST API và toàn bộ giao diện tĩnh.
+- **Render PostgreSQL (Free):** tài khoản Telegram, ví, sổ giao dịch, danh mục dịch vụ, ticket CSKH, session và audit log.
+- **Telegram Bot:** webhook HTTPS, Reply Keyboard tiếng Việt, các lệnh /start, /services, /balance, /support và /help.
+- **Mini App:** xác thực chữ ký Telegram initData ở backend; không tin dữ liệu người dùng gửi từ trình duyệt.
+- **Admin:** đăng nhập bằng biến môi trường riêng, quản lý dịch vụ và trạng thái ticket.
+- **Không cần Static Site, Cloudflare Worker, Docker hoặc persistent disk.**
 
-## Cấu trúc
+## 2. Cấu trúc mã nguồn
 
 ```text
 .
+├── .github/workflows/ci.yml
 ├── migrations/001_init.sql
 ├── public/
 │   ├── index.html
@@ -31,82 +33,101 @@ Mã nguồn thay thế cho phiên bản Cloudflare cũ. Ứng dụng gồm Teleg
 ├── test/security.test.js
 ├── .env.example
 ├── package.json
+├── package-lock.json
 └── render.yaml
 ```
 
-## Triển khai bằng Render Blueprint
+## 3. Triển khai bằng Render Blueprint
 
-1. Mở <https://dashboard.render.com/blueprint/new?repo=https://github.com/hendyngo-servers/hendydichvumang>.
-2. Chọn repository `hendyngo-servers/hendydichvumang`, nhánh `main`, sau đó Apply.
-3. Blueprint tạo một **Web Service Node.js** `hendydichvumang` gói Free và một PostgreSQL `hendydichvumang-db` gói Free cùng khu vực Singapore. Web Service phục vụ cả API, trang khách hàng, Admin và Telegram webhook; không tạo Static Site riêng.
-4. Khi Render yêu cầu các biến có `sync: false`, nhập:
-   - `BOT_TOKEN`: token BotFather mới. Không gửi token qua GitHub/README/chat.
-   - `ADMIN_USERNAME`: tên đăng nhập quản trị khác tên mặc định nếu có thể.
-   - `ADMIN_PASSWORD`: mật khẩu dài, ngẫu nhiên, riêng cho quản trị.
-5. `DATABASE_URL` được liên kết tự động từ PostgreSQL. `TELEGRAM_WEBHOOK_SECRET` do Render tự sinh; session dùng token ngẫu nhiên và chỉ lưu hash trong PostgreSQL.
-6. Chờ deploy thành công, mở `https://<ten-service>.onrender.com/healthz`. Kết quả mong đợi: `status: ok`, `database: ready`.
-7. Cập nhật Menu Button/Mini App URL trong BotFather thành `https://<ten-service>.onrender.com/`.
-8. Nếu đã cấu hình `BOT_TOKEN`, webhook được Web Service tự đăng ký khi khởi động. Chỉ dùng lệnh thủ công dưới đây nếu cần đăng ký lại webhook:
+1. Mở [Render Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/hendyngo-servers/hendydichvumang).
+2. Chọn repository `hendyngo-servers/hendydichvumang`, nhánh `main`, file `render.yaml`, rồi Apply.
+3. Blueprint tạo:
+   - Web Service `hendydichvumang`, runtime Node, gói Free, khu vực Singapore.
+   - PostgreSQL `hendydichvumang-db`, gói Free, cùng khu vực.
+4. Render yêu cầu nhập các giá trị `sync: false`:
+   - `BOT_TOKEN`: token BotFather mới (có thể để trống nếu chưa bật bot).
+   - `ADMIN_USERNAME`: tên đăng nhập quản trị.
+   - `ADMIN_PASSWORD`: mật khẩu ngẫu nhiên dài ít nhất 16 ký tự.
+5. Render tự liên kết `DATABASE_URL` và sinh `TELEGRAM_WEBHOOK_SECRET`. Không tạo biến `PORT` thủ công.
+6. Chờ deploy ở trạng thái Live. Mở `https://<service-name>.onrender.com/healthz`; cần thấy `status: ok` và `database: ready`.
+7. Mở `https://<service-name>.onrender.com/admin` để đăng nhập quản trị.
+8. Đặt URL Mini App trong BotFather thành URL Web Service, ví dụ `https://<service-name>.onrender.com/`. Khi có `BOT_TOKEN`, ứng dụng tự đăng ký webhook lúc khởi động.
 
-```bash
-npm install
-BOT_TOKEN="..." TELEGRAM_WEBHOOK_SECRET="..." PUBLIC_APP_URL="https://<ten-service>.onrender.com" npm run set-webhook
-```
+## 4. Cấu hình thủ công nếu không dùng Blueprint
 
-Webhook URL là `https://<ten-service>.onrender.com/telegram/webhook`. Không bật long polling đồng thời với webhook.
+- Runtime: Node
+- Branch: `main`
+- Build command: `npm ci --no-audit --no-fund && npm run verify`
+- Start command: `npm start`
+- Health check path: `/healthz`
+- Instance plan: Free
+- Tạo Render PostgreSQL cùng khu vực Singapore và gán internal connection string vào `DATABASE_URL`.
 
-## Cấu hình local
+Environment variables:
+| Key | Bắt buộc | Ghi chú |
+|---|---|---|
+| `NODE_ENV` | Có | `production` |
+| `DATABASE_URL` | Có | Internal URL của Render PostgreSQL |
+| `ADMIN_USERNAME` | Có | Tên đăng nhập Admin |
+| `ADMIN_PASSWORD` | Có | Tối thiểu 16 ký tự |
+| `BOT_TOKEN` | Tùy chọn | Token bot Telegram |
+| `TELEGRAM_WEBHOOK_SECRET` | Khi có bot | Có thể dùng giá trị ngẫu nhiên do Render sinh |
+| `PUBLIC_APP_URL` | Không | Mặc định dùng `RENDER_EXTERNAL_URL` |
+| `ALLOWED_ORIGINS` | Không | Danh sách origin phân tách bằng dấu phẩy |
+
+## 5. Chạy local
+
+Yêu cầu Node.js 22+ và PostgreSQL đang chạy.
 
 ```bash
 cp .env.example .env
-# Điền DATABASE_URL PostgreSQL, BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET,
-# ADMIN_USERNAME và ADMIN_PASSWORD.
-npm install
-npm run check
-npm test
+# Sửa DATABASE_URL và các biến môi trường trong .env
+npm ci
+npm run verify
 npm start
 ```
 
-Mở `http://localhost:10000/`. Đăng nhập Mini App cần mở qua Telegram vì API yêu cầu initData hợp lệ. Trang quản trị ở `/admin`.
+Mở `http://localhost:10000/`. Đăng nhập Mini App cần mở từ Telegram để có initData hợp lệ. Admin ở `/admin`.
 
-## API
+## 6. API chính
 
-| Method | Path | Mô tả |
+| Method | Path | Chức năng |
 |---|---|---|
-| GET | `/healthz` | Kiểm tra ứng dụng và PostgreSQL |
-| POST | `/telegram/webhook` | Telegram webhook, kiểm tra secret header |
-| POST | `/api/telegram/auth` | Xác thực Telegram initData, cấp session |
+| GET | `/healthz` | Health check ứng dụng và PostgreSQL |
+| POST | `/telegram/webhook` | Telegram webhook, xác minh secret header |
+| POST | `/api/telegram/auth` | Xác minh Telegram initData và cấp session |
 | GET | `/api/config` | Cấu hình giao diện công khai |
-| GET | `/api/me` | Hồ sơ tài khoản đã xác thực |
-| GET | `/api/dashboard` | Số dư, ticket gần đây, thống kê dịch vụ |
-| GET | `/api/services` | Danh mục dịch vụ đang mở |
-| GET/POST | `/api/tickets` | Xem/tạo ticket khách hàng; Admin xem tất cả |
+| GET | `/api/me` | Hồ sơ và số dư tài khoản |
+| GET | `/api/dashboard` | Tổng quan tài khoản |
+| GET | `/api/services` | Danh mục dịch vụ công khai |
+| GET/POST | `/api/tickets` | Xem/tạo ticket CSKH |
 | POST | `/api/admin/login` | Đăng nhập Admin |
-| GET | `/api/admin/stats` | Thống kê quản trị |
+| GET | `/api/admin/stats` | Thống kê Admin |
 | GET/POST/PATCH | `/api/admin/services` | Quản lý danh mục dịch vụ |
 | PATCH | `/api/admin/tickets/:id` | Cập nhật trạng thái và ghi chú ticket |
-| POST | `/api/logout` | Thu hồi session hiện tại |
+| POST | `/api/logout` | Thu hồi session |
 
-## Bảo mật
+## 7. Bảo mật và dữ liệu
 
-- Không commit `.env`, Bot Token, API key hoặc mật khẩu quản trị.
-- Telegram initData được xác minh bằng HMAC-SHA-256, kiểm tra `auth_date` và chữ ký; client không thể tự gán số dư hoặc role.
-- Session token ngẫu nhiên chỉ lưu SHA-256 trong PostgreSQL; quyền Admin được kiểm tra ở máy chủ.
-- Webhook yêu cầu `X-Telegram-Bot-Api-Secret-Token` trùng khớp secret đã đăng ký với Telegram.
-- API giới hạn kích thước JSON, dùng Helmet, CORS allow-list và rate limit.
-- Không có thao tác cộng tiền tự động. Không cộng số dư từ ảnh biên lai hoặc việc người dùng mở QR. Muốn tự động nạp tiền cần tích hợp nhà cung cấp thanh toán thật, xác minh chữ ký webhook và chống giao dịch trùng.
-- OTP, Proxy, VIP, thuê Tool và cấp phát Code chưa kết nối API nhà cung cấp. Danh mục hiển thị là catalog tư vấn, không giả lập việc hoàn tất dịch vụ.
+- Không commit `.env`, Bot Token, API key hoặc mật khẩu.
+- Telegram initData được xác minh HMAC-SHA-256 và kiểm tra thời gian, dữ liệu trùng khóa, user id.
+- Session là token ngẫu nhiên; chỉ SHA-256 hash được lưu trong PostgreSQL.
+- Admin role được xác định ở backend, không nhận role từ client.
+- Webhook xác minh `X-Telegram-Bot-Api-Secret-Token`.
+- Helmet CSP, CORS allow-list, giới hạn JSON body và rate limit được bật.
+- Không có API tự cộng tiền, tự xác nhận chuyển khoản, cấp OTP/Proxy hoặc giao dịch giả. Những tính năng đó chỉ được bật sau khi tích hợp nhà cung cấp thật, xác minh webhook và chống giao dịch trùng.
+- Các danh mục dịch vụ ban đầu để trống; Admin tự thêm dịch vụ thật.
 
-## Giới hạn Render Free — cần đọc trước khi dùng dữ liệu thật
+## 8. Giới hạn gói Free
 
-Render Free Web Service có thể spin down sau 15 phút không có traffic; request đầu tiên sau đó có thể mất khoảng một phút để khởi động. Filesystem của dịch vụ Free là ephemeral, do đó ứng dụng không lưu dữ liệu nghiệp vụ trên đĩa cục bộ.
+Render Free Web Service có thể spin down sau thời gian không có traffic, nên request đầu tiên sau khi ngủ có thể khởi động chậm. Filesystem của Web Service Free là ephemeral; dữ liệu nghiệp vụ phải lưu PostgreSQL.
 
-Render Free PostgreSQL chỉ có 1 GB, hết hạn sau 30 ngày kể từ ngày tạo, không có backup và không có connection pooling được quản lý. Sau khi hết hạn, có thời gian gia hạn 14 ngày để nâng cấp trước khi dữ liệu bị xóa. Đây là môi trường demo/kiểm thử, không phù hợp làm ví hoặc dữ liệu khách hàng production lâu dài. Cần nâng cấp PostgreSQL hoặc xuất backup/di chuyển dữ liệu trước ngày hết hạn.
+Render Free PostgreSQL có giới hạn 1 GB, hết hạn sau 30 ngày, không có backup và có thời gian gia hạn 14 ngày sau khi hết hạn trước khi bị xóa. Gói này phù hợp thử nghiệm, không phù hợp lưu ví hoặc dữ liệu khách hàng production lâu dài. Hãy nâng cấp hoặc di chuyển/backup dữ liệu trước hạn.
 
-## Kiểm thử
+## 9. Kiểm thử
 
 ```bash
 npm run verify
 ```
 
-Bộ test hiện bao gồm xác minh HMAC Telegram, dữ liệu bị sửa, auth_date hết hạn/tương lai, tạo/hash session và webhook secret. Kiểm thử tích hợp cần một PostgreSQL riêng và Bot Token thử nghiệm; chưa thể kiểm chứng thay cho việc chạy trên Render thật.
+CI GitHub chạy kiểm tra cú pháp Node.js và bộ test bảo mật trên mỗi lần push. CI thành công không thay thế kiểm thử kết nối PostgreSQL, Telegram Bot và deploy thực tế trong tài khoản Render.

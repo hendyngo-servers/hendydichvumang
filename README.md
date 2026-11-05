@@ -281,7 +281,7 @@ API:
 | PATCH | /api/admin/modules/:id/review | Duyệt hoặc từ chối artifact đang chờ |
 | GET | /api/admin/modules/:id/content | Tải artifact nội bộ với quyền Admin |
 
-Migration 005_module_artifacts.sql tạo bảng lưu trữ. Đây là phần có thể tái sử dụng an toàn từ ý tưởng ModuleRegistry của archive. Không sao chép PHP runtime hoặc chạy tệp upload trong Node/Python. Muốn phát hành code phải tạo pull request, qua review và CI rồi mới deploy.
+Migration 006_module_artifacts.sql tạo bảng lưu trữ. Đây là phần có thể tái sử dụng an toàn từ ý tưởng ModuleRegistry của archive. Không sao chép PHP runtime hoặc chạy tệp upload trong Node/Python. Muốn phát hành code phải tạo pull request, qua review và CI rồi mới deploy.
 
 ### Những phần archive chưa được nhập nguyên xi
 

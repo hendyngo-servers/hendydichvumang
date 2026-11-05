@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isUtf8 } from 'node:buffer';
 
 const MAX_ARTIFACT_BYTES = 1024 * 1024;
 const MODULE_KEY = /^[a-z][a-z0-9-]{1,62}$/;
@@ -25,7 +26,7 @@ export function validateArtifact({ moduleKey, fileName, mimeType, content }) {
   if (!Buffer.isBuffer(content) || content.length < 1 || content.length > MAX_ARTIFACT_BYTES) {
     throw new TypeError('Tệp phải có dung lượng từ 1 byte đến 1 MB.');
   }
-  if (!Buffer.isUtf8(content) || content.includes(0)) {
+  if (!isUtf8(content) || content.includes(0)) {
     throw new TypeError('Tệp phải là văn bản UTF-8 hợp lệ.');
   }
   const text = content.toString('utf8');

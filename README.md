@@ -46,7 +46,7 @@ Mã nguồn thay thế cho phiên bản Cloudflare cũ. Ứng dụng gồm Teleg
 5. `DATABASE_URL` được liên kết tự động từ PostgreSQL. `TELEGRAM_WEBHOOK_SECRET` do Render tự sinh; session dùng token ngẫu nhiên và chỉ lưu hash trong PostgreSQL.
 6. Chờ deploy thành công, mở `https://<ten-service>.onrender.com/healthz`. Kết quả mong đợi: `status: ok`, `database: ready`.
 7. Cập nhật Menu Button/Mini App URL trong BotFather thành `https://<ten-service>.onrender.com/`.
-8. Đặt Telegram webhook. Dùng local hoặc Shell trên máy cá nhân với các biến môi trường lấy từ Render (không lưu vào Git):
+8. Nếu đã cấu hình `BOT_TOKEN`, webhook được Web Service tự đăng ký khi khởi động. Chỉ dùng lệnh thủ công dưới đây nếu cần đăng ký lại webhook:
 
 ```bash
 npm install

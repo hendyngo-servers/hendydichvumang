@@ -1,8 +1,9 @@
 import 'dotenv/config';
 import { Bot } from 'grammy';
+import { normalizeWebhookSecret } from './security.js';
 
 const token = process.env.BOT_TOKEN;
-const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+const secret = normalizeWebhookSecret(process.env.TELEGRAM_WEBHOOK_SECRET);
 const base = (process.env.PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
 if (!token || !secret || !base.startsWith('https://')) {
   console.error('Cần BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET và PUBLIC_APP_URL (HTTPS).');

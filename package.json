@@ -1,16 +1,18 @@
 {
   "name": "hendydichvumang-render",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "type": "module",
-  "description": "HENDY Dịch Vụ Mạng - Telegram Bot, Mini App, customer center and admin on Render Web Service + PostgreSQL",
+  "description": "HENDY Dịch Vụ Mạng - Telegram Bot, external PostgreSQL API and separate Render Static Site",
   "engines": {
     "node": ">=22 <25"
   },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/bot.js && node --check src/security.js && node --check src/db.js && node --check src/config.js && node --check src/set-webhook.js && node --check public/app.js && node --check public/admin.js",
+    "build:static": "node scripts/build-static.js",
+    "automation:run": "node scripts/run-automations.js",
+    "check": "node --check src/server.js && node --check src/bot.js && node --check src/security.js && node --check src/db.js && node --check src/config.js && node --check src/automation.js && node --check src/set-webhook.js && node --check scripts/build-static.js && node --check scripts/run-automations.js && node --check public/config.js && node --check public/app.js && node --check public/admin.js",
     "test": "node --test",
     "verify": "npm run check && npm test",
     "set-webhook": "node src/set-webhook.js"

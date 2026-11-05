@@ -1,133 +1,189 @@
-# HENDY DỊCH VỤ MẠNG — Render Web Service
+# HENDY DỊCH VỤ MẠNG — Static Site + API + PostgreSQL
 
-Mã nguồn triển khai tập trung trên **một Render Web Service**. Node.js/Express phục vụ API, Telegram webhook, Telegram Mini App, trang khách hàng và Admin Dashboard. PostgreSQL lưu dữ liệu nghiệp vụ.
+Mã nguồn được triển khai theo kiến trúc tách biệt: **Render Static Site** phân phối giao diện qua CDN, **Render Web Service** chạy API/Telegram webhook/tác vụ tự động, và **PostgreSQL** có thể đặt tại Render hoặc nhà cung cấp bên ngoài.
 
 ## 1. Kiến trúc
 
-- **Render Web Service (Free):** Node.js 22, Express 5, grammY, REST API và toàn bộ giao diện tĩnh.
-- **Render PostgreSQL (Free):** tài khoản Telegram, ví, sổ giao dịch, danh mục dịch vụ, ticket CSKH, session và audit log.
-- **Telegram Bot:** webhook HTTPS, Reply Keyboard tiếng Việt, các lệnh /start, /services, /balance, /support và /help.
-- **Mini App:** xác thực chữ ký Telegram initData ở backend; không tin dữ liệu người dùng gửi từ trình duyệt.
-- **Admin:** đăng nhập bằng biến môi trường riêng, quản lý dịch vụ và trạng thái ticket.
-- **Không cần Static Site, Cloudflare Worker, Docker hoặc persistent disk.**
+| Thành phần | Trách nhiệm |
+|---|---|
+| Render Static Site | Giao diện Trung tâm khách hàng và Admin Dashboard; HTML/CSS/JS thuần, responsive, tiếng Việt; phân phối CDN |
+| Render Web Service | Node.js 22, Express 5, REST API, xác thực Telegram Mini App, Telegram webhook, đăng nhập Admin |
+| PostgreSQL | Hồ sơ khách hàng, ví, sổ giao dịch, danh mục dịch vụ, ticket, session, audit log, cấu hình/lịch sử automation |
+| Telegram Bot | Menu tiếng Việt, lệnh /start, /services, /balance, /support, /help; thông báo ticket cho Admin |
+| Automation scheduler | Dọn session, báo ticket mới, nhắc ticket đang chờ; PostgreSQL advisory lock tránh chạy trùng |
+| GitHub Actions | Kiểm tra cú pháp, chạy test với PostgreSQL 18 và build thử Static Site |
 
-## 2. Cấu trúc mã nguồn
+Static Site chỉ chứa tài nguyên frontend, không giữ secret và không kết nối database trực tiếp.
+
+## 2. Cấu trúc chính
 
 ```text
 .
 ├── .github/workflows/ci.yml
-├── migrations/001_init.sql\n├── migrations/002_remove_placeholders.sql
+├── migrations/
+│   ├── 001_init.sql
+│   ├── 002_remove_placeholders.sql
+│   └── 003_automations.sql
 ├── public/
 │   ├── index.html
-│   ├── app.js
 │   ├── admin.html
+│   ├── config.js
+│   ├── app.js
 │   ├── admin.js
 │   └── styles.css
+├── scripts/
+│   ├── build-static.js
+│   └── run-automations.js
 ├── src/
+│   ├── automation.js
 │   ├── bot.js
 │   ├── config.js
 │   ├── db.js
 │   ├── security.js
 │   ├── server.js
 │   └── set-webhook.js
-├── test/security.test.js
+├── test/
 ├── .env.example
 ├── package.json
-├── package-lock.json
 └── render.yaml
 ```
 
-## 3. Triển khai bằng Render Blueprint
+## 3. Tự động hóa
 
-1. Mở [Render Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/hendyngo-servers/hendydichvumang).
-2. Chọn repository `hendyngo-servers/hendydichvumang`, nhánh `main`, file `render.yaml`, rồi Apply.
-3. Blueprint tạo:
-   - Web Service `hendydichvumang`, runtime Node, gói Free, khu vực Singapore.
-   - PostgreSQL `hendydichvumang-db`, gói Free, cùng khu vực.
-4. Render yêu cầu nhập các giá trị `sync: false`:
-   - `BOT_TOKEN`: token BotFather mới (có thể để trống nếu chưa bật bot).
-   - `ADMIN_USERNAME`: tên đăng nhập quản trị.
-   - `ADMIN_PASSWORD`: mật khẩu ngẫu nhiên dài ít nhất 16 ký tự.
-5. Render tự liên kết `DATABASE_URL` và sinh `TELEGRAM_WEBHOOK_SECRET`. Không tạo biến `PORT` thủ công.
-6. Chờ deploy ở trạng thái Live. Mở `https://<service-name>.onrender.com/healthz`; cần thấy `status: ok` và `database: ready`.
-7. Mở `https://<service-name>.onrender.com/admin` để đăng nhập quản trị.
-8. Đặt URL Mini App trong BotFather thành URL Web Service, ví dụ `https://<service-name>.onrender.com/`. Khi có `BOT_TOKEN`, ứng dụng tự đăng ký webhook lúc khởi động.
+Trong Admin Dashboard, mục **Điều phối tác vụ hệ thống** hỗ trợ bật/tắt từng tác vụ, chọn chu kỳ chạy, xem lần chạy gần nhất/trạng thái và bấm **Chạy ngay**.
 
-## 4. Cấu hình thủ công nếu không dùng Blueprint
+| Tác vụ | Hành vi |
+|---|---|
+| Dọn phiên đăng nhập | Xóa session hết hạn và lịch sử automation cũ hơn 180 ngày |
+| Thông báo ticket mới | Gửi ticket mới đến Telegram Admin khi có BOT_TOKEN và ADMIN_TELEGRAM_ID |
+| Nhắc ticket chờ | Nhắc ticket open/processing đã tồn tại hơn 60 phút; nhắc lại sau mỗi 6 giờ |
 
-- Runtime: Node
-- Branch: `main`
-- Build command: `npm ci --no-audit --no-fund && npm run verify`
-- Start command: `npm start`
-- Health check path: `/healthz`
-- Instance plan: Free
-- Tạo Render PostgreSQL cùng khu vực Singapore và gán internal connection string vào `DATABASE_URL`.
+Các lần chạy được ghi vào `automation_runs`; cấu hình nằm trong `automation_settings`. Mỗi tác vụ có PostgreSQL advisory lock để tránh hai tiến trình thực thi cùng lúc. Chu kỳ có thể chọn từ 1 phút đến 7 ngày.
 
-Environment variables:
+Không tự tạo số dư, đơn hàng hoặc giao dịch giả. Việc cộng tiền, hoàn tiền, xác nhận chuyển khoản, cấp OTP/Proxy hay thuê Tool chỉ được triển khai khi có API nhà cung cấp thật, xác minh webhook, chống giao dịch trùng và đối soát.
+
+### Lưu ý gói Free
+
+Web Service Free có thể ngủ khi không có truy cập. Bộ hẹn giờ trong API sẽ tạm dừng trong thời gian service ngủ, nên tác vụ có thể chạy trễ; không dùng Free để cam kết SLA hoặc thông báo đúng phút.
+
+Khi cần chạy định kỳ ổn định, cấu hình Render Cron Job hoặc scheduler bên ngoài để chạy:
+
+```bash
+npm run automation:run
+```
+
+Lệnh dùng cùng biến môi trường và PostgreSQL, thực hiện các tác vụ đến hạn rồi thoát. Cron của Render dùng UTC; ví dụ mỗi phút là `* * * * *`. Có thể chuyển sang service Always-On phù hợp nếu cần worker liên tục.
+
+## 4. PostgreSQL tại Render hoặc bên ngoài
+
+Blueprint **không tạo database mặc định** và không tự kết nối vào database hiện có. API nhận kết nối qua `DATABASE_URL` (hoặc `EXTERNAL_DATABASE_URL`).
+
+1. Tạo database PostgreSQL riêng tại Render, Neon, Supabase, Railway hoặc nhà cung cấp tương thích.
+2. Tạo database/user riêng cho HENDY; tránh dùng superuser hoặc database nghiệp vụ khác.
+3. Đặt connection string trong biến môi trường bí mật `DATABASE_URL` của API Web Service.
+4. Với PostgreSQL truy cập từ Internet, bật TLS: `PGSSLMODE=require`. Khi cần xác minh đầy đủ CA/hostname, dùng `PGSSLMODE=verify-full` cùng `PGSSL_CA_CERT`.
+5. Đặt `PG_POOL_MAX=5` hoặc thấp hơn nếu nhà cung cấp giới hạn kết nối.
+6. Migrations tự động chạy khi API khởi động. Sao lưu database trước khi chạy migration production.
+
+| Biến | Ý nghĩa |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (bắt buộc) |
+| `PGSSLMODE` | `require` mặc định production; `verify-full` để xác minh certificate; `disable` chỉ dùng local/test phù hợp |
+| `PGSSL_CA_CERT` | CA PEM nếu dùng `verify-full` |
+| `PG_POOL_MAX` | Kích thước pool, mặc định 5, tối đa 20 |
+
+Nếu database nằm trên Render cùng khu vực, có thể dùng internal URL và cấu hình SSL theo yêu cầu của database. Không đưa DATABASE_URL vào Static Site, HTML/JS hoặc trình duyệt.
+
+## 5. Triển khai Render Blueprint
+
+Mở [Render Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/hendyngo-servers/hendydichvumang), chọn repository `hendyngo-servers/hendydichvumang`, branch `main`, file `render.yaml`, rồi Apply.
+
+Blueprint tạo hai dịch vụ, không tạo database:
+
+- `hendydichvumang-api`: Node.js Web Service, Node 22, health check `/healthz`.
+- `hendydichvumang-site`: Static Site, build ra `dist-site`, CDN, route `/admin` đến trang quản trị.
+
+Sau khi tạo:
+
+1. Trong API Web Service, đặt `DATABASE_URL` là connection string PostgreSQL riêng vừa tạo.
+2. Giữ `PGSSLMODE=require` cho PostgreSQL bên ngoài.
+3. Đặt `ADMIN_USERNAME` và `ADMIN_PASSWORD` mạnh, tối thiểu 16 ký tự.
+4. Đặt `BOT_TOKEN` nếu dùng bot và `ADMIN_TELEGRAM_ID` để nhận thông báo ticket.
+5. Đợi Static Site deploy xong, lấy URL dạng `https://<ten-site>.onrender.com`, rồi đặt URL này vào `PUBLIC_APP_URL` của API.
+6. Giữ `TELEGRAM_WEBHOOK_SECRET` do Blueprint tự sinh. Khi API có HTTPS và BOT_TOKEN, webhook tự đăng ký vào API URL; Mini App sử dụng URL Static Site.
+7. Kiểm tra `https://<api-url>/healthz`, cần có `status: ok` và `database: ready`.
+8. Mở `https://<static-site-url>/` và `https://<static-site-url>/admin`. Đặt URL Static Site làm Mini App URL trong BotFather.
+
+Biến API cần khai báo:
+
 | Key | Bắt buộc | Ghi chú |
 |---|---|---|
 | `NODE_ENV` | Có | `production` |
-| `DATABASE_URL` | Có | Internal URL của Render PostgreSQL |
+| `DATABASE_URL` | Có | PostgreSQL ở Render hoặc bên ngoài |
+| `PGSSLMODE` | Có | Mặc định `require` |
 | `ADMIN_USERNAME` | Có | Tên đăng nhập Admin |
 | `ADMIN_PASSWORD` | Có | Tối thiểu 16 ký tự |
-| `BOT_TOKEN` | Tùy chọn | Token bot Telegram |
-| `TELEGRAM_WEBHOOK_SECRET` | Khi có bot | Có thể dùng giá trị ngẫu nhiên do Render sinh |
-| `PUBLIC_APP_URL` | Không | Mặc định dùng `RENDER_EXTERNAL_URL` |
-| `ALLOWED_ORIGINS` | Không | Danh sách origin phân tách bằng dấu phẩy |
+| `PUBLIC_APP_URL` | Có | URL HTTPS của Static Site |
+| `BOT_TOKEN` | Tùy chọn | Token BotFather; để trống nếu chưa bật bot |
+| `TELEGRAM_WEBHOOK_SECRET` | Khi bật bot | Blueprint tự sinh |
+| `ADMIN_TELEGRAM_ID` | Tùy chọn | Telegram ID nhận thông báo ticket |
+| `PGSSL_CA_CERT` | Tùy chọn | CA PEM nếu dùng `verify-full` |
+| `ALLOWED_ORIGINS` | Tùy chọn | Origin bổ sung, phân tách bằng dấu phẩy |
 
-## 5. Chạy local
+## 6. Chạy local
 
-Yêu cầu Node.js 22+ và PostgreSQL đang chạy.
+Yêu cầu Node.js 22+ và PostgreSQL.
 
 ```bash
 cp .env.example .env
-# Sửa DATABASE_URL và các biến môi trường trong .env
+# Sửa DATABASE_URL và các biến trong .env
 npm ci
 npm run verify
 npm start
 ```
 
-Mở `http://localhost:10000/`. Đăng nhập Mini App cần mở từ Telegram để có initData hợp lệ. Admin ở `/admin`.
+Mở `http://localhost:10000/`. Đăng nhập Mini App yêu cầu mở từ Telegram để có initData hợp lệ. Admin ở `/admin`.
 
-## 6. API chính
+Build Static Site riêng:
+
+```bash
+STATIC_API_BASE_URL=https://<api-url> npm run build:static
+```
+
+Thư mục publish là `dist-site`. File `config.js` được sinh lúc build chỉ chứa public API origin, không chứa token hoặc database credentials.
+
+## 7. Bảo mật
+
+- Không commit `.env`, Bot Token, API key, mật khẩu hoặc PostgreSQL URL.
+- Telegram initData được xác minh HMAC-SHA-256 và kiểm tra thời hạn, duplicate query key ở server.
+- Session token ngẫu nhiên; chỉ SHA-256 hash được lưu trong PostgreSQL.
+- Admin role được kiểm tra ở backend.
+- Telegram webhook xác minh secret header.
+- Helmet CSP, CORS allow-list, rate limit, JSON body limit và audit log được bật.
+- Nếu một Bot Token thật từng được commit hoặc chia sẻ, hãy thu hồi qua BotFather, tạo token mới và chỉ lưu token mới trong Render Environment.
+
+## 8. API chính
 
 | Method | Path | Chức năng |
 |---|---|---|
-| GET | `/healthz` | Health check ứng dụng và PostgreSQL |
-| POST | `/telegram/webhook` | Telegram webhook, xác minh secret header |
-| POST | `/api/telegram/auth` | Xác minh Telegram initData và cấp session |
+| GET | `/healthz` | Kiểm tra API và PostgreSQL |
+| POST | `/telegram/webhook` | Telegram webhook |
+| POST | `/api/telegram/auth` | Xác thực Telegram Mini App |
 | GET | `/api/config` | Cấu hình giao diện công khai |
-| GET | `/api/me` | Hồ sơ và số dư tài khoản |
+| GET | `/api/me` | Hồ sơ và số lượng ticket |
 | GET | `/api/dashboard` | Tổng quan tài khoản |
 | GET | `/api/services` | Danh mục dịch vụ công khai |
-| GET/POST | `/api/tickets` | Xem/tạo ticket CSKH |
+| GET/POST | `/api/tickets` | Xem/tạo ticket |
 | POST | `/api/admin/login` | Đăng nhập Admin |
 | GET | `/api/admin/stats` | Thống kê Admin |
-| GET/POST/PATCH | `/api/admin/services` | Quản lý danh mục dịch vụ |
-| PATCH | `/api/admin/tickets/:id` | Cập nhật trạng thái và ghi chú ticket |
+| GET/POST/PATCH | `/api/admin/services` | Quản lý danh mục |
+| PATCH | `/api/admin/tickets/:id` | Cập nhật trạng thái/ghi chú ticket |
+| GET/PATCH | `/api/admin/automations` | Xem/cấu hình tác vụ |
+| POST | `/api/admin/automations/:code/run` | Chạy tác vụ ngay |
 | POST | `/api/logout` | Thu hồi session |
 
-## 7. Bảo mật và dữ liệu
+## 9. Kiểm tra và triển khai
 
-- Không commit `.env`, Bot Token, API key hoặc mật khẩu.
-- Telegram initData được xác minh HMAC-SHA-256 và kiểm tra thời gian, dữ liệu trùng khóa, user id.
-- Session là token ngẫu nhiên; chỉ SHA-256 hash được lưu trong PostgreSQL.
-- Admin role được xác định ở backend, không nhận role từ client.
-- Webhook xác minh `X-Telegram-Bot-Api-Secret-Token`.
-- Helmet CSP, CORS allow-list, giới hạn JSON body và rate limit được bật.
-- Không có API tự cộng tiền, tự xác nhận chuyển khoản, cấp OTP/Proxy hoặc giao dịch giả. Những tính năng đó chỉ được bật sau khi tích hợp nhà cung cấp thật, xác minh webhook và chống giao dịch trùng.
-- Các danh mục dịch vụ ban đầu để trống; Admin tự thêm dịch vụ thật.
+GitHub Actions kiểm tra cú pháp Node.js, chạy test với PostgreSQL 18 và build thử Static Site.
 
-## 8. Giới hạn gói Free
-
-Render Free Web Service có thể spin down sau thời gian không có traffic, nên request đầu tiên sau khi ngủ có thể khởi động chậm. Filesystem của Web Service Free là ephemeral; dữ liệu nghiệp vụ phải lưu PostgreSQL.
-
-Render Free PostgreSQL có giới hạn 1 GB, hết hạn sau 30 ngày, không có backup và có thời gian gia hạn 14 ngày sau khi hết hạn trước khi bị xóa. Gói này phù hợp thử nghiệm, không phù hợp lưu ví hoặc dữ liệu khách hàng production lâu dài. Hãy nâng cấp hoặc di chuyển/backup dữ liệu trước hạn.
-
-## 9. Kiểm thử
-
-```bash
-npm run verify
-```
-
-CI GitHub chạy kiểm tra cú pháp Node.js và bộ test bảo mật trên mỗi lần push. CI thành công không thay thế kiểm thử kết nối PostgreSQL, Telegram Bot và deploy thực tế trong tài khoản Render.
+Cập nhật source/Blueprint không đồng nghĩa với việc đã deploy lên Render. Sau khi Apply Blueprint, nhập database URL và secrets, hãy kiểm tra deploy cùng endpoint `/healthz` trước khi đưa hệ thống vào sử dụng. Gói Free có thể ngủ; không dùng database Free hết hạn/lưu trữ hạn chế cho ví hoặc thanh toán production lâu dài.

@@ -1,8 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const state = { token: sessionStorage.getItem('hendy_admin_session') || '' };
+const API_BASE_URL = String(window.HENDY_CONFIG?.apiBaseUrl || '').replace(/\/+$/, '');
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(API_BASE_URL + path, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}), ...(options.headers || {}) }
   });
@@ -15,7 +16,7 @@ function toast(message) { const el = $('toast'); el.textContent = message; el.cl
 function statusText(status) { return ({ open: 'Mới tiếp nhận', processing: 'Đang xử lý', closed: 'Đã đóng' })[status] || status; }
 
 async function loadAdmin() {
-  const [stats, services, tickets] = await Promise.all([api('/api/admin/stats'), api('/api/admin/services'), api('/api/tickets')]);
+  const [stats, services, tickets, automations] = await Promise.all([api('/api/admin/stats'), api('/api/admin/services'), api('/api/tickets'), api('/api/admin/automations')]);
   $('loginPanel').hidden = true;
   $('adminApp').hidden = false;
   const items = [
@@ -25,6 +26,7 @@ async function loadAdmin() {
   $('statsGrid').innerHTML = items.map(([label, value]) => `<article class="panel"><strong>${esc(value)}</strong><span class="muted">${esc(label)}</span></article>`).join('');
   renderServices(services.services);
   renderTickets(tickets.tickets);
+  renderAutomations(automations.automations);
 }
 
 function renderServices(services) {
@@ -60,6 +62,61 @@ function renderTickets(tickets) {
     try {
       await api(`/api/admin/tickets/${card.dataset.ticket}`, { method: 'PATCH', body: JSON.stringify({ status: card.querySelector('.ticket-status').value, admin_note: card.querySelector('.ticket-note').value }) });
       toast('Đã cập nhật yêu cầu hỗ trợ.');
+      await loadAdmin();
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  }));
+}
+
+
+function automationStatusText(status) {
+  return ({ never: 'Chưa chạy', running: 'Đang chạy', success: 'Thành công', failed: 'Thất bại', skipped: 'Đã bỏ qua' })[status] || status;
+}
+
+function renderAutomations(items) {
+  $('adminAutomations').innerHTML = items.length ? items.map((item) => `
+    <article class="panel automation-card" data-automation="${esc(item.code)}">
+      <div class="automation-heading">
+        <div><span class="automation-code">${esc(item.code)}</span><h3>${esc(item.name)}</h3><p class="muted">${esc(item.description)}</p></div>
+        <span class="status ${item.last_status === 'failed' ? 'processing' : item.last_status === 'success' ? 'closed' : ''}">${automationStatusText(item.last_status)}</span>
+      </div>
+      <div class="automation-meta"><span>Lần chạy: ${item.last_run_at ? new Date(item.last_run_at).toLocaleString('vi-VN') : 'Chưa có'}</span><span>Tiếp theo: ${item.enabled ? new Date(item.next_run_at).toLocaleString('vi-VN') : 'Đang tắt'}</span></div>
+      ${item.last_error ? `<p class="automation-error">Mã lỗi gần nhất: ${esc(item.last_error)}</p>` : ''}
+      <div class="automation-controls">
+        <label class="automation-toggle"><input class="automation-enabled" type="checkbox" ${item.enabled ? 'checked' : ''}> Bật tác vụ</label>
+        <label class="automation-interval">Chu kỳ
+          <select class="automation-minutes">
+            ${[1,5,15,30,60,240,1440].map((n) => `<option value="${n}" ${Number(item.interval_minutes) === n ? 'selected' : ''}>${n < 60 ? n + ' phút' : n === 60 ? '1 giờ' : n === 240 ? '4 giờ' : '24 giờ'}</option>`).join('')}
+          </select>
+        </label>
+        <button class="button ghost save-automation" type="button">Lưu cấu hình</button>
+        <button class="button primary run-automation" type="button">Chạy ngay</button>
+      </div>
+    </article>`).join('') : '<div class="panel"><p class="muted">Chưa có tác vụ tự động hóa.</p></div>';
+
+  document.querySelectorAll('.save-automation').forEach((button) => button.addEventListener('click', async () => {
+    const card = button.closest('[data-automation]');
+    button.disabled = true;
+    try {
+      await api(`/api/admin/automations/${card.dataset.automation}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          enabled: card.querySelector('.automation-enabled').checked,
+          interval_minutes: Number(card.querySelector('.automation-minutes').value)
+        })
+      });
+      toast('Đã lưu cấu hình tự động hóa.');
+      await loadAdmin();
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  }));
+
+  document.querySelectorAll('.run-automation').forEach((button) => button.addEventListener('click', async () => {
+    const card = button.closest('[data-automation]');
+    button.disabled = true;
+    try {
+      const result = await api(`/api/admin/automations/${card.dataset.automation}/run`, { method: 'POST' });
+      toast(result.result.status === 'skipped' ? 'Tác vụ đã bỏ qua do thiếu cấu hình phụ trợ.' : 'Đã chạy xong tác vụ.');
       await loadAdmin();
     } catch (error) { toast(error.message); }
     finally { button.disabled = false; }

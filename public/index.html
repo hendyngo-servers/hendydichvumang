@@ -8,6 +8,7 @@
   <title>HENDY | Trung tâm khách hàng</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/config.js"></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -33,6 +34,11 @@
       <article class="panel metric-panel"><span class="metric-icon">🛍</span><span class="metric-value" id="serviceCount">0</span><span class="muted">Dịch vụ đang mở</span></article>
     </section>
 
+    <section class="quick-actions" aria-label="Truy cập nhanh">
+      <a class="quick-action quick-red" href="#ticketForm"><span class="quick-number">01</span><span class="quick-copy"><strong>Gửi ticket CSKH</strong><small>Tạo yêu cầu hỗ trợ mới</small></span><span class="quick-arrow">↗</span></a>
+      <a class="quick-action quick-cyan" href="#ticketList"><span class="quick-number">02</span><span class="quick-copy"><strong>Theo dõi hỗ trợ</strong><small>Xem trạng thái ticket và phản hồi</small></span><span class="quick-arrow">↗</span></a>
+      <a class="quick-action quick-green" href="#serviceList"><span class="quick-number">03</span><span class="quick-copy"><strong>Danh mục dịch vụ</strong><small>Xem các dịch vụ đang được mở</small></span><span class="quick-arrow">↗</span></a>
+    </section>
     <section class="section-heading"><div><p class="eyebrow">KHÁM PHÁ</p><h2>Dịch vụ HENDY</h2></div><span class="section-note">Danh mục hiện có</span></section>
     <section id="serviceList" class="service-grid"><div class="panel skeleton">Đang tải danh mục…</div></section>
 

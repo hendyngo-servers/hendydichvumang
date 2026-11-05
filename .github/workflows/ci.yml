@@ -40,3 +40,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify source and PostgreSQL migrations
         run: npm run verify
+      - name: Build separate Static Site
+        run: npm run build:static
+        env:
+          STATIC_API_BASE_URL: https://api.example.com

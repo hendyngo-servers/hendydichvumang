@@ -10,26 +10,33 @@ test('PostgreSQL migrations apply once and create the application schema', {
   const db = createPool(databaseUrl);
   try {
     await migrate(db);
-    const tables = await db.query(
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-    );
+    const tables = await db.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
     const names = new Set(tables.rows.map((row) => row.table_name));
-    for (const table of ['users', 'wallets', 'wallet_transactions', 'service_catalog', 'tickets', 'auth_sessions', 'audit_logs', 'schema_migrations']) {
+    for (const table of [
+      'users', 'wallets', 'wallet_transactions', 'service_catalog', 'tickets',
+      'auth_sessions', 'audit_logs', 'schema_migrations', 'automation_settings', 'automation_runs'
+    ]) {
       assert.equal(names.has(table), true, 'missing table ' + table);
     }
 
+    const ticketColumns = await db.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'tickets'");
+    const columnNames = new Set(ticketColumns.rows.map((row) => row.column_name));
+    assert.equal(columnNames.has('admin_notified_at'), true);
+    assert.equal(columnNames.has('admin_reminded_at'), true);
+
     const migrations = await db.query('SELECT version FROM schema_migrations ORDER BY version');
     assert.deepEqual(migrations.rows.map((row) => row.version), [
-      '001_init.sql',
-      '002_remove_placeholders.sql'
+      '001_init.sql', '002_remove_placeholders.sql', '003_automations.sql'
     ]);
 
-    const services = await db.query('SELECT COUNT(*)::int AS count FROM service_catalog');
-    assert.equal(services.rows[0].count, 0);
+    const automation = await db.query('SELECT code FROM automation_settings ORDER BY code');
+    assert.deepEqual(automation.rows.map((row) => row.code), [
+      'cleanup_sessions', 'notify_new_tickets', 'remind_open_tickets'
+    ]);
 
     await migrate(db);
     const secondRun = await db.query('SELECT COUNT(*)::int AS count FROM schema_migrations');
-    assert.equal(secondRun.rows[0].count, 2);
+    assert.equal(secondRun.rows[0].count, 3);
   } finally {
     await closePool();
   }

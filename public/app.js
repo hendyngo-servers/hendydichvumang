@@ -1,4 +1,5 @@
 const state = { token: sessionStorage.getItem('hendy_session') || '', me: null };
+const API_BASE_URL = String(window.HENDY_CONFIG?.apiBaseUrl || '').replace(/\/+$/, '');
 const $ = (id) => document.getElementById(id);
 const money = (value) => Number(value || 0).toLocaleString('vi-VN');
 
@@ -10,7 +11,7 @@ function toast(message) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(API_BASE_URL + path, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}), ...(options.headers || {}) }
   });

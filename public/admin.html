@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101323"><title>HENDY | Quản trị</title>
-  <link rel="stylesheet" href="/styles.css"><script src="/admin.js" defer></script>
+  <link rel="stylesheet" href="/styles.css"><script src="/config.js"></script><script src="/admin.js" defer></script>
 </head>
 <body>
   <main class="shell admin-shell">
@@ -15,6 +15,8 @@
     </section>
     <div id="adminApp" hidden>
       <div class="admin-toolbar"><span class="muted">Đã đăng nhập quản trị</span><button class="button ghost" id="logoutButton">Đăng xuất</button></div>
+      <section class="section-heading"><div><p class="eyebrow">TỰ ĐỘNG HÓA</p><h2>Điều phối tác vụ hệ thống</h2></div><span class="section-note">Theo dõi và chạy tác vụ</span></section>
+      <section id="adminAutomations" class="automation-grid"><div class="panel skeleton">Đang tải tác vụ…</div></section>
       <section class="summary-grid admin-stats" id="statsGrid"></section>
       <section class="section-heading"><div><p class="eyebrow">DANH MỤC</p><h2>Quản lý dịch vụ</h2></div></section>
       <section class="panel ticket-panel">

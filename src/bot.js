@@ -94,7 +94,7 @@ export function createBot({ token, db, appUrl, legacyCustomerUrl = '' }) {
     const name = escapeHtml(ctx.from.first_name || 'bạn');
     const intro = escapeHtml(menuConfig.introText);
     await ctx.reply(
-      '💠 <b>HENDY DỊCH VỤ MẠNG</b>\\n\\nChào ' + name + '! Chào mừng bạn đến với hệ thống dịch vụ HENDY.\\n\\n' + intro,
+      '💠 <b>HENDY DỊCH VỤ MẠNG</b>\n\nChào ' + name + '! Chào mừng bạn đến với hệ thống dịch vụ HENDY.\n\n' + intro,
       { parse_mode: 'HTML', reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private', false, menuConfig) }
     );
   });
@@ -111,7 +111,7 @@ export function createBot({ token, db, appUrl, legacyCustomerUrl = '' }) {
   bot.command('help', async (ctx) => {
     const menuConfig = await loadMenuConfig(db, 'grammy');
     await ctx.reply(
-      'Các lệnh hiện có:\\n/start – Mở menu\\n/customer – Trung tâm khách hàng\\n/services – Danh sách dịch vụ\\n/balance – Kiểm tra số dư\\n/support – Trung tâm hỗ trợ',
+      'Các lệnh hiện có:\n/start – Mở menu\n/customer – Trung tâm khách hàng\n/services – Danh sách dịch vụ\n/balance – Kiểm tra số dư\n/support – Trung tâm hỗ trợ',
       { reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private', false, menuConfig) }
     );
   });

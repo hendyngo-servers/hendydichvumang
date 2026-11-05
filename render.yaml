@@ -3,12 +3,9 @@ services:
   - type: web
     name: hendydichvumang-site
     runtime: static
-    region: singapore
     buildCommand: npm ci --no-audit --no-fund && npm run build:static
     staticPublishPath: dist-site
     autoDeployTrigger: commit
-    previews:
-      generation: off
     routes:
       - type: rewrite
         source: /admin

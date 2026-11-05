@@ -7,6 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 from services.aiogram_bot.api_client import HendyApiError
+from services.aiogram_bot.menu_filter import MenuActionFilter
 
 support_router = Router(name="hendy-support")
 
@@ -25,7 +26,7 @@ def cancel_keyboard() -> ReplyKeyboardMarkup:
 
 
 @support_router.message(Command("support"), F.chat.type == "private")
-@support_router.message(F.text == "🎫 Hỗ trợ", F.chat.type == "private")
+@support_router.message(MenuActionFilter("support"), F.chat.type == "private")
 async def start_ticket(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(TicketForm.subject)

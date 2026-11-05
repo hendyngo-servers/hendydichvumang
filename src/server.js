@@ -266,6 +266,151 @@ app.post('/internal/bot/tickets', requireBotService, async (req, res) => {
   }
 });
 
+
+function requireTelegramAdmin(req, res, next) {
+  const telegramId = String(req.params.telegramId || '');
+  if (!/^\d{5,20}$/.test(telegramId)) {
+    return res.status(400).json({ error: 'Telegram ID quản trị không hợp lệ.' });
+  }
+  if (!config.adminTelegramId || telegramId !== config.adminTelegramId) {
+    return res.status(403).json({ error: 'Tài khoản Telegram này không có quyền quản trị.' });
+  }
+  req.telegramAdminId = telegramId;
+  return next();
+}
+
+const internalAdminPath = '/internal/bot/admin/:telegramId';
+
+app.get(internalAdminPath + '/access', requireBotService, (req, res) => {
+  const telegramId = String(req.params.telegramId || '');
+  const authorized = /^\d{5,20}$/.test(telegramId) &&
+    Boolean(config.adminTelegramId) &&
+    telegramId === config.adminTelegramId;
+  res.json({ authorized });
+});
+
+app.get(internalAdminPath + '/stats', requireBotService, requireTelegramAdmin, async (_req, res) => {
+  const { rows } = await db.query(
+    \`SELECT (SELECT COUNT(*) FROM users)::int AS users,
+      (SELECT COUNT(*) FROM tickets WHERE status <> 'closed')::int AS open_tickets,
+      (SELECT COUNT(*) FROM service_catalog)::int AS services,
+      (SELECT COALESCE(SUM(balance), 0)::text FROM wallets) AS wallet_total\`
+  );
+  res.json({ stats: rows[0] });
+});
+
+app.get(internalAdminPath + '/tickets', requireBotService, requireTelegramAdmin, async (_req, res) => {
+  const { rows } = await db.query(
+    \`SELECT t.id, t.subject, t.message, t.status, t.admin_note, t.created_at,
+      u.telegram_id, u.username, u.first_name
+     FROM tickets t JOIN users u ON u.id = t.user_id
+     ORDER BY CASE WHEN t.status = 'open' THEN 0 WHEN t.status = 'processing' THEN 1 ELSE 2 END,
+       t.created_at ASC
+     LIMIT 10\`
+  );
+  res.json({ tickets: rows });
+});
+
+app.patch(internalAdminPath + '/tickets/:ticketId', requireBotService, requireTelegramAdmin, async (req, res) => {
+  const id = Number(req.params.ticketId);
+  const status = String(req.body?.status || '');
+  const noteValue = req.body?.admin_note;
+  const note = typeof noteValue === 'string' ? noteValue.trim() : null;
+  if (!Number.isSafeInteger(id) || id < 1 || !['open', 'processing', 'closed'].includes(status)) {
+    return res.status(400).json({ error: 'ID hoặc trạng thái ticket không hợp lệ.' });
+  }
+  if (note !== null && note.length > 2000) {
+    return res.status(400).json({ error: 'Ghi chú không được vượt quá 2.000 ký tự.' });
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const updated = await client.query(
+      'UPDATE tickets SET status = $1, admin_note = COALESCE($2, admin_note), updated_at = NOW() WHERE id = $3 RETURNING id, subject, status, admin_note, updated_at',
+      [status, note, id]
+    );
+    if (!updated.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Không tìm thấy ticket.' });
+    }
+    await client.query(
+      'INSERT INTO audit_logs (actor, action, entity, entity_id, metadata) VALUES ($1, $2, $3, $4, $5)',
+      [req.telegramAdminId, 'ticket.update', 'ticket', String(id), JSON.stringify({ status, source: 'aiogram' })]
+    );
+    await client.query('COMMIT');
+    return res.json({ ticket: updated.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+app.get(internalAdminPath + '/automations', requireBotService, requireTelegramAdmin, async (_req, res) => {
+  const { rows } = await db.query(
+    \`SELECT a.code, a.name, a.description, a.enabled, a.interval_minutes,
+      a.next_run_at, a.last_run_at, a.last_status, a.last_error,
+      r.status AS recent_run_status, r.started_at AS recent_run_at
+     FROM automation_settings a
+     LEFT JOIN LATERAL (
+       SELECT status, started_at FROM automation_runs
+       WHERE code = a.code ORDER BY started_at DESC LIMIT 1
+     ) r ON TRUE
+     ORDER BY a.code\`
+  );
+  res.json({ automations: rows });
+});
+
+app.patch(internalAdminPath + '/automations/:code', requireBotService, requireTelegramAdmin, async (req, res) => {
+  const code = String(req.params.code || '');
+  const enabled = req.body?.enabled;
+  const interval = Number(req.body?.interval_minutes);
+  if (!AUTOMATION_CODES.includes(code)) {
+    return res.status(404).json({ error: 'Không tìm thấy tác vụ tự động hóa.' });
+  }
+  if (typeof enabled !== 'boolean' || !Number.isSafeInteger(interval) || interval < 1 || interval > 10080) {
+    return res.status(400).json({ error: 'Trạng thái hoặc chu kỳ chạy không hợp lệ.' });
+  }
+  const { rows } = await db.query(
+    \`UPDATE automation_settings
+     SET enabled = $1, interval_minutes = $2,
+       next_run_at = CASE WHEN $1 THEN NOW() ELSE next_run_at END,
+       updated_at = NOW()
+     WHERE code = $3
+     RETURNING code, enabled, interval_minutes, next_run_at, last_status\`,
+    [enabled, interval, code]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Không tìm thấy tác vụ tự động hóa.' });
+  await db.query(
+    'INSERT INTO audit_logs (actor, action, entity, entity_id, metadata) VALUES ($1, $2, $3, $4, $5)',
+    [req.telegramAdminId, 'automation.update', 'automation', code, JSON.stringify({ enabled, interval_minutes: interval, source: 'aiogram' })]
+  );
+  return res.json({ automation: rows[0] });
+});
+
+app.post(internalAdminPath + '/automations/:code/run', requireBotService, requireTelegramAdmin, async (req, res) => {
+  const code = String(req.params.code || '');
+  if (!AUTOMATION_CODES.includes(code)) {
+    return res.status(404).json({ error: 'Không tìm thấy tác vụ tự động hóa.' });
+  }
+  const result = await runAutomation(
+    db,
+    code,
+    { bot, adminTelegramId: config.adminTelegramId },
+    { force: true }
+  );
+  if (result.status === 'busy') {
+    return res.status(409).json({ error: 'Tác vụ này đang chạy ở một tiến trình khác.' });
+  }
+  await db.query(
+    'INSERT INTO audit_logs (actor, action, entity, entity_id, metadata) VALUES ($1, $2, $3, $4, $5)',
+    [req.telegramAdminId, 'automation.run', 'automation', code, JSON.stringify({ status: result.status, source: 'aiogram' })]
+  );
+  return res.json({ result });
+});
+
 app.post('/api/admin/login', rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false }), async (req, res) => {
   if (!config.adminPassword) return res.status(503).json({ error: 'Chưa cấu hình ADMIN_PASSWORD trên Render.' });
   const username = String(req.body?.username || '');

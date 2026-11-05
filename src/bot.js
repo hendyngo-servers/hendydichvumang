@@ -1,4 +1,5 @@
 import { Bot, Keyboard, InlineKeyboard } from 'grammy';
+import { buildMenuRows, defaultMenuConfig, normalizeMenuConfig, resolveMenuAction } from './menu-config.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -20,15 +21,28 @@ async function upsertTelegramUser(db, from) {
   return userId;
 }
 
-function mainMenu(appUrl, isPrivate = true) {
-  const keyboard = new Keyboard()
-    .text('👤 Trung tâm khách hàng').row()
-    .text('💳 Số dư').text('🛍 Dịch vụ').row()
-    .text('🎫 Hỗ trợ');
+async function loadMenuConfig(db, botKey = 'grammy') {
+  try {
+    const { rows } = await db.query('SELECT * FROM bot_menu_configs WHERE bot_key = $1 LIMIT 1', [botKey]);
+    return normalizeMenuConfig(rows[0] || defaultMenuConfig(botKey), botKey);
+  } catch (error) {
+    console.error('Không tải được cấu hình menu:', error?.code || error?.name || 'UNKNOWN');
+    return defaultMenuConfig(botKey);
+  }
+}
+
+function mainMenu(appUrl, isPrivate = true, isAdmin = false, menuConfig = defaultMenuConfig('grammy')) {
+  const config = normalizeMenuConfig(menuConfig, 'grammy');
+  const keyboard = new Keyboard();
+  const rows = buildMenuRows(config, isAdmin);
+  rows.forEach((row, index) => {
+    for (const button of row) keyboard.text(button.text);
+    if (index < rows.length - 1) keyboard.row();
+  });
   if (isPrivate && appUrl.startsWith('https://')) {
     keyboard.row().webApp('🌐 Mở Mini App', appUrl);
   }
-  return keyboard.resized().persistent();
+  return keyboard.resized(config.resizeKeyboard).persistent(config.persistentKeyboard);
 }
 
 export function buildCustomerCenterKeyboard({ appUrl = '', legacyCustomerUrl = '', isPrivate = true } = {}) {
@@ -47,7 +61,7 @@ export function buildCustomerCenterKeyboard({ appUrl = '', legacyCustomerUrl = '
   return keyboard;
 }
 
-async function sendCustomerCenter(ctx, appUrl, legacyCustomerUrl) {
+async function sendCustomerCenter(ctx, appUrl, legacyCustomerUrl, menuConfig) {
   if (ctx.chat?.type !== 'private') {
     await ctx.reply('🔐 Hãy mở chat riêng với bot để truy cập Trung tâm khách hàng.');
     return;
@@ -66,7 +80,7 @@ async function sendCustomerCenter(ctx, appUrl, legacyCustomerUrl) {
   const keyboard = buildCustomerCenterKeyboard({ appUrl, legacyCustomerUrl, isPrivate: true });
   await ctx.reply(lines.join('\n'), {
     parse_mode: 'HTML',
-    reply_markup: keyboard.inline_keyboard.length ? keyboard : mainMenu(appUrl, true)
+    reply_markup: keyboard.inline_keyboard.length ? keyboard : mainMenu(appUrl, true, false, menuConfig)
   });
 }
 
@@ -76,20 +90,22 @@ export function createBot({ token, db, appUrl, legacyCustomerUrl = '' }) {
 
   bot.command('start', async (ctx) => {
     await upsertTelegramUser(db, ctx.from);
+    const menuConfig = await loadMenuConfig(db, 'grammy');
     const name = escapeHtml(ctx.from.first_name || 'bạn');
+    const intro = escapeHtml(menuConfig.introText);
     await ctx.reply(
-      '💠 <b>HENDY DỊCH VỤ MẠNG</b>\n\nChào ' + name + '! Chào mừng bạn đến với hệ thống dịch vụ HENDY.\n\nMở Trung tâm khách hàng để quản lý tài khoản, số dư, dịch vụ và yêu cầu hỗ trợ.',
-      { parse_mode: 'HTML', reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private') }
+      '💠 <b>HENDY DỊCH VỤ MẠNG</b>\\n\\nChào ' + name + '! Chào mừng bạn đến với hệ thống dịch vụ HENDY.\\n\\n' + intro,
+      { parse_mode: 'HTML', reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private', false, menuConfig) }
     );
   });
 
   bot.command('customer', async (ctx) => {
     await upsertTelegramUser(db, ctx.from);
-    await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl);
+    await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl, await loadMenuConfig(db, 'grammy'));
   });
   bot.command('account', async (ctx) => {
     await upsertTelegramUser(db, ctx.from);
-    await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl);
+    await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl, await loadMenuConfig(db, 'grammy'));
   });
 
   bot.command('help', async (ctx) => {
@@ -103,31 +119,29 @@ export function createBot({ token, db, appUrl, legacyCustomerUrl = '' }) {
   bot.command('balance', async (ctx) => sendBalance(ctx, db));
   bot.command('support', async (ctx) => {
     await upsertTelegramUser(db, ctx.from);
-    await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl);
+    await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl, await loadMenuConfig(db, 'grammy'));
   });
 
   bot.callbackQuery('customer:home', async (ctx) => {
     await ctx.answerCallbackQuery({ text: 'Đã mở menu chính.' });
+    const menuConfig = await loadMenuConfig(db, 'grammy');
     await ctx.reply('💠 Menu chính HENDY. Chọn chức năng bạn cần:', {
-      reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private')
+      reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private', false, menuConfig)
     });
   });
 
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
-    const menu = mainMenu(appUrl, ctx.chat?.type === 'private');
-    if (text === '👤 Trung tâm khách hàng' || text === '👤 Tài khoản') {
+    const menuConfig = await loadMenuConfig(db, 'grammy');
+    const menu = mainMenu(appUrl, ctx.chat?.type === 'private', false, menuConfig);
+    const action = resolveMenuAction(text, menuConfig, false);
+    if (action === 'customer' || action === 'support') {
       await upsertTelegramUser(db, ctx.from);
-      await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl);
+      await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl, menuConfig);
       return;
     }
-    if (text === '💳 Số dư') return sendBalance(ctx, db);
-    if (text === '🛍 Dịch vụ') return sendServices(ctx, db);
-    if (text === '🎫 Hỗ trợ') {
-      await upsertTelegramUser(db, ctx.from);
-      await sendCustomerCenter(ctx, appUrl, legacyCustomerUrl);
-      return;
-    }
+    if (action === 'balance') return sendBalance(ctx, db);
+    if (action === 'services') return sendServices(ctx, db);
     await ctx.reply('Mình chưa nhận diện chức năng này. Hãy chọn nút trong menu hoặc gửi /help.', { reply_markup: menu });
   });
 

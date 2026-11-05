@@ -89,6 +89,7 @@ async def account_alias(message: Message, settings: Settings) -> None:
 
 
 @customer_router.message(Command("balance"), F.chat.type == "private")
+@customer_router.message(MenuActionFilter("balance"), F.chat.type == "private")
 async def account_balance(message: Message, api: HendyApiClient) -> None:
     assert message.from_user is not None
     result = await api.get_balance(message.from_user.id)

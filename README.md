@@ -206,12 +206,12 @@ Mở Settings → Secrets and variables → Actions và cấu hình:
 **Variables:**
 - RENDER_LIVE_CHECK_ENABLED = true
 - RENDER_WORKSPACE_ID = ID workspace Render.
-- RENDER_STATIC_SERVICE_ID = ID Static Site.
-- RENDER_API_SERVICE_ID = ID Web Service.
+- RENDER_STATIC_SERVICE_ID = ID Static Site (tùy chọn, script tự dò nếu bỏ trống).
+- RENDER_API_SERVICE_ID = ID Web Service (tùy chọn, script tự dò nếu bỏ trống).
 - STATIC_SITE_URL = URL HTTPS Static Site.
 - API_BASE_URL = URL HTTPS Web Service.
 
-Workflow .github/workflows/render-live-check.yml chạy mỗi 15 phút và có thể chạy thủ công trong tab Actions. Workflow kiểm tra đúng service, deployment live + commit, Static Site / /admin /config.js, API /healthz và /api/config.
+Workflow .github/workflows/render-live-check.yml chạy mỗi 15 phút và có thể chạy thủ công trong tab Actions. Script tự tìm service hendydichvumang-site và hendydichvumang-api trong workspace (có thể cung cấp ID để cố định), sau đó kiểm tra đúng service, deployment live + commit, Static Site / /admin /config.js, API /healthz và /api/config. Nếu API service chưa được tạo, kiểm tra trả về tên service hiện có và chỉ rõ service còn thiếu.
 
 ### Chạy thủ công
 

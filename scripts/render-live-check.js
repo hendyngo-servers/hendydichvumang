@@ -34,6 +34,23 @@ export function unwrapLatestDeploy(payload) {
   if (!deploy || typeof deploy !== 'object' || !deploy.id) throw new Error('Render API không trả về deployment hợp lệ.');
   return deploy;
 }
+export function findWorkspaceService(payload, expected) {
+  const entries = Array.isArray(payload) ? payload : Array.isArray(payload?.services) ? payload.services : [];
+  const services = entries.map((entry) => entry?.service || entry).filter((service) => service && typeof service === 'object');
+  const found = services.find((service) =>
+    service.name === expected.name &&
+    service.type === expected.type &&
+    service.ownerId === expected.workspaceId
+  );
+  if (found) return found;
+  const available = services
+    .filter((service) => !service.ownerId || service.ownerId === expected.workspaceId)
+    .map((service) => service.name + ' (' + service.type + ')');
+  throw new Error(
+    'Không tìm thấy service "' + expected.name + '" loại ' + expected.type +
+    ' trong workspace Render. Các service hiện có: ' + (available.join(', ') || 'không có') + '.'
+  );
+}
 export function validateService(service, expected) {
   if (service.id !== expected.id) throw new Error('Service ID không khớp cấu hình.');
   if (service.ownerId && service.ownerId !== expected.workspaceId) throw new Error('Service thuộc workspace khác.');
@@ -110,10 +127,19 @@ async function checkApi(apiUrl, siteUrl) {
   if (configuredSite !== siteUrl) throw new Error('PUBLIC_APP_URL trong API chưa trỏ đến Static Site.');
   return { health: health.response.status, database: healthJson.database, config: configResult.response.status, appUrl: configuredSite };
 }
+async function resolveService(apiKey, workspaceId, serviceId, expected) {
+  if (serviceId) {
+    return unwrapService(await renderGet(apiKey, '/services/' + encodeURIComponent(serviceId)));
+  }
+  const query = new URLSearchParams({ ownerId: workspaceId, limit: '100', includePreviews: 'false' });
+  const page = await renderGet(apiKey, '/services?' + query.toString());
+  return findWorkspaceService(page, { ...expected, workspaceId });
+}
+
 async function verifyOneService(apiKey, workspaceId, serviceId, expected) {
-  const service = unwrapService(await renderGet(apiKey, '/services/' + encodeURIComponent(serviceId)));
-  const url = validateService(service, { ...expected, id: serviceId, workspaceId, branch: EXPECTED_BRANCH, repository: EXPECTED_REPOSITORY });
-  const deploy = unwrapLatestDeploy(await renderGet(apiKey, '/services/' + encodeURIComponent(serviceId) + '/deploys?limit=1'));
+  const service = await resolveService(apiKey, workspaceId, serviceId, expected);
+  const url = validateService(service, { ...expected, id: service.id, workspaceId, branch: EXPECTED_BRANCH, repository: EXPECTED_REPOSITORY });
+  const deploy = unwrapLatestDeploy(await renderGet(apiKey, '/services/' + encodeURIComponent(service.id) + '/deploys?limit=1'));
   validateDeploy(deploy, EXPECTED_COMMIT);
   return {
     name: service.name, id: service.id, type: service.type, url,
@@ -126,8 +152,8 @@ export async function verifyRenderDeployment(env = process.env) {
   const workspaceId = String(env.RENDER_WORKSPACE_ID || '').trim();
   const staticServiceId = String(env.RENDER_STATIC_SERVICE_ID || '').trim();
   const apiServiceId = String(env.RENDER_API_SERVICE_ID || '').trim();
-  if (!apiKey || !workspaceId || !staticServiceId || !apiServiceId) {
-    throw new Error('Cần RENDER_API_KEY, RENDER_WORKSPACE_ID, RENDER_STATIC_SERVICE_ID và RENDER_API_SERVICE_ID. Chưa thể xác nhận hai dịch vụ nếu thiếu một trong các cấu hình này.');
+  if (!apiKey || !workspaceId) {
+    throw new Error('Cần RENDER_API_KEY và RENDER_WORKSPACE_ID. Service ID có thể để trống vì script tự tìm theo tên.');
   }
   const [staticService, apiService] = await Promise.all([
     verifyOneService(apiKey, workspaceId, staticServiceId, { type: 'static_site', name: 'hendydichvumang-site' }),

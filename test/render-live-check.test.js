@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeRepository, normalizeHttpsOrigin, unwrapService, unwrapLatestDeploy,
-  validateService, validateDeploy
+  validateService, validateDeploy, findWorkspaceService
 } from '../scripts/render-live-check.js';
 
 test('repository URL normalization removes .git and trailing slash', () => {
@@ -45,4 +45,18 @@ test('deployment must be Live and match the requested commit', () => {
   assert.equal(validateDeploy({ status: 'live', commit: { id: 'abc123' } }, 'abc123'), true);
   assert.throws(() => validateDeploy({ status: 'build_in_progress' }), /chưa Live/);
   assert.throws(() => validateDeploy({ status: 'live', commit: { id: 'old' } }, 'new'), /chưa chạy commit/);
+});
+
+test('service discovery finds the expected service inside the selected workspace', () => {
+  const payload = [
+    { service: { id: 'srv-site', name: 'hendydichvumang-site', type: 'static_site', ownerId: 'tea-1' }, cursor: 'c1' },
+    { service: { id: 'srv-api', name: 'hendydichvumang-api', type: 'web_service', ownerId: 'tea-1' }, cursor: 'c2' },
+    { service: { id: 'srv-other', name: 'other-api', type: 'web_service', ownerId: 'tea-2' }, cursor: 'c3' }
+  ];
+  const found = findWorkspaceService(payload, { name: 'hendydichvumang-api', type: 'web_service', workspaceId: 'tea-1' });
+  assert.equal(found.id, 'srv-api');
+  assert.throws(
+    () => findWorkspaceService(payload, { name: 'missing-api', type: 'web_service', workspaceId: 'tea-1' }),
+    /Không tìm thấy service.*other/i
+  );
 });

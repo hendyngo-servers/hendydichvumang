@@ -276,6 +276,18 @@ const server = await (async () => {
   });
 })();
 
+// Configure the Telegram webhook automatically after Render assigns the public HTTPS URL.
+if (bot && config.webhookSecret && config.publicAppUrl.startsWith('https://')) {
+  bot.api.setWebhook(`${config.publicAppUrl}/telegram/webhook`, {
+    secret_token: config.webhookSecret,
+    allowed_updates: ['message', 'callback_query']
+  }).then(() => {
+    console.log('Telegram webhook đã được đăng ký tự động.');
+  }).catch((error) => {
+    console.error('Không thể đăng ký Telegram webhook:', error?.error_code || error?.name || 'UNKNOWN');
+  });
+}
+
 async function shutdown(signal) {
   console.log(`Nhận ${signal}, đang đóng kết nối...`);
   server.close(async () => {

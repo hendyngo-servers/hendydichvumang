@@ -1,0 +1,62 @@
+name: Materialize Render source tree
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app-source.part-*.b64'
+      - '.github/workflows/materialize-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-source-main
+  cancel-in-progress: false
+
+jobs:
+  extract-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate and extract source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat app-source.part-*.b64 | base64 --decode > /tmp/hendy-source.tar.gz
+          gzip -t /tmp/hendy-source.tar.gz
+          tar -tzf /tmp/hendy-source.tar.gz >/tmp/hendy-source-files.txt
+          grep -q '^src/server.js$' /tmp/hendy-source-files.txt
+          grep -q '^public/admin.js$' /tmp/hendy-source-files.txt
+          tar -xzf /tmp/hendy-source.tar.gz
+
+      - name: Install and verify application
+        run: |
+          npm install --no-audit --no-fund
+          npm run verify
+
+      - name: Commit materialized source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Source tree is already materialized."
+            exit 0
+          fi
+          git commit -m "Materialize complete Render application source tree"
+          git push origin HEAD:main

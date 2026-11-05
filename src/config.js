@@ -10,7 +10,7 @@ export function loadConfig(env = process.env) {
   const botToken = env.BOT_TOKEN || '';
   const rawWebhookSecret = env.TELEGRAM_WEBHOOK_SECRET || '';
   const adminPassword = env.ADMIN_PASSWORD || '';
-  if (isProduction && !adminPassword) throw new Error('Thiếu biến môi trường bắt buộc: ADMIN_PASSWORD');
+  if (isProduction && adminPassword.length < 16) throw new Error('ADMIN_PASSWORD phải có ít nhất 16 ký tự trong môi trường production');
   if (isProduction && botToken && !rawWebhookSecret) throw new Error('Thiếu TELEGRAM_WEBHOOK_SECRET khi đã cấu hình BOT_TOKEN');
   const publicAppUrl = (env.PUBLIC_APP_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT || 10000}`).replace(/\/$/, '');
   if (isProduction && botToken && !publicAppUrl.startsWith('https://')) throw new Error('PUBLIC_APP_URL phải là HTTPS khi bật Telegram Bot');

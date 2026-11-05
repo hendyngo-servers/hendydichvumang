@@ -17,7 +17,14 @@ from services.aiogram_bot.api_client import HendyApiClient
 from services.aiogram_bot.config import Settings
 from services.aiogram_bot.fsm_storage import PostgresEventIsolation, PostgresFSMStorage
 from services.aiogram_bot.middlewares import EnsureCustomerMiddleware
-from services.aiogram_bot.routers import common_router, customer_router, error_router, support_router
+from services.aiogram_bot.routers import (
+    admin_router,
+    automation_router,
+    common_router,
+    customer_router,
+    error_router,
+    support_router,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -93,6 +100,8 @@ async def on_startup(
         BotCommand(command="services", description="Xem danh sách dịch vụ"),
         BotCommand(command="balance", description="Kiểm tra số dư"),
         BotCommand(command="support", description="Tạo ticket hỗ trợ"),
+        BotCommand(command="admin", description="Trung tâm quản trị (chỉ quản trị viên)"),
+        BotCommand(command="automation", description="Quản lý tự động hóa (chỉ quản trị viên)"),
         BotCommand(command="cancel", description="Hủy thao tác đang nhập"),
         BotCommand(command="help", description="Hướng dẫn sử dụng"),
     ])
@@ -135,10 +144,14 @@ async def health(request: web.Request) -> web.Response:
 async def close_resources(app: web.Application) -> None:
     api: HendyApiClient = app["hendy_api"]
     pool: asyncpg.Pool = app["db_pool"]
+    bot: Bot = app["bot"]
     try:
         await api.close()
     finally:
-        await pool.close()
+        try:
+            await bot.session.close()
+        finally:
+            await pool.close()
 
 
 async def create_app(settings: Settings) -> web.Application:
@@ -156,7 +169,13 @@ async def create_app(settings: Settings) -> web.Application:
         # One profile sync per private message before the router tree is traversed.
         dispatcher.message.outer_middleware(EnsureCustomerMiddleware(api))
 
-        dispatcher.include_routers(common_router, customer_router, support_router)
+        dispatcher.include_routers(
+            common_router,
+            customer_router,
+            support_router,
+            admin_router,
+            automation_router,
+        )
         dispatcher.include_router(error_router)
         dispatcher.startup.register(on_startup)
 

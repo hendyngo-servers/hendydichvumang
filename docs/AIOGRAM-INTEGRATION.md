@@ -58,10 +58,12 @@ Source file quan trọng của tag v3.31.0:
 Dispatcher là Router gốc. Router con có thể gắn lồng; mỗi event observer có filter và middleware riêng. Handler chỉ chạy khi filter chain khớp. Dispatcher đưa workflow data vào callback dựa theo tên tham số handler khai báo.
 
 HENDY chia handler:
-- `common.py`: /start, /help, /cancel và giới hạn chat riêng.
+- `common.py`: /start, /help, /cancel, menu cố định và hiển thị mục quản trị khi API xác nhận quyền.
 - `customer.py`: /customer, /balance, /services và Mini App.
 - `support.py`: quy trình FSM tạo ticket hai bước.
-- `errors.py`: lỗi update tập trung.
+- `admin.py`: thống kê, danh sách ticket, xem nội dung và cập nhật trạng thái ticket.
+- `automation.py`: bật/tắt và chạy thủ công các tác vụ đã allowlist, có bước xác nhận.
+- `errors.py`: lỗi update tập trung; log chỉ ghi loại exception để tránh lộ URL/secret.
 
 Router được include theo thứ tự xác định. Handler khớp đầu tiên kết thúc propagation trừ khi chủ động yêu cầu skip.
 
@@ -125,23 +127,31 @@ Router lỗi tập trung ghi log phía server và trả thông báo tổng quát
 
 ## 4. Luồng xử lý
 
-1. Telegram gửi update vào webhook service aiogram.
+1. Telegram gửi update vào webhook riêng của aiogram service.
 2. SimpleRequestHandler xác thực webhook secret.
 3. Dispatcher tạo context; FSM event isolation khóa StorageKey.
 4. Middleware đồng bộ hồ sơ khách hàng với Node API một lần cho private message.
-5. Router + filter chọn handler common/customer/support.
+5. Router + filter chọn handler common/customer/support/admin/automation.
 6. Handler gọi Node API qua HTTPS và `X-Hendy-Service-Key`.
-7. Node API xử lý transaction nghiệp vụ và audit log.
-8. FSM cập nhật state/JSONB trong PostgreSQL; khi ticket hoàn tất, Node API ghi ticket và FSM được clear.
-9. Health endpoint kiểm tra PostgreSQL cùng trạng thái webhook đã đăng ký.
+7. Node API xác minh `ADMIN_TELEGRAM_ID` cho API quản trị; các thao tác ticket/automation được ghi audit log.
+8. Node API là nguồn dữ liệu và bộ thực thi automation duy nhất; Aiogram không tự ghi trực tiếp bảng nghiệp vụ và không khởi chạy scheduler thứ hai.
+9. FSM cập nhật state/JSONB trong PostgreSQL; khi ticket hoàn tất, Node API ghi ticket và FSM được clear.
+10. Health endpoint kiểm tra PostgreSQL cùng trạng thái webhook đã đăng ký.
 
 Node API bổ sung các route nội bộ:
 - `GET /internal/bot/primary-identity`
 - `POST /internal/bot/users/upsert`
 - `GET /internal/bot/users/:telegramId/balance`
 - `POST /internal/bot/tickets`
+- `GET /internal/bot/admin/:telegramId/access`
+- `GET /internal/bot/admin/:telegramId/stats`
+- `GET /internal/bot/admin/:telegramId/tickets`
+- `PATCH /internal/bot/admin/:telegramId/tickets/:ticketId`
+- `GET /internal/bot/admin/:telegramId/automations`
+- `PATCH /internal/bot/admin/:telegramId/automations/:code`
+- `POST /internal/bot/admin/:telegramId/automations/:code/run`
 
-Route nội bộ yêu cầu header `X-Hendy-Service-Key`. Khóa tối thiểu 32 ký tự, chỉ lưu trong Render Environment, không đưa vào Static Site.
+Tất cả route nội bộ yêu cầu header `X-Hendy-Service-Key`. API xác minh Telegram ID quản trị từ `ADMIN_TELEGRAM_ID` phía server và chỉ nhận mã automation nằm trong danh sách cố định. Khóa tối thiểu 32 ký tự, chỉ lưu trong Render Environment, không đưa vào Static Site. Service Aiogram không gửi Bot Token đến API.
 
 ## 5. Các file tích hợp
 
@@ -156,6 +166,8 @@ services/aiogram_bot/
 │   ├── common.py
 │   ├── customer.py
 │   ├── support.py
+│   ├── admin.py
+│   ├── automation.py
 │   └── errors.py
 ├── tests/
 └── requirements.txt
@@ -167,6 +179,8 @@ migrations/004_aiogram_fsm.sql
 - `api_client.py`: aiohttp session dùng lại, timeout và xử lý lỗi Node API.
 - `fsm_storage.py`: PostgreSQL BaseStorage và event isolation.
 - `middlewares.py`: đồng bộ customer.
+- `routers/admin.py`: panel quản trị, thống kê và cập nhật ticket qua API.
+- `routers/automation.py`: điều khiển tác vụ allowlist ở Node API.
 - `routers/`: lệnh bot và quy trình khách hàng.
 - `tests/`: config, keyboard, storage key, PostgreSQL persistence, TTL và event isolation.
 
@@ -191,10 +205,13 @@ Triển khai Node API/migrations trước, sau đó mới deploy Python service.
 3. Đặt `BOT_TOKEN` và `BOT_SERVICE_KEY` trong API.
 4. Đặt `AIOGRAM_BOT_TOKEN` riêng rồi deploy Python service.
 5. Kiểm tra Python `/healthz`: `status=ok`, `database=ready`, `webhook=ready`.
-6. Thử /start, /customer, /balance, /services.
-7. Tạo ticket hai bước, kiểm tra Admin Dashboard và audit log.
-8. Restart Python service giữa bước nhập ticket; state phải còn trong PostgreSQL đến TTL.
-9. Gửi hai update liên tiếp cùng user để xác nhận event isolation.
-10. Kiểm tra webhook info và xác nhận webhook grammY không bị thay đổi.
+6. Thử `/start`, `/customer`, `/balance`, `/services` và menu Reply Keyboard.
+7. Tạo ticket hai bước, kiểm tra ticket xuất hiện trong cùng Admin Dashboard và audit log.
+8. Dùng Telegram ID quản trị đã cấu hình để thử `/admin`; tài khoản khác phải bị từ chối cả ở menu, callback và API.
+9. Thử xem thống kê, đổi trạng thái ticket; xác nhận `updated_at` và audit log thay đổi.
+10. Thử `/automation`, bật/tắt từng tác vụ, xác nhận chạy thủ công; mã ngoài allowlist phải bị từ chối.
+11. Restart Python service giữa bước nhập ticket; state phải còn trong PostgreSQL đến TTL.
+12. Gửi hai update liên tiếp cùng user để xác nhận event isolation.
+13. Kiểm tra webhook info và xác nhận webhook grammY không bị thay đổi.
 
 Chỉ cân nhắc chuyển bot production sang aiogram sau khi pilot chạy ổn định, có monitoring và soak test. Không thay grammY chính trong giai đoạn này.

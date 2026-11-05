@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: tar -xzf app-source.tar.gz && npm install && npm run verify
+    buildCommand: npm ci --no-audit --no-fund && npm run verify
     startCommand: npm start
     healthCheckPath: /healthz
     autoDeploy: true

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeRepository, normalizeHttpsOrigin, unwrapService, unwrapLatestDeploy,
-  validateService, validateDeploy, findWorkspaceService
+  validateService, validateDeploy, findWorkspaceService, validateAiogramHealth
 } from '../scripts/render-live-check.js';
 
 test('repository URL normalization removes .git and trailing slash', () => {
@@ -59,4 +59,11 @@ test('service discovery finds the expected service inside the selected workspace
     () => findWorkspaceService(payload, { name: 'missing-api', type: 'web_service', workspaceId: 'tea-1' }),
     /Không tìm thấy service.*hendydichvumang-api/i
   );
+});
+
+test('aiogram health is accepted only after database and webhook are ready', () => {
+  assert.equal(validateAiogramHealth({ status: 'ok', database: 'ready', webhook: 'ready', framework: 'aiogram', bot_id: '900001' }), true);
+  assert.throws(() => validateAiogramHealth({ status: 'starting', database: 'ready', webhook: 'not_ready', framework: 'aiogram' }), /chưa sẵn sàng/);
+  assert.throws(() => validateAiogramHealth({ status: 'ok', database: 'unavailable', webhook: 'ready', framework: 'aiogram' }), /PostgreSQL/);
+  assert.throws(() => validateAiogramHealth({ status: 'ok', database: 'ready', webhook: 'not_ready', framework: 'aiogram' }), /webhook/);
 });

@@ -226,8 +226,11 @@ Mở Settings → Secrets and variables → Actions và cấu hình:
 - RENDER_API_SERVICE_ID = ID Web Service (tùy chọn, script tự dò nếu bỏ trống).
 - STATIC_SITE_URL = URL HTTPS Static Site.
 - API_BASE_URL = URL HTTPS Web Service.
+- RENDER_AIOGRAM_CHECK_ENABLED = `true` để bật xác minh bot pilot (mặc định tắt).
+- RENDER_AIOGRAM_SERVICE_ID = ID dịch vụ Python (tùy chọn, script tự dò theo tên).
+- AIOGRAM_BASE_URL = URL HTTPS dịch vụ Python (tùy chọn, mặc định URL Render).
 
-Workflow .github/workflows/render-live-check.yml chạy mỗi 15 phút và có thể chạy thủ công trong tab Actions. Script tự tìm service hendydichvumang-site và hendydichvumang-api trong workspace (có thể cung cấp ID để cố định), sau đó kiểm tra đúng service, deployment live + commit, Static Site / /admin /config.js, API /healthz và /api/config. Nếu API service chưa được tạo, kiểm tra trả về tên service hiện có và chỉ rõ service còn thiếu.
+Workflow .github/workflows/render-live-check.yml chạy mỗi 15 phút và có thể chạy thủ công trong tab Actions. Script tự tìm service hendydichvumang-site và hendydichvumang-api trong workspace (có thể cung cấp ID để cố định), sau đó kiểm tra đúng service, deployment live + commit, Static Site / /admin /config.js, API /healthz và /api/config. Khi bật `RENDER_AIOGRAM_CHECK_ENABLED=true`, script xác minh thêm service `hendydichvumang-aiogram-bot`: deployment Live và `/healthz` phải trả `database=ready`, `webhook=ready`, `framework=aiogram`. Nếu API service chưa được tạo, kiểm tra trả về tên service hiện có và chỉ rõ service còn thiếu.
 
 ### Chạy thủ công
 

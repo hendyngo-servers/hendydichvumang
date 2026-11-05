@@ -147,6 +147,40 @@ async function verifyOneService(apiKey, workspaceId, serviceId, expected) {
     commit: deploy.commit?.id || null, finishedAt: deploy.finishedAt || null
   };
 }
+export function validateAiogramHealth(payload) {
+  if (!payload || payload.status !== 'ok') throw new Error('Aiogram service chưa sẵn sàng.');
+  if (payload.database !== 'ready') throw new Error('Aiogram service chưa kết nối PostgreSQL.');
+  if (payload.webhook !== 'ready') throw new Error('Aiogram webhook chưa được đăng ký thành công.');
+  if (payload.framework !== 'aiogram') throw new Error('Health endpoint không xác nhận framework aiogram.');
+  return true;
+}
+
+async function checkAiogramService(apiKey, workspaceId, serviceId, env = process.env) {
+  const service = await resolveService(apiKey, workspaceId, serviceId, {
+    type: 'web_service', name: 'hendydichvumang-aiogram-bot'
+  });
+  const url = validateService(service, {
+    id: service.id, workspaceId, type: 'web_service',
+    name: 'hendydichvumang-aiogram-bot',
+    branch: EXPECTED_BRANCH, repository: EXPECTED_REPOSITORY
+  });
+  const configuredUrl = String(env.AIOGRAM_BASE_URL || '').trim()
+    ? normalizeHttpsOrigin(env.AIOGRAM_BASE_URL, 'AIOGRAM_BASE_URL')
+    : url;
+  if (configuredUrl !== url) throw new Error('AIOGRAM_BASE_URL không trùng URL Render cấp cho service.');
+  const deploy = unwrapLatestDeploy(await renderGet(apiKey, '/services/' + encodeURIComponent(service.id) + '/deploys?limit=1'));
+  validateDeploy(deploy, EXPECTED_COMMIT);
+  const health = await fetchPublic(url + '/healthz', 'Aiogram health check');
+  let payload;
+  try { payload = JSON.parse(health.body); } catch { throw new Error('Aiogram /healthz không trả JSON hợp lệ.'); }
+  validateAiogramHealth(payload);
+  return {
+    name: service.name, id: service.id, type: service.type, url,
+    deployId: deploy.id, deployStatus: deploy.status, commit: deploy.commit?.id || null,
+    finishedAt: deploy.finishedAt || null,
+    smoke: { health: health.response.status, database: payload.database, webhook: payload.webhook, framework: payload.framework }
+  };
+}
 export async function verifyRenderDeployment(env = process.env) {
   const apiKey = String(env.RENDER_API_KEY || '').trim();
   const workspaceId = String(env.RENDER_WORKSPACE_ID || '').trim();
@@ -167,12 +201,17 @@ export async function verifyRenderDeployment(env = process.env) {
     checkStaticSite(staticUrl, apiUrl),
     checkApi(apiUrl, staticUrl)
   ]);
+  const services = {
+    staticSite: { ...staticService, smoke: staticSmoke },
+    apiWebService: { ...apiService, smoke: apiSmoke }
+  };
+  if (String(env.RENDER_AIOGRAM_CHECK_ENABLED || '').toLowerCase() === 'true') {
+    const aiogramServiceId = String(env.RENDER_AIOGRAM_SERVICE_ID || '').trim();
+    services.aiogramBot = await checkAiogramService(apiKey, workspaceId, aiogramServiceId, env);
+  }
   return {
-    result: 'LIVE', checkedAt: new Date().toISOString(), expectedCommit: EXPECTED_COMMIT || null,
-    services: {
-      staticSite: { ...staticService, smoke: staticSmoke },
-      apiWebService: { ...apiService, smoke: apiSmoke }
-    }
+    result: 'LIVE', checkedAt: new Date().toISOString(),
+    expectedCommit: EXPECTED_COMMIT || null, services
   };
 }
 async function main() {

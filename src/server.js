@@ -129,6 +129,143 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireBotService(req, res, next) {
+  if (!config.botServiceKey || config.botServiceKey.length < 32) {
+    return res.status(503).json({ error: 'Chưa cấu hình BOT_SERVICE_KEY trên API.' });
+  }
+  const supplied = req.get('x-hendy-service-key') || '';
+  if (!safeEqual(config.botServiceKey, supplied)) {
+    return res.status(401).json({ error: 'Service key không hợp lệ.' });
+  }
+  return next();
+}
+
+app.use('/internal/bot', rateLimit({
+  windowMs: 60_000,
+  limit: 120,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false
+}));
+
+app.get('/internal/bot/primary-identity', requireBotService, async (_req, res) => {
+  if (!bot) return res.status(503).json({ error: 'Bot grammY chính chưa được cấu hình.' });
+  const identity = await bot.api.getMe();
+  res.json({ telegram_id: String(identity.id), username: identity.username || null });
+});
+
+app.post('/internal/bot/users/upsert', requireBotService, async (req, res) => {
+  const telegramId = String(req.body?.telegram_id || '');
+  const username = req.body?.username == null ? null : String(req.body.username);
+  const firstName = String(req.body?.first_name || '');
+  const lastName = String(req.body?.last_name || '');
+  const languageCode = String(req.body?.language_code || 'vi');
+  if (!/^\d{5,20}$/.test(telegramId) ||
+      (username !== null && (!/^[A-Za-z0-9_]{1,64}$/.test(username))) ||
+      firstName.length > 128 || lastName.length > 128 || languageCode.length > 16) {
+    return res.status(400).json({ error: 'Thông tin Telegram không hợp lệ.' });
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const user = await client.query(
+      \`INSERT INTO users (telegram_id, username, first_name, last_name, language_code)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (telegram_id) DO UPDATE SET
+         username = EXCLUDED.username,
+         first_name = EXCLUDED.first_name,
+         last_name = EXCLUDED.last_name,
+         language_code = EXCLUDED.language_code,
+         updated_at = NOW()
+       RETURNING id, telegram_id, username, first_name, last_name, language_code, created_at\`,
+      [telegramId, username, firstName, lastName, languageCode]
+    );
+    const userId = user.rows[0].id;
+    await client.query(
+      'INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
+      [userId]
+    );
+    const wallet = await client.query(
+      'SELECT COALESCE(balance, 0)::text AS balance FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+    await client.query('COMMIT');
+    res.json({ user: user.rows[0], balance: wallet.rows[0]?.balance || '0.00' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/internal/bot/users/:telegramId/balance', requireBotService, async (req, res) => {
+  const telegramId = String(req.params.telegramId || '');
+  if (!/^\d{5,20}$/.test(telegramId)) return res.status(400).json({ error: 'Telegram ID không hợp lệ.' });
+  const { rows } = await db.query(
+    \`SELECT u.telegram_id, COALESCE(w.balance, 0)::text AS balance
+     FROM users u LEFT JOIN wallets w ON w.user_id = u.id
+     WHERE u.telegram_id = $1 LIMIT 1\`,
+    [telegramId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Chưa tìm thấy tài khoản HENDY. Hãy gửi /start trước.' });
+  res.json(rows[0]);
+});
+
+app.post('/internal/bot/tickets', requireBotService, async (req, res) => {
+  const telegramId = String(req.body?.telegram_id || '');
+  const subject = String(req.body?.subject || '').trim();
+  const message = String(req.body?.message || '').trim();
+  if (!/^\d{5,20}$/.test(telegramId) ||
+      subject.length < 3 || subject.length > 160 ||
+      message.length < 5 || message.length > 3000) {
+    return res.status(400).json({ error: 'Tiêu đề hoặc nội dung ticket không hợp lệ.' });
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['hendy-aiogram-ticket:' + telegramId]);
+    const user = await client.query(
+      'SELECT id FROM users WHERE telegram_id = $1 LIMIT 1',
+      [telegramId]
+    );
+    if (!user.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Chưa tìm thấy hồ sơ khách hàng. Hãy gửi /start trước.' });
+    }
+
+    const recent = await client.query(
+      \`SELECT COUNT(*)::int AS count FROM tickets
+       WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'\`,
+      [user.rows[0].id]
+    );
+    if (recent.rows[0].count >= 5) {
+      await client.query('ROLLBACK');
+      return res.status(429).json({ error: 'Bạn đã tạo quá nhiều ticket trong một giờ. Vui lòng thử lại sau.' });
+    }
+
+    const ticket = await client.query(
+      \`INSERT INTO tickets (user_id, subject, message)
+       VALUES ($1, $2, $3)
+       RETURNING id, subject, status, created_at\`,
+      [user.rows[0].id, subject, message]
+    );
+    await client.query(
+      \`INSERT INTO audit_logs (actor, action, entity, entity_id, metadata)
+       VALUES ($1, $2, $3, $4, $5)\`,
+      [telegramId, 'ticket.create', 'ticket', String(ticket.rows[0].id), JSON.stringify({ source: 'aiogram' })]
+    );
+    await client.query('COMMIT');
+    res.status(201).json({ ticket: ticket.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/api/admin/login', rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false }), async (req, res) => {
   if (!config.adminPassword) return res.status(503).json({ error: 'Chưa cấu hình ADMIN_PASSWORD trên Render.' });
   const username = String(req.body?.username || '');

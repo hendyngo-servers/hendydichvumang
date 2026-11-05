@@ -79,3 +79,16 @@ test('production Mini App URL must use HTTPS when Telegram Bot is enabled', () =
     PUBLIC_APP_URL: 'http://customer.example.com'
   }), /PUBLIC_APP_URL.*HTTPS/);
 });
+
+test('bot service key is optional for grammY-only operation and is read when configured', () => {
+  const base = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://db',
+    ADMIN_USERNAME: 'owner',
+    ADMIN_PASSWORD: 'long-unique-password-123',
+    PUBLIC_API_URL: 'https://api.example.com',
+    PUBLIC_APP_URL: 'https://app.example.com'
+  };
+  assert.equal(loadConfig(base).botServiceKey, '');
+  assert.equal(loadConfig({ ...base, BOT_SERVICE_KEY: 'x'.repeat(48) }).botServiceKey, 'x'.repeat(48));
+});

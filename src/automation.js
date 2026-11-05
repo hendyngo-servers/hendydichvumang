@@ -4,7 +4,8 @@ export const AUTOMATION_CODES = Object.freeze([...HANDLERS]);
 async function cleanupSessions(db) {
   const sessions = await db.query('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
   const runs = await db.query("DELETE FROM automation_runs WHERE finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '180 days'");
-  return { expiredSessionsRemoved: sessions.rowCount, oldRunsRemoved: runs.rowCount };
+  const fsm = await db.query('DELETE FROM bot_fsm_states WHERE expires_at <= NOW()');
+  return { expiredSessionsRemoved: sessions.rowCount, oldRunsRemoved: runs.rowCount, expiredFsmStatesRemoved: fsm.rowCount };
 }
 
 async function notifyNewTickets(db, context) {

@@ -47,6 +47,8 @@ services:
         value: "5"
       - key: TELEGRAM_WEBHOOK_SECRET
         generateValue: true
+      - key: BOT_SERVICE_KEY
+        generateValue: true
       - key: BOT_TOKEN
         sync: false
       - key: ADMIN_USERNAME
@@ -57,3 +59,47 @@ services:
         sync: false
       - key: PUBLIC_APP_URL
         sync: false
+
+  # Python aiogram pilot bot. AIOGRAM_BOT_TOKEN must differ from grammY's BOT_TOKEN.
+  - type: web
+    name: hendydichvumang-aiogram-bot
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install --no-cache-dir -r services/aiogram_bot/requirements.txt
+    startCommand: python -m services.aiogram_bot.main
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+      - key: AIOGRAM_BOT_TOKEN
+        sync: false
+      - key: AIOGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: HENDY_API_BASE_URL
+        fromService:
+          type: web
+          name: hendydichvumang-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: HENDY_BOT_SERVICE_KEY
+        fromService:
+          type: web
+          name: hendydichvumang-api
+          envVarKey: BOT_SERVICE_KEY
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: hendydichvumang-api
+          envVarKey: DATABASE_URL
+      - key: PGSSLMODE
+        fromService:
+          type: web
+          name: hendydichvumang-api
+          envVarKey: PGSSLMODE
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: LEGACY_CUSTOMER_URL
+        sync: false
+      - key: AIOGRAM_FSM_TTL_HOURS
+        value: "24"

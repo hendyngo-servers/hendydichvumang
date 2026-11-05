@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101323">
+  <meta name="description" content="HENDY Dịch Vụ Mạng — Trung tâm khách hàng Telegram.">
+  <title>HENDY | Trung tâm khách hàng</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="HENDY trang chủ"><span class="brand-mark">H</span><span><strong>HENDY</strong><small>DỊCH VỤ MẠNG</small></span></a>
+      <span class="connection" id="connectionStatus"><i></i> Đang kết nối</span>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">HENDY CUSTOMER CENTER</p>
+      <h1>Xin chào, <span id="userName">bạn</span> 👋</h1>
+      <p class="muted">Quản lý tài khoản và theo dõi yêu cầu dịch vụ tại một nơi.</p>
+    </section>
+
+    <section class="summary-grid" aria-label="Tổng quan tài khoản">
+      <article class="panel balance-panel">
+        <div class="panel-label">SỐ DƯ TÀI KHOẢN</div>
+        <div class="balance" id="balanceValue">— <small>VNĐ</small></div>
+        <p class="muted tiny">Số dư chỉ thay đổi sau khi giao dịch được xác minh.</p>
+      </article>
+      <article class="panel metric-panel"><span class="metric-icon">🎫</span><span class="metric-value" id="ticketCount">0</span><span class="muted">Yêu cầu hỗ trợ</span></article>
+      <article class="panel metric-panel"><span class="metric-icon">🛍</span><span class="metric-value" id="serviceCount">0</span><span class="muted">Dịch vụ đang mở</span></article>
+    </section>
+
+    <section class="section-heading"><div><p class="eyebrow">KHÁM PHÁ</p><h2>Dịch vụ HENDY</h2></div><span class="section-note">Danh mục hiện có</span></section>
+    <section id="serviceList" class="service-grid"><div class="panel skeleton">Đang tải danh mục…</div></section>
+
+    <section class="section-heading"><div><p class="eyebrow">CHĂM SÓC KHÁCH HÀNG</p><h2>Trung tâm hỗ trợ</h2></div></section>
+    <section class="panel ticket-panel">
+      <div class="ticket-intro"><span class="metric-icon">💬</span><div><h3>Gửi yêu cầu hỗ trợ</h3><p class="muted">Mô tả vấn đề, đội ngũ HENDY sẽ tiếp nhận và phản hồi.</p></div></div>
+      <form id="ticketForm" class="form-grid">
+        <label>Tiêu đề<input id="ticketSubject" name="subject" minlength="3" maxlength="160" placeholder="Ví dụ: Cần tư vấn dịch vụ" required></label>
+        <label>Nội dung<textarea id="ticketMessage" name="message" minlength="5" maxlength="3000" rows="4" placeholder="Nhập nội dung cần hỗ trợ…" required></textarea></label>
+        <div class="form-footer"><span class="muted tiny" id="ticketFeedback" aria-live="polite">Không chia sẻ mật khẩu hoặc mã OTP.</span><button class="button primary" type="submit">Gửi yêu cầu <span>→</span></button></div>
+      </form>
+    </section>
+
+    <section class="section-heading"><div><p class="eyebrow">LỊCH SỬ</p><h2>Yêu cầu gần đây</h2></div></section>
+    <section id="ticketList" class="panel ticket-list"><p class="muted">Chưa có yêu cầu hỗ trợ.</p></section>
+
+    <footer class="footer"><span>© <span id="year"></span> HENDY DỊCH VỤ MẠNG</span><a href="/admin">Quản trị hệ thống</a></footer>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

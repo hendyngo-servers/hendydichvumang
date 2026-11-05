@@ -60,12 +60,12 @@ async def send_customer_center(message: Message, settings: Settings) -> None:
 
 
 @customer_router.callback_query(F.data == "customer:home")
-async def customer_home(callback: CallbackQuery, settings: Settings) -> None:
+async def customer_home(callback: CallbackQuery, settings: Settings, api: HendyApiClient) -> None:
     await callback.answer("Đã mở menu chính.")
     if callback.message:
         await callback.message.answer(
             "💠 Menu chính HENDY. Chọn chức năng bạn cần:",
-            reply_markup=main_menu(settings),
+            reply_markup=main_menu(settings, is_admin=await api.is_admin(callback.from_user.id)),
         )
 
 @customer_router.message(Command("customer"), F.chat.type == "private")

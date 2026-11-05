@@ -58,8 +58,9 @@ app.get('/api/config', (_req, res) => {
   res.json({ brand: 'HENDY DỊCH VỤ MẠNG', appUrl: config.publicAppUrl, language: 'vi', telegramBotConfigured: Boolean(bot) });
 });
 
-app.post('/telegram/webhook', async (req, res) => {
+app.post('/telegram/webhook', rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false }), async (req, res) => {
   if (!bot) return res.status(503).json({ error: 'Telegram Bot chưa được cấu hình.' });
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return res.status(400).json({ error: 'Dữ liệu webhook không hợp lệ.' });
   const received = req.get('x-telegram-bot-api-secret-token');
   if (!verifyWebhookSecret(config.webhookSecret, received)) return res.status(401).json({ error: 'Webhook không hợp lệ.' });
   try {
@@ -91,7 +92,10 @@ app.post('/api/telegram/auth', async (req, res) => {
     const userId = userResult.rows[0].id;
     await client.query('INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [userId]);
     const token = createSessionToken();
-    await client.query('INSERT INTO auth_sessions (token_hash, user_id, role, expires_at) VALUES ($1, $2, $3, NOW() + INTERVAL \'7 days\')', [hashSessionToken(token), userId, 'user']);
+    await client.query(
+      "INSERT INTO auth_sessions (token_hash, user_id, role, expires_at) VALUES ($1, $2, 'user', NOW() + ($3 * INTERVAL '1 second'))",
+      [hashSessionToken(token), userId, config.sessionTtlSeconds]
+    );
     await client.query('COMMIT');
     res.json({ token, expiresIn: 604800 });
   } catch (error) {
@@ -210,7 +214,7 @@ app.get('/api/admin/services', requireAuth, requireAdmin, async (_req, res) => {
 
 app.post('/api/admin/services', requireAuth, requireAdmin, async (req, res) => {
   const { code, name, category = 'Khác', description = '', price = 0, is_active = true, sort_order = 100 } = req.body || {};
-  if (!/^[a-z0-9][a-z0-9_-]{1,49}$/.test(String(code || '')) || !String(name || '').trim() || String(name).length > 120) {
+  if (typeof is_active !== 'boolean' || !Number.isSafeInteger(Number(sort_order)) || !/^[a-z0-9][a-z0-9_-]{1,49}$/.test(String(code || '')) || !String(name || '').trim() || String(name).length > 120) {
     return res.status(400).json({ error: 'Mã dịch vụ hoặc tên dịch vụ không hợp lệ.' });
   }
   const value = Number(price);
@@ -234,8 +238,10 @@ app.patch('/api/admin/services/:id', requireAuth, requireAdmin, async (req, res)
   const category = req.body?.category === undefined ? old.category : String(req.body.category).slice(0, 80);
   const description = req.body?.description === undefined ? old.description : String(req.body.description).slice(0, 1000);
   const price = req.body?.price === undefined ? Number(old.price) : Number(req.body.price);
-  const isActive = req.body?.is_active === undefined ? old.is_active : Boolean(req.body.is_active);
-  const sortOrder = req.body?.sort_order === undefined ? old.sort_order : Number(req.body.sort_order) || 100;
+  if (req.body?.is_active !== undefined && typeof req.body.is_active !== 'boolean') return res.status(400).json({ error: 'Trạng thái hiển thị phải là true hoặc false.' });
+  const isActive = req.body?.is_active === undefined ? old.is_active : req.body.is_active;
+  const sortOrder = req.body?.sort_order === undefined ? old.sort_order : Number(req.body.sort_order);
+  if (!Number.isSafeInteger(sortOrder)) return res.status(400).json({ error: 'Thứ tự sắp xếp không hợp lệ.' });
   if (!name || name.length > 120 || !Number.isFinite(price) || price < 0 || price > 1_000_000_000) return res.status(400).json({ error: 'Dữ liệu dịch vụ không hợp lệ.' });
   const { rows } = await db.query(
     `UPDATE service_catalog SET name=$1, category=$2, description=$3, price=$4, is_active=$5, sort_order=$6, updated_at=NOW()
@@ -248,7 +254,8 @@ app.patch('/api/admin/services/:id', requireAuth, requireAdmin, async (req, res)
 app.patch('/api/admin/tickets/:id', requireAuth, requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const status = String(req.body?.status || '');
-  const note = String(req.body?.admin_note || '').slice(0, 2000);
+  const note = String(req.body?.admin_note || '').trim();
+  if (note.length > 2000) return res.status(400).json({ error: 'Ghi chú không được vượt quá 2.000 ký tự.' });
   if (!Number.isSafeInteger(id) || id < 1 || !['open', 'processing', 'closed'].includes(status)) return res.status(400).json({ error: 'Trạng thái hoặc ID không hợp lệ.' });
   const { rows } = await db.query('UPDATE tickets SET status=$1, admin_note=$2, updated_at=NOW() WHERE id=$3 RETURNING id, status, admin_note, updated_at', [status, note, id]);
   if (!rows[0]) return res.status(404).json({ error: 'Không tìm thấy yêu cầu hỗ trợ.' });
@@ -264,8 +271,11 @@ app.get('*path', (req, res, next) => {
 });
 
 app.use((error, _req, res, _next) => {
-  console.error('Request failed:', error?.code || error?.name || 'UNKNOWN');
   if (res.headersSent) return;
+  if (error?.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON gửi lên không hợp lệ.' });
+  if (error?.type === 'entity.too.large') return res.status(413).json({ error: 'Dữ liệu gửi lên vượt quá giới hạn 32 KB.' });
+  if (error?.code === '23505') return res.status(409).json({ error: 'Mã dữ liệu đã tồn tại.' });
+  console.error('Request failed:', error?.code || error?.name || 'UNKNOWN');
   res.status(500).json({ error: 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.' });
 });
 
@@ -278,22 +288,31 @@ const server = await (async () => {
 
 // Configure the Telegram webhook automatically after Render assigns the public HTTPS URL.
 if (bot && config.webhookSecret && config.publicAppUrl.startsWith('https://')) {
-  bot.api.setWebhook(`${config.publicAppUrl}/telegram/webhook`, {
-    secret_token: config.webhookSecret,
-    allowed_updates: ['message', 'callback_query']
-  }).then(() => {
-    console.log('Telegram webhook đã được đăng ký tự động.');
-  }).catch((error) => {
-    console.error('Không thể đăng ký Telegram webhook:', error?.error_code || error?.name || 'UNKNOWN');
-  });
+  Promise.all([
+    bot.api.setWebhook(`${config.publicAppUrl}/telegram/webhook`, {
+      secret_token: config.webhookSecret,
+      allowed_updates: ['message', 'callback_query']
+    }),
+    bot.api.setMyCommands([
+      { command: 'start', description: 'Mở menu HENDY' },
+      { command: 'services', description: 'Xem danh sách dịch vụ' },
+      { command: 'balance', description: 'Kiểm tra số dư' },
+      { command: 'support', description: 'Trung tâm hỗ trợ' },
+      { command: 'help', description: 'Hướng dẫn sử dụng' }
+    ])
+  ]).then(() => console.log('Telegram webhook và menu lệnh đã được đăng ký.'))
+    .catch((error) => console.error('Không thể cấu hình Telegram Bot:', error?.error_code || error?.name || 'UNKNOWN'));
 }
 
 async function shutdown(signal) {
   console.log(`Nhận ${signal}, đang đóng kết nối...`);
+  const forceExit = setTimeout(() => process.exit(1), 25000);
+  forceExit.unref();
   server.close(async () => {
+    clearTimeout(forceExit);
     try { await closePool(); } finally { process.exit(0); }
   });
-  setTimeout(() => process.exit(1), 10000).unref();
+  server.closeIdleConnections?.();
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));

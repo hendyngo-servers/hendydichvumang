@@ -109,9 +109,10 @@ export function createBot({ token, db, appUrl, legacyCustomerUrl = '' }) {
   });
 
   bot.command('help', async (ctx) => {
+    const menuConfig = await loadMenuConfig(db, 'grammy');
     await ctx.reply(
-      'Các lệnh hiện có:\n/start – Mở menu\n/customer – Trung tâm khách hàng\n/services – Danh sách dịch vụ\n/balance – Kiểm tra số dư\n/support – Trung tâm hỗ trợ',
-      { reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private') }
+      'Các lệnh hiện có:\\n/start – Mở menu\\n/customer – Trung tâm khách hàng\\n/services – Danh sách dịch vụ\\n/balance – Kiểm tra số dư\\n/support – Trung tâm hỗ trợ',
+      { reply_markup: mainMenu(appUrl, ctx.chat?.type === 'private', false, menuConfig) }
     );
   });
 

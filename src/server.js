@@ -452,7 +452,7 @@ app.patch('/api/admin/bot-menus/:botKey', requireAuth, requireAdmin, async (req,
   }
 
   const { rows } = await db.query(
-    \`INSERT INTO bot_menu_configs
+    `INSERT INTO bot_menu_configs
       (bot_key, intro_text, menu_columns, persistent_keyboard, resize_keyboard,
        button_order, button_labels, button_icons, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, NOW())
@@ -465,7 +465,7 @@ app.patch('/api/admin/bot-menus/:botKey', requireAuth, requireAdmin, async (req,
        button_labels = EXCLUDED.button_labels,
        button_icons = EXCLUDED.button_icons,
        updated_at = NOW()
-     RETURNING *\`,
+     RETURNING *`,
     [
       botKey,
       menu.introText,

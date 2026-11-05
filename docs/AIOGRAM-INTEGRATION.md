@@ -71,7 +71,7 @@ Router được include theo thứ tự xác định. Handler khớp đầu tiê
 
 Aiogram phân biệt outer middleware (bao quanh event propagation) và inner middleware (sau khi handler/filter đã được chọn). Middleware HENDY đồng bộ hồ sơ Telegram trước khi xử lý tin nhắn riêng.
 
-Middleware được gắn một lần tại `Dispatcher.message`, không gắn riêng lên từng child router. Việc này tránh cùng một update bị upsert hồ sơ nhiều lần khi lần lượt đi qua common/customer/support routers. Context data được aiogram inject vào handler.
+Middleware được gắn một lần tại `Dispatcher.message`, không gắn riêng lên từng child router. Việc này tránh cùng một update bị upsert hồ sơ nhiều lần khi lần lượt đi qua các router common/customer/support/admin/automation. Context data được aiogram inject vào handler.
 
 ### 3.3 Filters
 
@@ -186,7 +186,7 @@ migrations/004_aiogram_fsm.sql
 
 ## 6. CI và triển khai Render
 
-GitHub Actions dùng Python 3.12, cài aiogram pin 3.31.0, compileall, chạy unit tests và PostgreSQL FSM integration tests. Node migration job chạy trước để tạo bảng FSM.
+GitHub Actions dùng Python 3.12, cài aiogram pin 3.31.0, chạy `compileall` và các Python unit tests; cùng workflow chạy `npm run verify` cho Node API/migrations và build Static Site. Test FSM hiện kiểm tra StorageKey/event-isolation contract; cần chạy soak test với PostgreSQL thật sau khi deploy để xác nhận persistence và concurrency ở môi trường Render.
 
 Blueprint khai báo `hendydichvumang-aiogram-bot` (Python 3.12.10). Cần cấu hình:
 - `AIOGRAM_BOT_TOKEN`: token bot pilot khác hoàn toàn grammY.

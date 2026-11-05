@@ -12,6 +12,7 @@ from aiogram.types import (
 )
 
 from services.aiogram_bot.api_client import HendyApiClient
+from services.aiogram_bot.menu_filter import MenuActionFilter
 
 admin_router = Router(name="hendy-admin")
 
@@ -107,7 +108,7 @@ async def show_ticket_detail(
 
 
 @admin_router.message(Command("admin"), F.chat.type == "private")
-@admin_router.message(F.text == "🛠 Quản trị", F.chat.type == "private")
+@admin_router.message(MenuActionFilter("admin"), F.chat.type == "private")
 async def admin_home(message: Message, api: HendyApiClient) -> None:
     await send_admin_panel(message, api)
 

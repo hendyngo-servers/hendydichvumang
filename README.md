@@ -16,7 +16,7 @@ Mã nguồn triển khai tập trung trên **một Render Web Service**. Node.js
 ```text
 .
 ├── .github/workflows/ci.yml
-├── migrations/001_init.sql
+├── migrations/001_init.sql\n├── migrations/002_remove_placeholders.sql
 ├── public/
 │   ├── index.html
 │   ├── app.js

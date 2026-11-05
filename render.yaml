@@ -7,7 +7,7 @@ services:
     buildCommand: npm ci --no-audit --no-fund && npm run verify
     startCommand: npm start
     healthCheckPath: /healthz
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production

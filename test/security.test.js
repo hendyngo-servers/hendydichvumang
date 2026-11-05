@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { safeEqual, verifyTelegramInitData, createSessionToken, hashSessionToken, verifyWebhookSecret } from '../src/security.js';
+import { safeEqual, verifyTelegramInitData, createSessionToken, hashSessionToken, verifyWebhookSecret, normalizeWebhookSecret } from '../src/security.js';
 
 function buildInitData(botToken, user, authDate) {
   const values = new URLSearchParams({ auth_date: String(authDate), query_id: 'AAEAAAE', user: JSON.stringify(user) });
@@ -49,6 +49,13 @@ test('session tokens are random and hashed deterministically', () => {
   assert.notEqual(a, b);
   assert.match(hashSessionToken(a), /^[a-f0-9]{64}$/);
   assert.equal(hashSessionToken(a), hashSessionToken(a));
+});
+
+test('Render webhook secret is normalized to Telegram-safe URL-safe characters', () => {
+  const normalized = normalizeWebhookSecret('base64+/=render-generated-secret');
+  assert.match(normalized, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(normalizeWebhookSecret('base64+/=render-generated-secret'), normalized);
+  assert.equal(normalizeWebhookSecret(''), '');
 });
 
 test('webhook secret must match and cannot be empty', () => {

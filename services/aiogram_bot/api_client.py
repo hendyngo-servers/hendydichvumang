@@ -107,3 +107,63 @@ class HendyApiClient:
                 "message": message,
             },
         )
+
+
+    def _admin_path(self, telegram_id: int) -> str:
+        value = int(telegram_id)
+        if value < 1:
+            raise ValueError("Telegram ID quản trị không hợp lệ.")
+        return f"/internal/bot/admin/{value}"
+
+    async def is_admin(self, telegram_id: int) -> bool:
+        result = await self._request("GET", self._admin_path(telegram_id) + "/access")
+        return result.get("authorized") is True
+
+    async def get_admin_stats(self, telegram_id: int) -> dict[str, Any]:
+        return await self._request("GET", self._admin_path(telegram_id) + "/stats")
+
+    async def get_admin_tickets(self, telegram_id: int) -> list[dict[str, Any]]:
+        result = await self._request("GET", self._admin_path(telegram_id) + "/tickets")
+        tickets = result.get("tickets", [])
+        return tickets if isinstance(tickets, list) else []
+
+    async def update_admin_ticket(
+        self,
+        telegram_id: int,
+        ticket_id: int,
+        status: str,
+        admin_note: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"status": status}
+        if admin_note is not None:
+            payload["admin_note"] = admin_note
+        return await self._request(
+            "PATCH",
+            self._admin_path(telegram_id) + f"/tickets/{int(ticket_id)}",
+            payload=payload,
+        )
+
+    async def get_automations(self, telegram_id: int) -> list[dict[str, Any]]:
+        result = await self._request("GET", self._admin_path(telegram_id) + "/automations")
+        automations = result.get("automations", [])
+        return automations if isinstance(automations, list) else []
+
+    async def update_automation(
+        self,
+        telegram_id: int,
+        code: str,
+        enabled: bool,
+        interval_minutes: int,
+    ) -> dict[str, Any]:
+        return await self._request(
+            "PATCH",
+            self._admin_path(telegram_id) + f"/automations/{code}",
+            payload={"enabled": bool(enabled), "interval_minutes": int(interval_minutes)},
+        )
+
+    async def run_automation(self, telegram_id: int, code: str) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            self._admin_path(telegram_id) + f"/automations/{code}/run",
+            payload={},
+        )

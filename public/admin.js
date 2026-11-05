@@ -16,7 +16,7 @@ function toast(message) { const el = $('toast'); el.textContent = message; el.cl
 function statusText(status) { return ({ open: 'Mới tiếp nhận', processing: 'Đang xử lý', closed: 'Đã đóng' })[status] || status; }
 
 async function loadAdmin() {
-  const [stats, services, tickets, automations] = await Promise.all([api('/api/admin/stats'), api('/api/admin/services'), api('/api/tickets'), api('/api/admin/automations')]);
+  const [stats, services, tickets, automations, menus] = await Promise.all([api('/api/admin/stats'), api('/api/admin/services'), api('/api/tickets'), api('/api/admin/automations'), api('/api/admin/bot-menus')]);
   $('loginPanel').hidden = true;
   $('adminApp').hidden = false;
   const items = [
@@ -27,6 +27,86 @@ async function loadAdmin() {
   renderServices(services.services);
   renderTickets(tickets.tickets);
   renderAutomations(automations.automations);
+  renderBotMenus(menus.menus);
+}
+
+const MENU_ACTION_META = {
+  customer: { label: 'Trung tâm khách hàng', hint: 'Mở trang tài khoản' },
+  balance: { label: 'Số dư', hint: 'Tra cứu ví' },
+  services: { label: 'Dịch vụ', hint: 'Danh mục dịch vụ' },
+  support: { label: 'Hỗ trợ', hint: 'Tạo yêu cầu CSKH' },
+  admin: { label: 'Quản trị', hint: 'Trung tâm quản trị Aiogram' },
+  automation: { label: 'Tự động hóa', hint: 'Quản lý tác vụ Aiogram' }
+};
+const MENU_ACTIONS_BY_BOT = {
+  grammy: ['customer', 'balance', 'services', 'support'],
+  aiogram: ['customer', 'balance', 'services', 'support', 'admin', 'automation']
+};
+
+function renderBotMenus(menus) {
+  const byKey = new Map(menus.map((menu) => [menu.botKey, menu]));
+  $('adminBotMenus').innerHTML = ['grammy', 'aiogram'].map((botKey) => {
+    const menu = byKey.get(botKey) || {};
+    const actions = MENU_ACTIONS_BY_BOT[botKey];
+    const configuredOrder = Array.isArray(menu.buttonOrder) ? menu.buttonOrder : [];
+    const displayOrder = [
+      ...configuredOrder.filter((action) => actions.includes(action)),
+      ...actions.filter((action) => !configuredOrder.includes(action))
+    ];
+    const actionRows = displayOrder.map((action) => {
+      const meta = MENU_ACTION_META[action];
+      const isEnabled = configuredOrder.length ? configuredOrder.includes(action) : true;
+      return '<div class="menu-action-row" data-action="' + action + '">' +
+        '<label class="menu-action-toggle"><input class="menu-visible" type="checkbox" ' + (isEnabled ? 'checked' : '') + '> <span><strong>' + meta.label + '</strong><small>' + meta.hint + '</small></span></label>' +
+        '<label>Icon<input class="menu-icon" maxlength="8" value="' + esc(menu.buttonIcons?.[action] || '') + '" aria-label="Biểu tượng ' + meta.label + '"></label>' +
+        '<label>Nhãn nút<input class="menu-label" maxlength="40" value="' + esc(menu.buttonLabels?.[action] || '') + '" placeholder="' + esc(meta.label) + '" aria-label="Nhãn ' + meta.label + '"></label>' +
+      '</div>';
+    }).join('');
+    return '<article class="panel menu-config-card" data-bot-menu="' + botKey + '">' +
+      '<div class="automation-heading"><div><span class="automation-code">' + (botKey === 'grammy' ? 'BOT GRAMMY' : 'BOT AIOGRAM') + '</span>' +
+      '<h3>' + (botKey === 'grammy' ? 'Bot chính grammY' : 'Bot pilot Aiogram') + '</h3>' +
+      '<p class="muted">Cấu hình độc lập; thay đổi được dùng ở lần mở menu tiếp theo.</p></div></div>' +
+      '<div class="menu-config-options">' +
+        '<label>Lời giới thiệu<textarea class="menu-intro" maxlength="500" rows="2">' + esc(menu.introText || '') + '</textarea></label>' +
+        '<label>Số cột<select class="menu-columns">' +
+          [1, 2, 3].map((n) => '<option value="' + n + '" ' + (Number(menu.menuColumns || 2) === n ? 'selected' : '') + '>' + n + ' cột</option>').join('') +
+        '</select></label>' +
+        '<label class="menu-check"><input class="menu-persistent" type="checkbox" ' + (menu.persistentKeyboard !== false ? 'checked' : '') + '> Giữ bàn phím</label>' +
+        '<label class="menu-check"><input class="menu-resize" type="checkbox" ' + (menu.resizeKeyboard !== false ? 'checked' : '') + '> Tự co giãn nút</label>' +
+      '</div><div class="menu-actions-list">' + actionRows + '</div>' +
+      '<div class="automation-controls"><button class="button primary save-menu" type="button">Lưu menu ' + (botKey === 'grammy' ? 'grammY' : 'Aiogram') + '</button></div>' +
+      '</article>';
+  }).join('');
+
+  document.querySelectorAll('.save-menu').forEach((button) => button.addEventListener('click', async () => {
+    const card = button.closest('[data-bot-menu]');
+    const botKey = card.dataset.botMenu;
+    const rows = [...card.querySelectorAll('.menu-action-row')];
+    const buttonOrder = rows.filter((row) => row.querySelector('.menu-visible').checked).map((row) => row.dataset.action);
+    const buttonLabels = Object.fromEntries(rows.map((row) => [row.dataset.action, row.querySelector('.menu-label').value.trim()]));
+    const buttonIcons = Object.fromEntries(rows.map((row) => [row.dataset.action, row.querySelector('.menu-icon').value.trim()]));
+    button.disabled = true;
+    try {
+      await api('/api/admin/bot-menus/' + botKey, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          introText: card.querySelector('.menu-intro').value,
+          menuColumns: Number(card.querySelector('.menu-columns').value),
+          persistentKeyboard: card.querySelector('.menu-persistent').checked,
+          resizeKeyboard: card.querySelector('.menu-resize').checked,
+          buttonOrder,
+          buttonLabels,
+          buttonIcons
+        })
+      });
+      toast('Đã lưu cấu hình menu ' + (botKey === 'grammy' ? 'grammY' : 'Aiogram') + '.');
+      await loadAdmin();
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }));
 }
 
 function renderServices(services) {

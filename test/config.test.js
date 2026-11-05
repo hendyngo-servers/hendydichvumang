@@ -130,12 +130,14 @@ test('BOT1_TOKEN takes precedence and BOT_TOKEN remains a temporary alias', () =
   const preferred = loadConfig({
     DATABASE_URL: 'postgres://localhost/db',
     BOT1_TOKEN: '111:primary-new',
-    BOT_TOKEN: '222:primary-legacy'
+    BOT_TOKEN: '222:primary-legacy',
+    TELEGRAM_WEBHOOK_SECRET: 'test-webhook-secret'
   });
   assert.equal(preferred.botToken, '111:primary-new');
   const legacy = loadConfig({
     DATABASE_URL: 'postgres://localhost/db',
-    BOT_TOKEN: '222:primary-legacy'
+    BOT_TOKEN: '222:primary-legacy',
+    TELEGRAM_WEBHOOK_SECRET: 'test-webhook-secret'
   });
   assert.equal(legacy.botToken, '222:primary-legacy');
 });

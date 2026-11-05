@@ -10,6 +10,7 @@ from aiogram.types import (
 )
 
 from services.aiogram_bot.api_client import HendyApiClient
+from services.aiogram_bot.menu_filter import MenuActionFilter
 
 automation_router = Router(name="hendy-automation")
 AUTOMATION_CODES = frozenset({
@@ -78,6 +79,7 @@ async def show_automations(message: Message, telegram_id: int, api: HendyApiClie
 
 
 @automation_router.message(Command("automation"), F.chat.type == "private")
+@automation_router.message(MenuActionFilter("automation"), F.chat.type == "private")
 async def automation_command(message: Message, api: HendyApiClient) -> None:
     if not message.from_user or not await _authorized(message.from_user.id, api):
         await message.answer("🔒 Chức năng này chỉ dành cho quản trị viên HENDY.")

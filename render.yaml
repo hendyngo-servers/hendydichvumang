@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: cat app-source.part-*.b64 | base64 -d | tar -xz && npm install && npm run verify
+    buildCommand: cat app-source.part-*.b64 | tar -xz && npm install --no-audit --no-fund && npm run verify
     startCommand: npm start
     healthCheckPath: /healthz
     autoDeploy: true

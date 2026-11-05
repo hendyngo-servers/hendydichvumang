@@ -122,8 +122,9 @@ async def health(request: web.Request) -> web.Response:
     try:
         async with pool.acquire() as connection:
             await connection.fetchval("SELECT 1")
-    except Exception:
-        logger.exception("PostgreSQL health check failed")
+    except Exception as exc:
+        # Avoid logging DSNs, hostnames, or driver error details.
+        logger.error("PostgreSQL health check failed: %s", type(exc).__name__)
         return web.json_response({"status": "error", "database": "unavailable"}, status=503)
     runtime = request.app["runtime_status"]
     if not runtime.get("webhook_ready"):

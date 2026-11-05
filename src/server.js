@@ -496,9 +496,9 @@ const artifactUploadParser = express.raw({
 
 app.get('/api/admin/modules', requireAuth, requireAdmin, async (_req, res) => {
   const { rows } = await db.query(
-    \`SELECT id, module_key, original_name, mime_type, size_bytes, sha256,
+    `SELECT id, module_key, original_name, mime_type, size_bytes, sha256,
       status, uploaded_by, reviewed_by, review_note, created_at, reviewed_at
-     FROM module_artifacts ORDER BY created_at DESC LIMIT 100\`
+     FROM module_artifacts ORDER BY created_at DESC LIMIT 100`
   );
   res.json({ artifacts: rows });
 });
@@ -517,10 +517,10 @@ app.post('/api/admin/modules/:moduleKey', requireAuth, requireAdmin, artifactUpl
   }
 
   const { rows } = await db.query(
-    \`INSERT INTO module_artifacts
+    `INSERT INTO module_artifacts
       (module_key, original_name, mime_type, size_bytes, sha256, content, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7)
-     RETURNING id, module_key, original_name, mime_type, size_bytes, sha256, status, created_at\`,
+     RETURNING id, module_key, original_name, mime_type, size_bytes, sha256, status, created_at`,
     [
       artifact.moduleKey,
       artifact.fileName,
@@ -554,10 +554,10 @@ app.patch('/api/admin/modules/:id/review', requireAuth, requireAdmin, async (req
     return res.status(400).json({ error: 'ID, trạng thái hoặc ghi chú kiểm duyệt không hợp lệ.' });
   }
   const { rows } = await db.query(
-    \`UPDATE module_artifacts
+    `UPDATE module_artifacts
      SET status = $1, reviewed_by = 'admin', review_note = $2, reviewed_at = NOW()
      WHERE id = $3 AND status = 'pending_review'
-     RETURNING id, module_key, original_name, sha256, status, reviewed_by, review_note, reviewed_at\`,
+     RETURNING id, module_key, original_name, sha256, status, reviewed_by, review_note, reviewed_at`,
     [status, note, id]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Không tìm thấy tệp đang chờ kiểm duyệt.' });
@@ -578,7 +578,7 @@ app.get('/api/admin/modules/:id/content', requireAuth, requireAdmin, async (req,
   if (!rows[0]) return res.status(404).json({ error: 'Không tìm thấy tệp module.' });
   res.set({
     'Content-Type': 'application/octet-stream',
-    'Content-Disposition': \`attachment; filename="\${encodeURIComponent(rows[0].original_name)}"\`,
+    'Content-Disposition': `attachment; filename="${encodeURIComponent(rows[0].original_name)}"`,
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'private, no-store',
     'X-Artifact-SHA256': rows[0].sha256

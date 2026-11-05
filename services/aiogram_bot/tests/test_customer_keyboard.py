@@ -39,9 +39,6 @@ class CustomerKeyboardTests(unittest.TestCase):
                 self.assertFalse(button.url and "token=" in button.url.lower())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_return_button_has_callback_data(self) -> None:
         settings = Settings.from_env({
             "AIOGRAM_BOT_TOKEN": "123456:test",
@@ -55,3 +52,7 @@ if __name__ == "__main__":
         })
         keyboard = customer_center_keyboard(settings)
         self.assertEqual(keyboard.inline_keyboard[-1][0].callback_data, "customer:home")
+
+
+if __name__ == "__main__":
+    unittest.main()

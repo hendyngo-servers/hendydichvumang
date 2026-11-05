@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from aiogram import F, Router
+from aiogram import F, Router, html
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from aiogram.utils import html
 
 from services.aiogram_bot.api_client import HendyApiError
 

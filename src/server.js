@@ -34,8 +34,8 @@ app.use(helmet({
 }));
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || !config.allowedOrigins.length || config.allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Origin không được phép'));
+    if (!origin || config.allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
   },
   methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

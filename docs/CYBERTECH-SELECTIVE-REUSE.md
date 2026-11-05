@@ -10,7 +10,7 @@ Giữ nguyên nền tảng hiện hữu và port các capability độc lập, c
 
 1. Module artifact review: upload metadata/content dạng BYTEA, SHA-256, allowlist loại tệp, giới hạn 1 MB, trạng thái pending_review/approved/rejected, audit log.
 2. Không thực thi tệp: PHP, JS, HTML, SVG, archive và MIME không cho phép bị từ chối. Approve không đồng nghĩa deploy.
-3. PostgreSQL authoritative: dùng migration 005, không tạo database nghiệp vụ thứ hai.
+3. PostgreSQL authoritative: dùng migration 006, không tạo database nghiệp vụ thứ hai.
 4. CI: test validation module và compile source bằng Node test runner.
 5. Quyền Admin: mọi endpoint module yêu cầu session role admin ở backend.
 

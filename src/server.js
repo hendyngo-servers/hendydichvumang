@@ -291,22 +291,22 @@ app.get(internalAdminPath + '/access', requireBotService, (req, res) => {
 
 app.get(internalAdminPath + '/stats', requireBotService, requireTelegramAdmin, async (_req, res) => {
   const { rows } = await db.query(
-    \`SELECT (SELECT COUNT(*) FROM users)::int AS users,
+    `SELECT (SELECT COUNT(*) FROM users)::int AS users,
       (SELECT COUNT(*) FROM tickets WHERE status <> 'closed')::int AS open_tickets,
       (SELECT COUNT(*) FROM service_catalog)::int AS services,
-      (SELECT COALESCE(SUM(balance), 0)::text FROM wallets) AS wallet_total\`
+      (SELECT COALESCE(SUM(balance), 0)::text FROM wallets) AS wallet_total`
   );
   res.json({ stats: rows[0] });
 });
 
 app.get(internalAdminPath + '/tickets', requireBotService, requireTelegramAdmin, async (_req, res) => {
   const { rows } = await db.query(
-    \`SELECT t.id, t.subject, t.message, t.status, t.admin_note, t.created_at,
+    `SELECT t.id, t.subject, t.message, t.status, t.admin_note, t.created_at,
       u.telegram_id, u.username, u.first_name
      FROM tickets t JOIN users u ON u.id = t.user_id
      ORDER BY CASE WHEN t.status = 'open' THEN 0 WHEN t.status = 'processing' THEN 1 ELSE 2 END,
        t.created_at ASC
-     LIMIT 10\`
+     LIMIT 10`
   );
   res.json({ tickets: rows });
 });
@@ -350,7 +350,7 @@ app.patch(internalAdminPath + '/tickets/:ticketId', requireBotService, requireTe
 
 app.get(internalAdminPath + '/automations', requireBotService, requireTelegramAdmin, async (_req, res) => {
   const { rows } = await db.query(
-    \`SELECT a.code, a.name, a.description, a.enabled, a.interval_minutes,
+    `SELECT a.code, a.name, a.description, a.enabled, a.interval_minutes,
       a.next_run_at, a.last_run_at, a.last_status, a.last_error,
       r.status AS recent_run_status, r.started_at AS recent_run_at
      FROM automation_settings a
@@ -358,7 +358,7 @@ app.get(internalAdminPath + '/automations', requireBotService, requireTelegramAd
        SELECT status, started_at FROM automation_runs
        WHERE code = a.code ORDER BY started_at DESC LIMIT 1
      ) r ON TRUE
-     ORDER BY a.code\`
+     ORDER BY a.code`
   );
   res.json({ automations: rows });
 });
@@ -374,12 +374,12 @@ app.patch(internalAdminPath + '/automations/:code', requireBotService, requireTe
     return res.status(400).json({ error: 'Trạng thái hoặc chu kỳ chạy không hợp lệ.' });
   }
   const { rows } = await db.query(
-    \`UPDATE automation_settings
+    `UPDATE automation_settings
      SET enabled = $1, interval_minutes = $2,
        next_run_at = CASE WHEN $1 THEN NOW() ELSE next_run_at END,
        updated_at = NOW()
      WHERE code = $3
-     RETURNING code, enabled, interval_minutes, next_run_at, last_status\`,
+     RETURNING code, enabled, interval_minutes, next_run_at, last_status`,
     [enabled, interval, code]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Không tìm thấy tác vụ tự động hóa.' });

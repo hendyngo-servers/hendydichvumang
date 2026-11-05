@@ -508,7 +508,7 @@ app.post('/api/admin/modules/:moduleKey', requireAuth, requireAdmin, artifactUpl
   try {
     artifact = validateArtifact({
       moduleKey: String(req.params.moduleKey || ''),
-      fileName: String(req.get('x-file-name') || ''),
+      fileName: (() => { try { return decodeURIComponent(String(req.get('x-file-name') || '')); } catch { return ''; } })(),
       mimeType: String(req.get('x-artifact-mime') || ''),
       content: req.body
     });

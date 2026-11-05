@@ -57,6 +57,6 @@ test('service discovery finds the expected service inside the selected workspace
   assert.equal(found.id, 'srv-api');
   assert.throws(
     () => findWorkspaceService(payload, { name: 'missing-api', type: 'web_service', workspaceId: 'tea-1' }),
-    /Không tìm thấy service.*other/i
+    /Không tìm thấy service.*hendydichvumang-api/i
   );
 });

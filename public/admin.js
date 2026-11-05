@@ -86,7 +86,7 @@ function renderAutomations(items) {
         <label class="automation-toggle"><input class="automation-enabled" type="checkbox" ${item.enabled ? 'checked' : ''}> Bật tác vụ</label>
         <label class="automation-interval">Chu kỳ
           <select class="automation-minutes">
-            ${[1,5,15,30,60,240,1440].map((n) => `<option value="${n}" ${Number(item.interval_minutes) === n ? 'selected' : ''}>${n < 60 ? n + ' phút' : n === 60 ? '1 giờ' : n === 240 ? '4 giờ' : '24 giờ'}</option>`).join('')}
+            ${[1,5,15,30,60,240,1440,10080].map((n) => `<option value="${n}" ${Number(item.interval_minutes) === n ? 'selected' : ''}>${n < 60 ? n + ' phút' : n === 60 ? '1 giờ' : n === 240 ? '4 giờ' : n === 1440 ? '24 giờ' : '7 ngày'}</option>`).join('')}
           </select>
         </label>
         <button class="button ghost save-automation" type="button">Lưu cấu hình</button>

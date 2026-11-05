@@ -85,7 +85,8 @@ Blueprint **không tạo database mặc định** và không tự kết nối v�
 3. Đặt connection string trong biến môi trường bí mật `DATABASE_URL` của API Web Service.
 4. Với PostgreSQL truy cập từ Internet, bật TLS: `PGSSLMODE=require`. Khi cần xác minh đầy đủ CA/hostname, dùng `PGSSLMODE=verify-full` cùng `PGSSL_CA_CERT`.
 5. Đặt `PG_POOL_MAX=5` hoặc thấp hơn nếu nhà cung cấp giới hạn kết nối.
-6. Migrations tự động chạy khi API khởi động. Sao lưu database trước khi chạy migration production.
+6. Dùng connection string trực tiếp hoặc pooler ở chế độ session. Không dùng transaction-pooling endpoint cho phiên bản này vì migration và khóa chống chạy automation trùng nhau sử dụng PostgreSQL session advisory lock.
+7. Migrations tự động chạy khi API khởi động. Sao lưu database trước khi chạy migration production.
 
 | Biến | Ý nghĩa |
 |---|---|

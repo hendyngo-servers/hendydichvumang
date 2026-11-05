@@ -42,6 +42,13 @@ export function hashSessionToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+export function normalizeWebhookSecret(secret) {
+  if (!secret) return '';
+  // Telegram Bot API accepts only A-Z, a-z, 0-9, underscore and hyphen.
+  // Render-generated values are base64 and may contain +, / or =; derive a stable URL-safe secret.
+  return crypto.createHash('sha256').update(String(secret)).digest('base64url');
+}
+
 export function verifyWebhookSecret(expected, received) {
   return Boolean(expected && received && safeEqual(expected, received));
 }

@@ -84,7 +84,7 @@ test('production config accepts valid Render settings and normalizes origins', (
     DATABASE_URL: 'postgresql://user:pass@db.example.com/app',
     ADMIN_USERNAME: 'owner',
     ADMIN_PASSWORD: 'a'.repeat(20),
-    BOT_TOKEN: '123456:token',
+    BOT1_TOKEN: '123456:token',
     TELEGRAM_WEBHOOK_SECRET: 'render-generated-secret',
     RENDER_EXTERNAL_URL: 'https://hendy.onrender.com',
     ALLOWED_ORIGINS: 'https://hendy.onrender.com, https://shop.example.com/'

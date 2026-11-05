@@ -6,7 +6,7 @@ from typing import Any
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiogram.types import Message, TelegramObject
 
-from services.aiogram_bot.api_client import HendyApiClient
+from apps.bot_phu.api_client import HendyApiClient
 
 
 class EnsureCustomerMiddleware(BaseMiddleware):

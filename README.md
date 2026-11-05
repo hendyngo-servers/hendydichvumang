@@ -55,7 +55,7 @@ Trong Admin Dashboard, mục **Điều phối tác vụ hệ thống** hỗ tr�
 | Tác vụ | Hành vi |
 |---|---|
 | Dọn phiên đăng nhập | Xóa session hết hạn và lịch sử automation cũ hơn 180 ngày |
-| Thông báo ticket mới | Gửi ticket mới đến Telegram Admin khi có BOT_TOKEN và ADMIN_TELEGRAM_ID |
+| Thông báo ticket mới | Gửi ticket mới đến Telegram Admin khi có BOT1_TOKEN và ADMIN_TELEGRAM_ID |
 | Nhắc ticket chờ | Nhắc ticket open/processing đã tồn tại hơn 60 phút; nhắc lại sau mỗi 6 giờ |
 
 Các lần chạy được ghi vào `automation_runs`; cấu hình nằm trong `automation_settings`. Mỗi tác vụ có PostgreSQL advisory lock để tránh hai tiến trình thực thi cùng lúc. Chu kỳ có thể chọn từ 1 phút đến 7 ngày.
@@ -112,12 +112,12 @@ Sau khi tạo:
 1. Trong API Web Service, đặt `DATABASE_URL` là connection string PostgreSQL riêng vừa tạo.
 2. Giữ `PGSSLMODE=require` cho PostgreSQL bên ngoài.
 3. Đặt `ADMIN_USERNAME` và `ADMIN_PASSWORD` mạnh, tối thiểu 16 ký tự.
-4. Đặt `BOT_TOKEN` nếu dùng grammY chính và `ADMIN_TELEGRAM_ID` để nhận thông báo ticket. `BOT_SERVICE_KEY` được Blueprint tự sinh để xác thực dịch vụ aiogram.
+4. Đặt `BOT1_TOKEN` nếu dùng grammY chính và `ADMIN_TELEGRAM_ID` để nhận thông báo ticket. `BOT_SERVICE_KEY` được Blueprint tự sinh để xác thực dịch vụ aiogram.
 5. Đặt `PUBLIC_APP_URL` là origin website (ví dụ `https://<ten-site>.onrender.com`) và `PUBLIC_MINI_APP_URL` là URL Mini App đầy đủ, kết thúc bằng `/app`.
-6. Giữ `TELEGRAM_WEBHOOK_SECRET` do Blueprint tự sinh. Khi API có HTTPS và BOT_TOKEN, webhook tự đăng ký vào API URL; Mini App sử dụng URL Static Site.
+6. Giữ `TELEGRAM_WEBHOOK_SECRET` do Blueprint tự sinh. Khi API có HTTPS và BOT1_TOKEN, webhook tự đăng ký vào API URL; Mini App sử dụng URL Static Site.
 7. Kiểm tra `https://<api-url>/healthz`, cần có `status: ok` và `database: ready`.
 8. Mở `https://<static-site-url>/` để xem trang chủ giới thiệu, `https://<static-site-url>/app` để mở Mini App từ Telegram, và `https://<static-site-url>/admin` để vào trang quản trị. Đặt URL `.../app` làm Mini App URL trong BotFather.
-9. Nếu bật Aiogram, nhập `AIOGRAM_BOT_TOKEN` khác grammY; giữ `AIOGRAM_WEBHOOK_SECRET` do Render tự sinh. Aiogram nhận `PUBLIC_APP_URL` và `PUBLIC_MINI_APP_URL` từ API qua Blueprint. Chỉ deploy Python service sau khi API và migration PostgreSQL đã Live.
+9. Nếu bật Aiogram, nhập `BOT2_TOKEN` khác grammY; giữ `AIOGRAM_WEBHOOK_SECRET` do Render tự sinh. Aiogram nhận `PUBLIC_APP_URL` và `PUBLIC_MINI_APP_URL` từ API qua Blueprint. Chỉ deploy Python service sau khi API và migration PostgreSQL đã Live.
 
 Biến API cần khai báo:
 
@@ -130,7 +130,7 @@ Biến API cần khai báo:
 | `ADMIN_PASSWORD` | Có | Tối thiểu 16 ký tự |
 | `PUBLIC_APP_URL` | Có | Origin HTTPS của trang chủ Static Site, không có path |
 | `PUBLIC_MINI_APP_URL` | Có | URL HTTPS đầy đủ của Mini App, kết thúc bằng `/app` |
-| `BOT_TOKEN` | Tùy chọn | Token BotFather của grammY chính; để trống nếu chưa bật bot |
+| `BOT1_TOKEN` | Tùy chọn | Token BotFather của grammY chính; để trống nếu chưa bật bot |
 | `BOT_SERVICE_KEY` | Tùy chọn | Blueprint tự sinh; khóa riêng cho dịch vụ aiogram gọi API nội bộ |
 | `TELEGRAM_WEBHOOK_SECRET` | Khi bật bot | Blueprint tự sinh |
 | `ADMIN_TELEGRAM_ID` | Tùy chọn | Telegram ID nhận thông báo ticket |
@@ -245,7 +245,7 @@ Trạng thái deployment live chỉ là một điều kiện. Lệnh còn gọi 
 
 Phân tích source upstream, quyết định module, kiến trúc tích hợp, bảo mật và hướng dẫn thử nghiệm nằm tại [docs/AIOGRAM-INTEGRATION.md](docs/AIOGRAM-INTEGRATION.md). Aiogram chạy thành dịch vụ Python riêng với token khác grammY; Node.js API và PostgreSQL vẫn quản lý dữ liệu nghiệp vụ. Không dùng chung Bot Token giữa hai framework.
 
-Biến cần cấu hình cho dịch vụ Python: `AIOGRAM_BOT_TOKEN` (token bot thử nghiệm riêng), `AIOGRAM_WEBHOOK_SECRET` (Render tự sinh), `HENDY_API_BASE_URL`, `HENDY_BOT_SERVICE_KEY`, `DATABASE_URL`, `PGSSLMODE`, `PUBLIC_APP_URL` và `AIOGRAM_FSM_TTL_HOURS`. Blueprint liên kết API key và PostgreSQL từ API Web Service; không đưa secrets vào frontend.
+Biến cần cấu hình cho dịch vụ Python: `BOT2_TOKEN` (token bot thử nghiệm riêng), `AIOGRAM_WEBHOOK_SECRET` (Render tự sinh), `HENDY_API_BASE_URL`, `HENDY_BOT_SERVICE_KEY`, `DATABASE_URL`, `PGSSLMODE`, `PUBLIC_APP_URL` và `AIOGRAM_FSM_TTL_HOURS`. Blueprint liên kết API key và PostgreSQL từ API Web Service; không đưa secrets vào frontend.
 
 
 
@@ -296,3 +296,14 @@ Migration 006_module_artifacts.sql tạo bảng lưu trữ. Đây là phần có
 ### Đổi tên Static Site hiện hữu trên Render
 
 Blueprint hiện tạm giữ tên resource `hendydichvumang-site` để khớp service đang chạy, tránh tạo một Static Site thứ hai. Hãy đổi tên resource hiện hữu trực tiếp trong Render Dashboard trước; sau khi service đã đổi tên tại chỗ, cập nhật trường `name` trong `render.yaml` thành `hendydichvumang` rồi mới đồng bộ Blueprint. Không đổi riêng tên trong Blueprint trước khi resource cũ được đổi tên.
+
+
+## Tích hợp chọn lọc HENDY Cybertech
+
+Node.js + PostgreSQL tiếp tục là nguồn dữ liệu chính. Menu và router được tổ chức theo namespace canonical: grammY tại `apps/bot_chinh/`, Aiogram tại `apps/bot_phu/`; code Aiogram mới sử dụng namespace `apps.bot_phu`.
+
+Mini App hiện tại giữ nguyên xác thực Telegram và API Node.js. Giao diện bảy màu từ ZIP được chuyển thành CSS theme/component, không thay bằng trang PHP vốn phụ thuộc các API chưa tồn tại.
+
+Migration `007_commerce_readiness.sql` chuẩn bị schema riêng cho thanh toán, đơn hàng, VIP, Voucher, Giftcode, referral, Video Jobs, ledger và đối soát. Tất cả module được khóa mặc định. Xem [điều kiện mở module](docs/COMMERCE-MODULES-READINESS.md).
+
+Tên token chuẩn: `BOT1_TOKEN` cho grammY và `BOT2_TOKEN` cho Aiogram. `BOT_TOKEN` và `AIOGRAM_BOT_TOKEN` chỉ là bí danh tương thích chuyển tiếp. Không ghi token thật vào source code, log, URL hoặc frontend. Mật khẩu quản trị production yêu cầu tối thiểu 13 ký tự.

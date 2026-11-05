@@ -6,8 +6,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
-from services.aiogram_bot.api_client import HendyApiError
-from services.aiogram_bot.menu_filter import MenuActionFilter
+from apps.bot_phu.api_client import HendyApiError
+from apps.bot_phu.menu_filter import MenuActionFilter
 
 support_router = Router(name="hendy-support")
 

@@ -12,10 +12,10 @@ from aiogram.types import (
     WebAppInfo,
 )
 
-from services.aiogram_bot.api_client import HendyApiClient
-from services.aiogram_bot.config import Settings
-from services.aiogram_bot.routers.common import main_menu
-from services.aiogram_bot.menu_filter import MenuActionFilter
+from apps.bot_phu.api_client import HendyApiClient
+from apps.bot_phu.config import Settings
+from apps.bot_phu.routers.common import main_menu
+from apps.bot_phu.menu_filter import MenuActionFilter
 
 customer_router = Router(name="hendy-customer")
 

@@ -11,9 +11,9 @@ from aiogram.types import (
 )
 
 
-from services.aiogram_bot.config import Settings
-from services.aiogram_bot.api_client import HendyApiClient
-from services.aiogram_bot.menu_config import build_menu_rows, normalize_menu_config
+from apps.bot_phu.config import Settings
+from apps.bot_phu.api_client import HendyApiClient
+from apps.bot_phu.menu_config import build_menu_rows, normalize_menu_config
 
 common_router = Router(name="hendy-common")
 

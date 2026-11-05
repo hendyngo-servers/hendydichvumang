@@ -11,7 +11,7 @@ test('production config requires webhook secret when a bot token is configured',
     NODE_ENV: 'production',
     DATABASE_URL: 'postgres://db',
     ADMIN_PASSWORD: 'long-strong-password',
-    BOT_TOKEN: '123:token',
+    BOT1_TOKEN: '123:token',
     RENDER_EXTERNAL_URL: 'https://hendy.onrender.com'
   }), /TELEGRAM_WEBHOOK_SECRET/);
 });
@@ -22,7 +22,7 @@ test('production config separates API URL and Static Site URL', () => {
     DATABASE_URL: 'postgres://db',
     ADMIN_USERNAME: 'ops',
     ADMIN_PASSWORD: 'long-strong-password',
-    BOT_TOKEN: '123:token',
+    BOT1_TOKEN: '123:token',
     TELEGRAM_WEBHOOK_SECRET: 'render-generated+/=secret',
     RENDER_EXTERNAL_URL: 'https://api-hendy.onrender.com',
     PUBLIC_APP_URL: 'https://hendy-customer.onrender.com'
@@ -75,7 +75,7 @@ test('production Mini App URL must use HTTPS when Telegram Bot is enabled', () =
     DATABASE_URL: 'postgres://db',
     ADMIN_USERNAME: 'owner',
     ADMIN_PASSWORD: 'long-unique-password-123',
-    BOT_TOKEN: '123:token',
+    BOT1_TOKEN: '123:token',
     TELEGRAM_WEBHOOK_SECRET: 'render-generated-secret',
     PUBLIC_API_URL: 'https://api.example.com',
     PUBLIC_APP_URL: 'http://customer.example.com'
@@ -106,4 +106,36 @@ test('Mini App URL must remain on the configured Static Site origin', () => {
     PUBLIC_APP_URL: 'https://hendy-site.onrender.com',
     PUBLIC_MINI_APP_URL: 'https://hendy-site.onrender.com/app?token=secret'
   }), /query/);
+});
+
+test('production accepts an ADMIN_PASSWORD of exactly 13 characters', () => {
+  const config = loadConfig({
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://db',
+    ADMIN_USERNAME: 'hendyngo',
+    ADMIN_PASSWORD: 'a'.repeat(13)
+  });
+  assert.equal(config.adminPassword.length, 13);
+});
+
+test('production rejects an ADMIN_PASSWORD shorter than 13 characters', () => {
+  assert.throws(() => loadConfig({
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://db',
+    ADMIN_PASSWORD: 'a'.repeat(12)
+  }), /ít nhất 13 ký tự/);
+});
+
+test('BOT1_TOKEN takes precedence and BOT_TOKEN remains a temporary alias', () => {
+  const preferred = loadConfig({
+    DATABASE_URL: 'postgres://localhost/db',
+    BOT1_TOKEN: '111:primary-new',
+    BOT_TOKEN: '222:primary-legacy'
+  });
+  assert.equal(preferred.botToken, '111:primary-new');
+  const legacy = loadConfig({
+    DATABASE_URL: 'postgres://localhost/db',
+    BOT_TOKEN: '222:primary-legacy'
+  });
+  assert.equal(legacy.botToken, '222:primary-legacy');
 });

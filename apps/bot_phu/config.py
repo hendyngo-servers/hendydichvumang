@@ -78,10 +78,12 @@ class Settings:
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
         source = os.environ if env is None else env
-        token = _required(source, "AIOGRAM_BOT_TOKEN")
-        primary_token = str(source.get("BOT_TOKEN", "")).strip()
+        token = str(source.get("BOT2_TOKEN") or source.get("AIOGRAM_BOT_TOKEN") or "").strip()
+        if not token:
+            raise ValueError("Thiếu biến môi trường bắt buộc: BOT2_TOKEN")
+        primary_token = str(source.get("BOT1_TOKEN") or source.get("BOT_TOKEN") or "").strip()
         if primary_token and token == primary_token:
-            raise ValueError("AIOGRAM_BOT_TOKEN phải khác BOT_TOKEN của grammY chính.")
+            raise ValueError("BOT2_TOKEN phải khác BOT1_TOKEN của grammY chính.")
 
         database_url = _required(source, "DATABASE_URL")
         db_parts = urlsplit(database_url)

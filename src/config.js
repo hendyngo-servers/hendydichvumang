@@ -40,7 +40,7 @@ export function loadConfig(env = process.env) {
   }
 
   const port = readPositiveInteger(env.PORT, 10000, 'PORT', 65535);
-  const botToken = String(env.BOT_TOKEN || '').trim();
+  const botToken = String(env.BOT1_TOKEN || env.BOT_TOKEN || '').trim();
   const rawWebhookSecret = String(env.TELEGRAM_WEBHOOK_SECRET || '').trim();
   const adminUsername = String(env.ADMIN_USERNAME || 'admin').trim();
   const adminPassword = String(env.ADMIN_PASSWORD || '');
@@ -49,11 +49,11 @@ export function loadConfig(env = process.env) {
   if (!['disable', 'require', 'verify-full'].includes(sslMode)) {
     throw new Error('PGSSLMODE chỉ nhận disable, require hoặc verify-full.');
   }
-  if (isProduction && adminPassword.length < 16) {
-    throw new Error('ADMIN_PASSWORD phải có ít nhất 16 ký tự trong môi trường production.');
+  if (isProduction && adminPassword.length < 13) {
+    throw new Error('ADMIN_PASSWORD phải có ít nhất 13 ký tự trong môi trường production.');
   }
   if (isProduction && !adminUsername) throw new Error('ADMIN_USERNAME không được để trống.');
-  if (botToken && !rawWebhookSecret) throw new Error('Đã cấu hình BOT_TOKEN nhưng thiếu TELEGRAM_WEBHOOK_SECRET.');
+  if (botToken && !rawWebhookSecret) throw new Error('Đã cấu hình BOT1_TOKEN (hoặc BOT_TOKEN cũ) nhưng thiếu TELEGRAM_WEBHOOK_SECRET.');
 
   const publicApiUrl = normalizeBaseUrl(
     env.PUBLIC_API_URL || env.RENDER_EXTERNAL_URL,

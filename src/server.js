@@ -14,6 +14,7 @@ import { AUTOMATION_CODES, runAutomation, runDueAutomations } from './automation
 import { BOT_MENU_KEYS, normalizeMenuConfig, validateMenuConfigInput } from './menu-config.js';
 import { validateArtifact } from './module-registry.js';
 import { getRenderOverview } from './render-client.js';
+import { COMMERCE_MODULES, loadCommerceStatus, createCommerceFeatureGate } from './commerce.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -141,6 +142,24 @@ function requireBotService(req, res, next) {
     return res.status(401).json({ error: 'Service key không hợp lệ.' });
   }
   return next();
+}
+
+app.get('/api/commerce/status', requireAuth, async (_req, res, next) => {
+  try {
+    return res.json({ features: await loadCommerceStatus(db) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+for (const feature of COMMERCE_MODULES) {
+  app.use('/api/' + feature.route, requireAuth, createCommerceFeatureGate(db, feature.code), (_req, res) => {
+    return res.status(503).json({
+      error: 'API nghiệp vụ chưa được phát hành; module vẫn khóa an toàn.',
+      feature: feature.code,
+      readiness: 'LOCKED'
+    });
+  });
 }
 
 app.use('/internal/bot', rateLimit({

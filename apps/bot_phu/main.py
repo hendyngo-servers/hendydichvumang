@@ -13,11 +13,11 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-from services.aiogram_bot.api_client import HendyApiClient
-from services.aiogram_bot.config import Settings
-from services.aiogram_bot.fsm_storage import PostgresEventIsolation, PostgresFSMStorage
-from services.aiogram_bot.middlewares import EnsureCustomerMiddleware
-from services.aiogram_bot.routers import (
+from apps.bot_phu.api_client import HendyApiClient
+from apps.bot_phu.config import Settings
+from apps.bot_phu.fsm_storage import PostgresEventIsolation, PostgresFSMStorage
+from apps.bot_phu.middlewares import EnsureCustomerMiddleware
+from apps.bot_phu.routers import (
     admin_router,
     automation_router,
     common_router,

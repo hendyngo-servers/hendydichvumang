@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from services.aiogram_bot.config import Settings, normalize_webhook_secret
+from apps.bot_phu.config import Settings, normalize_webhook_secret
 
 
 class SettingsTests(unittest.TestCase):
     def valid_env(self) -> dict[str, str]:
         return {
-            "AIOGRAM_BOT_TOKEN": "123456:aiogram-test-token",
+            "BOT2_TOKEN": "123456:aiogram-test-token",
             "AIOGRAM_WEBHOOK_SECRET": "render-generated-secret+/",
             "RENDER_EXTERNAL_URL": "https://aiogram.onrender.com",
             "HENDY_API_BASE_URL": "https://api-hendy.onrender.com",
@@ -42,9 +42,19 @@ class SettingsTests(unittest.TestCase):
 
     def test_aiogram_token_must_differ_from_primary_grammy_token(self) -> None:
         env = self.valid_env()
-        env["BOT_TOKEN"] = env["AIOGRAM_BOT_TOKEN"]
+        env["BOT1_TOKEN"] = env["BOT2_TOKEN"]
         with self.assertRaisesRegex(ValueError, "phải khác"):
             Settings.from_env(env)
+
+    def test_legacy_aiogram_token_name_remains_supported(self) -> None:
+        env = self.valid_env()
+        env["AIOGRAM_BOT_TOKEN"] = env.pop("BOT2_TOKEN")
+        self.assertEqual(Settings.from_env(env).bot_token, "123456:aiogram-test-token")
+
+    def test_bot2_token_takes_precedence_over_legacy_alias(self) -> None:
+        env = self.valid_env()
+        env["AIOGRAM_BOT_TOKEN"] = "999:legacy-token"
+        self.assertEqual(Settings.from_env(env).bot_token, "123456:aiogram-test-token")
 
     def test_api_and_mini_app_must_use_https(self) -> None:
         env = self.valid_env()

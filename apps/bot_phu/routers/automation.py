@@ -9,8 +9,8 @@ from aiogram.types import (
     Message,
 )
 
-from services.aiogram_bot.api_client import HendyApiClient
-from services.aiogram_bot.menu_filter import MenuActionFilter
+from apps.bot_phu.api_client import HendyApiClient
+from apps.bot_phu.menu_filter import MenuActionFilter
 
 automation_router = Router(name="hendy-automation")
 AUTOMATION_CODES = frozenset({

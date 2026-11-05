@@ -1,0 +1,163 @@
+import 'dotenv/config';
+
+const RENDER_API_BASE = 'https://api.render.com/v1';
+const EXPECTED_REPOSITORY = process.env.REPOSITORY_URL || 'https://github.com/hendyngo-servers/hendydichvumang';
+const EXPECTED_BRANCH = process.env.EXPECTED_BRANCH || 'main';
+const EXPECTED_COMMIT = process.env.EXPECTED_COMMIT_SHA || process.env.GITHUB_SHA || '';
+
+export function normalizeRepository(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    return (url.hostname.toLowerCase() + url.pathname.replace(/\/+$/, '').replace(/\.git$/i, '')).toLowerCase();
+  } catch {
+    return raw.replace(/\.git$/i, '').replace(/\/+$/, '').toLowerCase();
+  }
+}
+export function normalizeHttpsOrigin(value, name = 'URL') {
+  let url;
+  try { url = new URL(String(value || '').trim()); } catch { throw new Error(name + ' không phải URL hợp lệ.'); }
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error(name + ' phải là HTTPS công khai và không chứa user/password.');
+  return url.origin;
+}
+export function unwrapService(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('Render API trả về service không hợp lệ.');
+  const service = payload.service || payload;
+  if (!service || typeof service !== 'object' || !service.id) throw new Error('Render API không trả về thông tin service.');
+  return service;
+}
+export function unwrapLatestDeploy(payload) {
+  const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
+  if (!items.length) throw new Error('Service chưa có deployment nào.');
+  const deploy = items[0]?.deploy || items[0];
+  if (!deploy || typeof deploy !== 'object' || !deploy.id) throw new Error('Render API không trả về deployment hợp lệ.');
+  return deploy;
+}
+export function validateService(service, expected) {
+  if (service.id !== expected.id) throw new Error('Service ID không khớp cấu hình.');
+  if (service.ownerId && service.ownerId !== expected.workspaceId) throw new Error('Service thuộc workspace khác.');
+  if (service.type !== expected.type) throw new Error('Sai loại dịch vụ: mong đợi ' + expected.type + ', nhận ' + String(service.type || 'không rõ') + '.');
+  if (expected.name && service.name !== expected.name) throw new Error('Tên service không khớp.');
+  if (service.suspended && service.suspended !== 'not_suspended') throw new Error('Service đang bị tạm ngưng trên Render.');
+  if (service.branch && service.branch !== expected.branch) throw new Error('Service đang deploy nhánh ' + service.branch + ', không phải ' + expected.branch + '.');
+  if (service.repo && normalizeRepository(service.repo) !== normalizeRepository(expected.repository)) throw new Error('Service đang kết nối repository khác.');
+  return normalizeHttpsOrigin(service.serviceDetails?.url || service.url, 'URL của ' + expected.name);
+}
+export function validateDeploy(deploy, expectedCommit = '') {
+  if (deploy.status !== 'live') throw new Error('Deployment chưa Live: trạng thái hiện tại là ' + String(deploy.status || 'không rõ') + '.');
+  if (expectedCommit && deploy.commit?.id !== expectedCommit) {
+    throw new Error('Deployment chưa chạy commit yêu cầu. Mong đợi ' + expectedCommit + ', hiện tại ' + String(deploy.commit?.id || 'không rõ') + '.');
+  }
+  return true;
+}
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    signal: AbortSignal.timeout(20_000),
+    headers: { Accept: 'application/json', ...(options.headers || {}) }
+  });
+  const body = await response.text();
+  let payload = null;
+  if (body) {
+    try { payload = JSON.parse(body); } catch { throw new Error('Phản hồi JSON không hợp lệ từ ' + new URL(url).pathname + '.'); }
+  }
+  if (!response.ok) {
+    const message = response.status === 401
+      ? 'Render API key không hợp lệ hoặc không có quyền truy cập.'
+      : response.status === 404
+        ? 'Không tìm thấy tài nguyên trên Render (HTTP 404).'
+        : 'Render API trả về HTTP ' + response.status + '.';
+    throw new Error(message);
+  }
+  return payload;
+}
+async function renderGet(apiKey, path) {
+  return fetchJson(RENDER_API_BASE + path, { headers: { Authorization: 'Bearer ' + apiKey } });
+}
+async function fetchPublic(url, label) {
+  const response = await fetch(url, {
+    redirect: 'follow',
+    signal: AbortSignal.timeout(20_000),
+    headers: { Accept: 'text/html,application/json,*/*', 'User-Agent': 'HENDY-Render-Live-Check/1.0' }
+  });
+  if (!response.ok) throw new Error(label + ' trả về HTTP ' + response.status + '.');
+  return { response, body: await response.text() };
+}
+async function checkStaticSite(siteUrl, apiUrl) {
+  const [home, admin, config] = await Promise.all([
+    fetchPublic(siteUrl + '/', 'Static Site trang chủ'),
+    fetchPublic(siteUrl + '/admin', 'Static Site trang Admin'),
+    fetchPublic(siteUrl + '/config.js', 'Static Site config.js')
+  ]);
+  if (!/HENDY/i.test(home.body) || !/Trung tâm khách hàng/i.test(home.body)) throw new Error('Trang chủ không trả về nội dung Trung tâm khách hàng HENDY.');
+  if (!/HENDY|Trung tâm quản trị/i.test(admin.body) || !/Đăng nhập quản trị/i.test(admin.body)) throw new Error('Đường dẫn /admin không trả về trang đăng nhập quản trị.');
+  if (!config.body.includes(apiUrl)) throw new Error('config.js trên Static Site chưa trỏ đến API URL đã cấu hình: ' + apiUrl);
+  return { home: home.response.status, admin: admin.response.status, config: config.response.status };
+}
+async function checkApi(apiUrl, siteUrl) {
+  const health = await fetchPublic(apiUrl + '/healthz', 'API health check');
+  let healthJson;
+  try { healthJson = JSON.parse(health.body); } catch { throw new Error('/healthz không trả về JSON hợp lệ.'); }
+  if (healthJson.status !== 'ok' || healthJson.database !== 'ready') throw new Error('API chưa sẵn sàng hoặc PostgreSQL chưa kết nối: ' + JSON.stringify(healthJson));
+
+  const configResult = await fetchPublic(apiUrl + '/api/config', 'API public config');
+  let publicConfig;
+  try { publicConfig = JSON.parse(configResult.body); } catch { throw new Error('/api/config không trả về JSON hợp lệ.'); }
+  const configuredApi = normalizeHttpsOrigin(publicConfig.apiBaseUrl, 'API public config');
+  const configuredSite = normalizeHttpsOrigin(publicConfig.appUrl, 'Mini App public config');
+  if (configuredApi !== apiUrl) throw new Error('PUBLIC_API_URL trong API không trùng URL service.');
+  if (configuredSite !== siteUrl) throw new Error('PUBLIC_APP_URL trong API chưa trỏ đến Static Site.');
+  return { health: health.response.status, database: healthJson.database, config: configResult.response.status, appUrl: configuredSite };
+}
+async function verifyOneService(apiKey, workspaceId, serviceId, expected) {
+  const service = unwrapService(await renderGet(apiKey, '/services/' + encodeURIComponent(serviceId)));
+  const url = validateService(service, { ...expected, id: serviceId, workspaceId, branch: EXPECTED_BRANCH, repository: EXPECTED_REPOSITORY });
+  const deploy = unwrapLatestDeploy(await renderGet(apiKey, '/services/' + encodeURIComponent(serviceId) + '/deploys?limit=1'));
+  validateDeploy(deploy, EXPECTED_COMMIT);
+  return {
+    name: service.name, id: service.id, type: service.type, url,
+    deployId: deploy.id, deployStatus: deploy.status,
+    commit: deploy.commit?.id || null, finishedAt: deploy.finishedAt || null
+  };
+}
+export async function verifyRenderDeployment(env = process.env) {
+  const apiKey = String(env.RENDER_API_KEY || '').trim();
+  const workspaceId = String(env.RENDER_WORKSPACE_ID || '').trim();
+  const staticServiceId = String(env.RENDER_STATIC_SERVICE_ID || '').trim();
+  const apiServiceId = String(env.RENDER_API_SERVICE_ID || '').trim();
+  if (!apiKey || !workspaceId || !staticServiceId || !apiServiceId) {
+    throw new Error('Cần RENDER_API_KEY, RENDER_WORKSPACE_ID, RENDER_STATIC_SERVICE_ID và RENDER_API_SERVICE_ID. Chưa thể xác nhận hai dịch vụ nếu thiếu một trong các cấu hình này.');
+  }
+  const [staticService, apiService] = await Promise.all([
+    verifyOneService(apiKey, workspaceId, staticServiceId, { type: 'static_site', name: 'hendydichvumang-site' }),
+    verifyOneService(apiKey, workspaceId, apiServiceId, { type: 'web_service', name: 'hendydichvumang-api' })
+  ]);
+  const staticUrl = normalizeHttpsOrigin(env.STATIC_SITE_URL || staticService.url, 'STATIC_SITE_URL');
+  const apiUrl = normalizeHttpsOrigin(env.API_BASE_URL || apiService.url, 'API_BASE_URL');
+  if (staticUrl !== staticService.url) throw new Error('STATIC_SITE_URL không trùng URL Render cấp cho Static Site.');
+  if (apiUrl !== apiService.url) throw new Error('API_BASE_URL không trùng URL Render cấp cho Web Service.');
+  const [staticSmoke, apiSmoke] = await Promise.all([
+    checkStaticSite(staticUrl, apiUrl),
+    checkApi(apiUrl, staticUrl)
+  ]);
+  return {
+    result: 'LIVE', checkedAt: new Date().toISOString(), expectedCommit: EXPECTED_COMMIT || null,
+    services: {
+      staticSite: { ...staticService, smoke: staticSmoke },
+      apiWebService: { ...apiService, smoke: apiSmoke }
+    }
+  };
+}
+async function main() {
+  try {
+    const result = await verifyRenderDeployment();
+    console.log('\n✅ CẢ HAI DỊCH VỤ RENDER ĐỀU LIVE VÀ ỨNG DỤNG ĐÃ VƯỢT QUA SMOKE TEST\n');
+    console.log(JSON.stringify(result, null, 2));
+  } catch (error) {
+    console.error('\n❌ CHƯA THỂ XÁC NHẬN CẢ HAI DỊCH VỤ ĐỀU LIVE');
+    console.error(error?.message || 'Lỗi không xác định.');
+    process.exitCode = 1;
+  }
+}
+if (process.argv[1] && new URL(import.meta.url).href === new URL('file://' + process.argv[1]).href) await main();

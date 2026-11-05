@@ -191,3 +191,44 @@ Thư mục publish là `dist-site`. File `config.js` được sinh lúc build ch
 GitHub Actions kiểm tra cú pháp Node.js, chạy test với PostgreSQL 18 và build thử Static Site.
 
 Cập nhật source/Blueprint không đồng nghĩa với việc đã deploy lên Render. Sau khi Apply Blueprint, nhập database URL và secrets, hãy kiểm tra deploy cùng endpoint `/healthz` trước khi đưa hệ thống vào sử dụng. Gói Free có thể ngủ; không dùng database Free hết hạn/lưu trữ hạn chế cho ví hoặc thanh toán production lâu dài.
+
+## Render Live Verification — kiểm tra hai dịch vụ thật
+
+Repository có lệnh xác minh Render bằng API key riêng, không đưa Render API key vào frontend hay mã nguồn. Lệnh chỉ xác nhận khi cả hai service có deployment mới nhất trạng thái LIVE, đúng workspace/repository/nhánh/commit, URL công khai truy cập được, và API kết nối PostgreSQL thành công.
+
+### GitHub Actions định kỳ
+
+Mở Settings → Secrets and variables → Actions và cấu hình:
+
+**Secret (không công khai):**
+- RENDER_API_KEY: Render API key, không phải Bot Token.
+
+**Variables:**
+- RENDER_LIVE_CHECK_ENABLED = true
+- RENDER_WORKSPACE_ID = ID workspace Render.
+- RENDER_STATIC_SERVICE_ID = ID Static Site.
+- RENDER_API_SERVICE_ID = ID Web Service.
+- STATIC_SITE_URL = URL HTTPS Static Site.
+- API_BASE_URL = URL HTTPS Web Service.
+
+Workflow .github/workflows/render-live-check.yml chạy mỗi 15 phút và có thể chạy thủ công trong tab Actions. Workflow kiểm tra đúng service, deployment live + commit, Static Site / /admin /config.js, API /healthz và /api/config.
+
+### Chạy thủ công
+
+Yêu cầu Node.js 22+:
+
+```bash
+RENDER_API_KEY=... \
+RENDER_WORKSPACE_ID=... \
+RENDER_STATIC_SERVICE_ID=... \
+RENDER_API_SERVICE_ID=... \
+STATIC_SITE_URL=https://<static-site>.onrender.com \
+API_BASE_URL=https://<api-service>.onrender.com \
+npm run verify:render-live
+```
+
+Không truyền giá trị secret vào terminal được ghi lại hoặc commit. Trên Windows PowerShell, đặt biến bằng $env:TEN_BIEN="gia_tri" rồi chạy npm run verify:render-live.
+
+### Giới hạn kiểm tra
+
+Trạng thái deployment live chỉ là một điều kiện. Lệnh còn gọi endpoint thật và kiểm tra PostgreSQL, nhưng không thực hiện giao dịch tiền, không gửi OTP và không giả lập thao tác mua hàng. Chỉ kết quả thành công mới xác nhận hai dịch vụ đang Live và endpoint cơ bản hoạt động tại thời điểm kiểm tra.

@@ -1,0 +1,41 @@
+name: Render Live Verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-live-verification
+  cancel-in-progress: true
+
+jobs:
+  verify-render:
+    if: \${{ vars.RENDER_LIVE_CHECK_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RENDER_API_KEY: \${{ secrets.RENDER_API_KEY }}
+      RENDER_WORKSPACE_ID: \${{ vars.RENDER_WORKSPACE_ID }}
+      RENDER_STATIC_SERVICE_ID: \${{ vars.RENDER_STATIC_SERVICE_ID }}
+      RENDER_API_SERVICE_ID: \${{ vars.RENDER_API_SERVICE_ID }}
+      STATIC_SITE_URL: \${{ vars.STATIC_SITE_URL }}
+      API_BASE_URL: \${{ vars.API_BASE_URL }}
+      REPOSITORY_URL: https://github.com/hendyngo-servers/hendydichvumang
+      EXPECTED_BRANCH: main
+      EXPECTED_COMMIT_SHA: \${{ github.sha }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify Render service states and public endpoints
+        run: npm run verify:render-live

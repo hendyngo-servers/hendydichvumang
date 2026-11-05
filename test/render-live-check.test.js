@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  normalizeRepository, normalizeHttpsOrigin, unwrapService, unwrapLatestDeploy,
+  validateService, validateDeploy
+} from '../scripts/render-live-check.js';
+
+test('repository URL normalization removes .git and trailing slash', () => {
+  assert.equal(normalizeRepository('https://github.com/hendyngo-servers/hendydichvumang.git/'), 'github.com/hendyngo-servers/hendydichvumang');
+});
+test('public URLs must use HTTPS and must not contain credentials', () => {
+  assert.equal(normalizeHttpsOrigin('https://site.example.com/path/'), 'https://site.example.com');
+  assert.throws(() => normalizeHttpsOrigin('http://site.example.com'), /HTTPS/);
+  assert.throws(() => normalizeHttpsOrigin('https://user:pass@site.example.com'), /HTTPS/);
+});
+test('Render API service response accepts direct and wrapped service objects', () => {
+  const service = { id: 'srv-123', type: 'static_site' };
+  assert.deepEqual(unwrapService(service), service);
+  assert.deepEqual(unwrapService({ service }), service);
+  assert.throws(() => unwrapService({}), /service/);
+});
+test('Render API deploy response accepts wrapped list items', () => {
+  const deploy = { id: 'dep-123', status: 'live' };
+  assert.deepEqual(unwrapLatestDeploy([{ deploy, cursor: 'next' }]), deploy);
+  assert.deepEqual(unwrapLatestDeploy([deploy]), deploy);
+  assert.throws(() => unwrapLatestDeploy([]), /chưa có deployment/i);
+});
+test('service metadata must match ID, workspace, type, repo, and branch', () => {
+  const service = {
+    id: 'srv-123', ownerId: 'tea-123', name: 'hendydichvumang-site',
+    type: 'static_site', branch: 'main',
+    repo: 'https://github.com/hendyngo-servers/hendydichvumang.git',
+    suspended: 'not_suspended', serviceDetails: { url: 'https://site.onrender.com' }
+  };
+  const expected = {
+    id: 'srv-123', workspaceId: 'tea-123', name: 'hendydichvumang-site',
+    type: 'static_site', branch: 'main',
+    repository: 'https://github.com/hendyngo-servers/hendydichvumang'
+  };
+  assert.equal(validateService(service, expected), 'https://site.onrender.com');
+  assert.throws(() => validateService({ ...service, branch: 'dev' }, expected), /nhánh/);
+  assert.throws(() => validateService({ ...service, ownerId: 'tea-other' }, expected), /workspace/);
+});
+test('deployment must be Live and match the requested commit', () => {
+  assert.equal(validateDeploy({ status: 'live', commit: { id: 'abc123' } }, 'abc123'), true);
+  assert.throws(() => validateDeploy({ status: 'build_in_progress' }), /chưa Live/);
+  assert.throws(() => validateDeploy({ status: 'live', commit: { id: 'old' } }, 'new'), /chưa chạy commit/);
+});

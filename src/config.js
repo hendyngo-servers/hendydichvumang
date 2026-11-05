@@ -77,6 +77,8 @@ export function loadConfig(env = process.env) {
     adminPassword,
     adminTelegramId,
     botServiceKey: String(env.BOT_SERVICE_KEY || '').trim(),
+    renderApiKey: String(env.RENDER_API_KEY || '').trim(),
+    renderWorkspaceId: String(env.RENDER_WORKSPACE_ID || '').trim(),
     publicApiUrl,
     publicAppUrl,
     allowedOrigins: [...new Set([publicApiUrl, publicAppUrl, ...origins])],

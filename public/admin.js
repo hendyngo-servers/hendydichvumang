@@ -104,6 +104,7 @@ async function loadAdmin() {
   renderAutomations(automations.automations);
   renderBotMenus(menus.menus);
   renderModules(modules.artifacts);
+  await window.HENDY_OPS?.refresh?.();
 }
 
 const MENU_ACTION_META = {

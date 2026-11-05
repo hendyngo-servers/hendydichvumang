@@ -13,6 +13,7 @@ import { createSessionToken, hashSessionToken, safeEqual, verifyTelegramInitData
 import { AUTOMATION_CODES, runAutomation, runDueAutomations } from './automation.js';
 import { BOT_MENU_KEYS, normalizeMenuConfig, validateMenuConfigInput } from './menu-config.js';
 import { validateArtifact } from './module-registry.js';
+import { getRenderOverview } from './render-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -777,6 +778,148 @@ app.post('/api/admin/automations/:code/run', requireAuth, requireAdmin, async (r
     ['admin', 'automation.run', 'automation', code, JSON.stringify({ status: result.status })]
   );
   res.json({ result });
+});
+
+
+/*
+ * HENDY Operations Center
+ * Reuses existing PostgreSQL business tables. It does not migrate, reset,
+ * duplicate, or store bot credentials. Render is queried read-only.
+ */
+app.get('/api/admin/operations/overview', requireAuth, requireAdmin, async (_req, res) => {
+  const startedAt = Date.now();
+  const [business, moduleStats, automationStats, menuStats, migration] = await Promise.all([
+    db.query(`SELECT
+      (SELECT COUNT(*) FROM users)::int AS users,
+      (SELECT COUNT(*) FROM tickets WHERE status <> 'closed')::int AS open_tickets,
+      (SELECT COUNT(*) FROM service_catalog)::int AS services,
+      (SELECT COALESCE(SUM(balance), 0)::text FROM wallets) AS wallet_total`),
+    db.query(`SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending,
+      COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
+      COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+      FROM module_artifacts`),
+    db.query(`SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE enabled)::int AS enabled,
+      (SELECT COUNT(*) FROM automation_runs WHERE status = 'failed'
+        AND started_at >= NOW() - INTERVAL '24 hours')::int AS failed_24h,
+      (SELECT started_at FROM automation_runs ORDER BY started_at DESC LIMIT 1) AS last_run_at
+      FROM automation_settings`),
+    db.query('SELECT COUNT(*)::int AS total FROM bot_menu_configs'),
+    db.query('SELECT version, applied_at FROM schema_migrations ORDER BY applied_at DESC LIMIT 1')
+  ]);
+  await db.query('SELECT 1');
+  return res.json({
+    status: 'ok',
+    runtime: {
+      environment: config.nodeEnv,
+      uptime_seconds: Math.floor(process.uptime()),
+      node_version: process.version,
+      db_latency_ms: Date.now() - startedAt,
+      api_url: config.publicApiUrl,
+      app_url: config.publicAppUrl
+    },
+    database: {
+      status: 'ready',
+      latest_migration: migration.rows[0]?.version || null,
+      latest_migration_at: migration.rows[0]?.applied_at || null
+    },
+    bots: {
+      grammy: { configured: Boolean(config.botToken), role: 'primary' },
+      aiogram: { managed_by: 'Render service inventory', role: 'parallel' }
+    },
+    business: business.rows[0],
+    modules: moduleStats.rows[0],
+    automations: { ...automationStats.rows[0] },
+    bot_menus: { total: menuStats.rows[0]?.total || 0 },
+    render: { configured: Boolean(config.renderApiKey) },
+    generated_at: new Date().toISOString()
+  });
+});
+
+app.get('/api/admin/operations/config', requireAuth, requireAdmin, (_req, res) => {
+  const groups = [
+    {
+      name: 'API & PostgreSQL',
+      items: [
+        ['DATABASE_URL', Boolean(config.databaseUrl), true],
+        ['PGSSLMODE', Boolean(config.databaseSslMode), false],
+        ['PG_POOL_MAX', Boolean(process.env.PG_POOL_MAX), false],
+        ['BOT_SERVICE_KEY', Boolean(config.botServiceKey), true]
+      ]
+    },
+    {
+      name: 'Telegram grammY (bot chính)',
+      items: [
+        ['BOT_TOKEN', Boolean(config.botToken), true],
+        ['TELEGRAM_WEBHOOK_SECRET', Boolean(process.env.TELEGRAM_WEBHOOK_SECRET), true],
+        ['ADMIN_TELEGRAM_ID', Boolean(config.adminTelegramId), false]
+      ]
+    },
+    {
+      name: 'Quản trị & Mini App',
+      items: [
+        ['ADMIN_USERNAME', Boolean(config.adminUsername), false],
+        ['ADMIN_PASSWORD', Boolean(config.adminPassword), true],
+        ['PUBLIC_APP_URL', Boolean(config.publicAppUrl), false],
+        ['ALLOWED_ORIGINS', Boolean(process.env.ALLOWED_ORIGINS), false]
+      ]
+    },
+    {
+      name: 'Render API',
+      items: [
+        ['RENDER_API_KEY', Boolean(config.renderApiKey), true],
+        ['RENDER_WORKSPACE_ID', Boolean(config.renderWorkspaceId), false]
+      ]
+    }
+  ];
+  return res.json({
+    groups: groups.map((group) => ({
+      name: group.name,
+      items: group.items.map(([key, configured, secret]) => ({
+        key,
+        configured,
+        secret,
+        source: 'Biến môi trường của API service'
+      }))
+    })),
+    security: {
+      secret_values_exposed: false,
+      secret_values_stored_in_database: false,
+      instruction: 'Giá trị bí mật chỉ được quản lý tại Render Environment; giao diện chỉ nhận trạng thái đã cấu hình.'
+    }
+  });
+});
+
+app.get('/api/admin/operations/render', requireAuth, requireAdmin,
+  rateLimit({ windowMs: 60_000, limit: 12, standardHeaders: 'draft-8', legacyHeaders: false }),
+  async (_req, res) => {
+    const result = await getRenderOverview({
+      apiKey: config.renderApiKey,
+      workspaceId: config.renderWorkspaceId
+    });
+    return res.json(result);
+  }
+);
+
+app.get('/api/admin/operations/logs', requireAuth, requireAdmin, async (req, res) => {
+  const requested = Number(req.query.limit || 25);
+  const limit = Number.isSafeInteger(requested) ? Math.min(Math.max(requested, 1), 50) : 25;
+  const [audit, runs] = await Promise.all([
+    db.query(
+      `SELECT actor, action, entity, entity_id, created_at
+       FROM audit_logs ORDER BY created_at DESC LIMIT $1`,
+      [limit]
+    ),
+    db.query(
+      `SELECT code, status, started_at, finished_at
+       FROM automation_runs ORDER BY started_at DESC LIMIT $1`,
+      [limit]
+    )
+  ]);
+  return res.json({ audit: audit.rows, automation_runs: runs.rows });
 });
 
 app.get('/admin', (_req, res) => res.sendFile(path.resolve(__dirname, '../public/admin.html')));

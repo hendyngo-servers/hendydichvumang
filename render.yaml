@@ -59,6 +59,10 @@ services:
         sync: false
       - key: PUBLIC_APP_URL
         sync: false
+      - key: RENDER_API_KEY
+        sync: false
+      - key: RENDER_WORKSPACE_ID
+        sync: false
 
   # Python aiogram pilot bot. AIOGRAM_BOT_TOKEN must differ from grammY's BOT_TOKEN.
   - type: web

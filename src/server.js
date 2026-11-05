@@ -279,11 +279,29 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.' });
 });
 
+async function migrateWithRetry() {
+  const attempts = 8;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await migrate(db);
+      return;
+    } catch (error) {
+      console.error('PostgreSQL chưa sẵn sàng, lần thử ' + attempt + '/' + attempts + ':', error?.code || error?.name || 'UNKNOWN');
+      if (attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(attempt * 2000, 12000)));
+    }
+  }
+}
+
 const server = await (async () => {
-  await migrate(db);
-  return app.listen(config.port, '0.0.0.0', () => {
+  await migrateWithRetry();
+  const instance = app.listen(config.port, '0.0.0.0', () => {
     console.log(`HENDY đang chạy trên cổng ${config.port}; PostgreSQL đã sẵn sàng; Telegram Bot: ${bot ? 'đã cấu hình' : 'chưa cấu hình'}.`);
   });
+  instance.keepAliveTimeout = 65000;
+  instance.headersTimeout = 66000;
+  instance.requestTimeout = 30000;
+  return instance;
 })();
 
 // Configure the Telegram webhook automatically after Render assigns the public HTTPS URL.

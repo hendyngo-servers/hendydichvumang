@@ -15,6 +15,7 @@ from aiogram.types import (
 from services.aiogram_bot.api_client import HendyApiClient
 from services.aiogram_bot.config import Settings
 from services.aiogram_bot.routers.common import main_menu
+from services.aiogram_bot.menu_filter import MenuActionFilter
 
 customer_router = Router(name="hendy-customer")
 
@@ -65,7 +66,11 @@ async def customer_home(callback: CallbackQuery, settings: Settings, api: HendyA
     if callback.message:
         await callback.message.answer(
             "💠 Menu chính HENDY. Chọn chức năng bạn cần:",
-            reply_markup=main_menu(settings, is_admin=await api.is_admin(callback.from_user.id)),
+            reply_markup=main_menu(
+                settings,
+                await api.get_menu_config("aiogram"),
+                is_admin=await api.is_admin(callback.from_user.id),
+            ),
         )
 
 @customer_router.message(Command("customer"), F.chat.type == "private")
@@ -73,7 +78,7 @@ async def customer_command(message: Message, settings: Settings) -> None:
     await send_customer_center(message, settings)
 
 
-@customer_router.message(F.text == "👤 Trung tâm khách hàng", F.chat.type == "private")
+@customer_router.message(MenuActionFilter("customer"), F.chat.type == "private")
 async def menu_customer(message: Message, settings: Settings) -> None:
     await send_customer_center(message, settings)
 
@@ -95,7 +100,7 @@ async def account_balance(message: Message, api: HendyApiClient) -> None:
 
 
 @customer_router.message(Command("services"), F.chat.type == "private")
-@customer_router.message(F.text == "🛍 Dịch vụ", F.chat.type == "private")
+@customer_router.message(MenuActionFilter("services"), F.chat.type == "private")
 async def list_services(message: Message, api: HendyApiClient) -> None:
     services = await api.get_services()
     if not services:

@@ -22,5 +22,9 @@ class EnsureCustomerMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         if isinstance(event, Message) and event.chat.type == "private" and event.from_user:
-            data["hendy_customer"] = await self.api.upsert_user(event.from_user)
+            profile = await self.api.upsert_user(event.from_user)
+            data["hendy_customer"] = profile
+            data["hendy_is_admin"] = profile.get("is_admin") is True
+            menu = profile.get("menu")
+            data["hendy_menu_config"] = menu if isinstance(menu, dict) else await self.api.get_menu_config("aiogram")
         return await handler(event, data)

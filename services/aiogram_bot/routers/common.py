@@ -11,16 +11,19 @@ from aiogram.types import (
 
 
 from services.aiogram_bot.config import Settings
+from services.aiogram_bot.api_client import HendyApiClient
 
 common_router = Router(name="hendy-common")
 
 
-def main_menu(settings: Settings) -> ReplyKeyboardMarkup:
+def main_menu(settings: Settings, is_admin: bool = False) -> ReplyKeyboardMarkup:
     rows = [
         [KeyboardButton(text="👤 Trung tâm khách hàng")],
         [KeyboardButton(text="💳 Số dư"), KeyboardButton(text="🛍 Dịch vụ")],
         [KeyboardButton(text="🎫 Hỗ trợ")],
     ]
+    if is_admin:
+        rows.append([KeyboardButton(text="🛠 Quản trị")])
     return ReplyKeyboardMarkup(
         keyboard=rows,
         resize_keyboard=True,
@@ -30,18 +33,19 @@ def main_menu(settings: Settings) -> ReplyKeyboardMarkup:
 
 
 @common_router.message(CommandStart(), F.chat.type == "private")
-async def command_start(message: Message, settings: Settings) -> None:
+async def command_start(message: Message, settings: Settings, api: HendyApiClient) -> None:
     name = html.quote(message.from_user.first_name if message.from_user else "bạn")
+    is_admin = bool(message.from_user and await api.is_admin(message.from_user.id))
     await message.answer(
         f"💠 <b>HENDY DỊCH VỤ MẠNG</b>\n\n"
         f"Chào mừng <b>{name}</b>!\n"
         "Mở Trung tâm khách hàng để quản lý tài khoản, xem dịch vụ và gửi yêu cầu hỗ trợ.",
-        reply_markup=main_menu(settings),
+        reply_markup=main_menu(settings, is_admin=is_admin),
     )
 
 
 @common_router.message(Command("help"), F.chat.type == "private")
-async def command_help(message: Message, settings: Settings) -> None:
+async def command_help(message: Message, settings: Settings, api: HendyApiClient) -> None:
     await message.answer(
         "<b>HƯỚNG DẪN HENDY</b>\n\n"
         "/start — Mở menu\n"
@@ -49,8 +53,10 @@ async def command_help(message: Message, settings: Settings) -> None:
         "/balance — Kiểm tra số dư\n"
         "/services — Danh sách dịch vụ\n"
         "/support — Tạo ticket hỗ trợ\n"
-        "/cancel — Hủy quy trình đang nhập",
-        reply_markup=main_menu(settings),
+        "/cancel — Hủy quy trình đang nhập\n"
+        "/admin — Trung tâm quản trị (chỉ quản trị viên)\n"
+        "/automation — Quản lý tác vụ tự động hóa",
+        reply_markup=main_menu(settings, is_admin=bool(message.from_user and await api.is_admin(message.from_user.id))),
     )
 
 

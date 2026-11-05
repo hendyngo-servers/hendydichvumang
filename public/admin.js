@@ -13,10 +13,85 @@ async function api(path, options = {}) {
 }
 function esc(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 function toast(message) { const el = $('toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3000); }
+function moduleStatusText(status) {
+  return ({ pending_review: 'Chờ kiểm duyệt', approved: 'Đã duyệt', rejected: 'Từ chối' })[status] || status;
+}
+
+function renderModules(items) {
+  $('adminModules').innerHTML = items.length ? items.map((item) =>
+    '<article class="panel admin-ticket" data-module="' + item.id + '">' +
+      '<div class="ticket-row"><div><h3>' + esc(item.module_key) + ' · ' + esc(item.original_name) + '</h3>' +
+      '<small class="muted">' + esc(item.mime_type) + ' · ' + Number(item.size_bytes).toLocaleString('vi-VN') + ' byte · SHA-256 ' + esc(item.sha256) + '</small></div>' +
+      '<span class="status ' + (item.status === 'approved' ? 'closed' : item.status === 'rejected' ? 'processing' : '') + '">' + moduleStatusText(item.status) + '</span></div>' +
+      '<small class="muted">Tải lên: ' + new Date(item.created_at).toLocaleString('vi-VN') + ' · Người gửi: ' + esc(item.uploaded_by) + '</small>' +
+      (item.review_note ? '<p>' + esc(item.review_note) + '</p>' : '') +
+      '<div class="ticket-actions"><button class="button ghost download-module" type="button">Tải tệp kiểm tra</button>' +
+      (item.status === 'pending_review' ? '<input class="module-review-note" maxlength="1000" placeholder="Ghi chú kiểm duyệt">' +
+        '<button class="button primary review-module" data-status="approved" type="button">Duyệt</button>' +
+        '<button class="button ghost review-module" data-status="rejected" type="button">Từ chối</button>' : '') +
+      '</div></article>'
+  ).join('') : '<div class="panel"><p class="muted">Chưa có module nào được tải lên.</p></div>';
+
+  document.querySelectorAll('.download-module').forEach((button) => button.addEventListener('click', async () => {
+    const card = button.closest('[data-module]');
+    button.disabled = true;
+    try {
+      const response = await fetch(API_BASE_URL + '/api/admin/modules/' + card.dataset.module + '/content', { headers: { Authorization: 'Bearer ' + state.token } });
+      if (!response.ok) throw new Error('Không thể tải tệp module.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = 'hendy-module-' + card.dataset.module; link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  }));
+
+  document.querySelectorAll('.review-module').forEach((button) => button.addEventListener('click', async () => {
+    const card = button.closest('[data-module]');
+    button.disabled = true;
+    try {
+      await api('/api/admin/modules/' + card.dataset.module + '/review', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: button.dataset.status, review_note: card.querySelector('.module-review-note')?.value || '' })
+      });
+      toast(button.dataset.status === 'approved' ? 'Đã duyệt artifact.' : 'Đã từ chối artifact.');
+      await loadAdmin();
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  }));
+}
+
+$('moduleUploadForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  const file = form.elements.artifact.files[0];
+  if (!file) return;
+  if (file.size < 1 || file.size > 1024 * 1024) { $('moduleFeedback').textContent = 'Tệp phải có dung lượng tối đa 1 MB.'; return; }
+  button.disabled = true;
+  $('moduleFeedback').textContent = 'Đang tải lên vùng chờ kiểm duyệt…';
+  try {
+    const moduleKey = form.elements.module_key.value.trim();
+    const extension = file.name.split('.').pop().toLowerCase();
+    const mime = file.type || ({ json: 'application/json', md: 'text/markdown', txt: 'text/plain', css: 'text/css' })[extension] || '';
+    const response = await fetch(API_BASE_URL + '/api/admin/modules/' + encodeURIComponent(moduleKey), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + state.token, 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name), 'X-Artifact-Mime': mime },
+      body: await file.arrayBuffer()
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Không thể tải tệp lên.');
+    $('moduleFeedback').textContent = result.message || 'Đã tải lên.';
+    form.reset(); toast('Đã đưa tệp vào hàng chờ kiểm duyệt.'); await loadAdmin();
+  } catch (error) { $('moduleFeedback').textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
 function statusText(status) { return ({ open: 'Mới tiếp nhận', processing: 'Đang xử lý', closed: 'Đã đóng' })[status] || status; }
 
 async function loadAdmin() {
-  const [stats, services, tickets, automations, menus] = await Promise.all([api('/api/admin/stats'), api('/api/admin/services'), api('/api/tickets'), api('/api/admin/automations'), api('/api/admin/bot-menus')]);
+  const [stats, services, tickets, automations, menus, modules] = await Promise.all([api('/api/admin/stats'), api('/api/admin/services'), api('/api/tickets'), api('/api/admin/automations'), api('/api/admin/bot-menus'), api('/api/admin/modules')]);
   $('loginPanel').hidden = true;
   $('adminApp').hidden = false;
   const items = [
@@ -28,6 +103,7 @@ async function loadAdmin() {
   renderTickets(tickets.tickets);
   renderAutomations(automations.automations);
   renderBotMenus(menus.menus);
+  renderModules(modules.artifacts);
 }
 
 const MENU_ACTION_META = {

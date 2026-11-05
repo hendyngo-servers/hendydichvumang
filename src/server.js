@@ -12,6 +12,7 @@ import { createBot } from './bot.js';
 import { createSessionToken, hashSessionToken, safeEqual, verifyTelegramInitData, verifyWebhookSecret } from './security.js';
 import { AUTOMATION_CODES, runAutomation, runDueAutomations } from './automation.js';
 import { BOT_MENU_KEYS, normalizeMenuConfig, validateMenuConfigInput } from './menu-config.js';
+import { validateArtifact } from './module-registry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -487,6 +488,104 @@ app.patch('/api/admin/bot-menus/:botKey', requireAuth, requireAdmin, async (req,
   return res.json({ menu: normalizeMenuConfig(rows[0], botKey) });
 });
 
+
+const artifactUploadParser = express.raw({
+  type: 'application/octet-stream',
+  limit: '1mb'
+});
+
+app.get('/api/admin/modules', requireAuth, requireAdmin, async (_req, res) => {
+  const { rows } = await db.query(
+    `SELECT id, module_key, original_name, mime_type, size_bytes, sha256,
+      status, uploaded_by, reviewed_by, review_note, created_at, reviewed_at
+     FROM module_artifacts ORDER BY created_at DESC LIMIT 100`
+  );
+  res.json({ artifacts: rows });
+});
+
+app.post('/api/admin/modules/:moduleKey', requireAuth, requireAdmin, artifactUploadParser, async (req, res) => {
+  let artifact;
+  try {
+    artifact = validateArtifact({
+      moduleKey: String(req.params.moduleKey || ''),
+      fileName: (() => { try { return decodeURIComponent(String(req.get('x-file-name') || '')); } catch { return ''; } })(),
+      mimeType: String(req.get('x-artifact-mime') || ''),
+      content: req.body
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Tệp module không hợp lệ.' });
+  }
+
+  const { rows } = await db.query(
+    `INSERT INTO module_artifacts
+      (module_key, original_name, mime_type, size_bytes, sha256, content, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, module_key, original_name, mime_type, size_bytes, sha256, status, created_at`,
+    [
+      artifact.moduleKey,
+      artifact.fileName,
+      artifact.mimeType,
+      artifact.sizeBytes,
+      artifact.sha256,
+      artifact.content,
+      'admin'
+    ]
+  );
+  await db.query(
+    'INSERT INTO audit_logs (actor, action, entity, entity_id, metadata) VALUES ($1,$2,$3,$4,$5)',
+    ['admin', 'module.upload', 'module-artifact', String(rows[0].id), JSON.stringify({
+      module_key: artifact.moduleKey,
+      sha256: artifact.sha256,
+      size_bytes: artifact.sizeBytes,
+      status: 'pending_review'
+    })]
+  );
+  return res.status(201).json({
+    artifact: rows[0],
+    message: 'Tệp đã được đưa vào vùng chờ kiểm duyệt; không được thực thi hoặc tự động phát hành.'
+  });
+});
+
+app.patch('/api/admin/modules/:id/review', requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const status = String(req.body?.status || '');
+  const note = String(req.body?.review_note || '').trim();
+  if (!Number.isSafeInteger(id) || id < 1 || !['approved', 'rejected'].includes(status) || note.length > 1000) {
+    return res.status(400).json({ error: 'ID, trạng thái hoặc ghi chú kiểm duyệt không hợp lệ.' });
+  }
+  const { rows } = await db.query(
+    `UPDATE module_artifacts
+     SET status = $1, reviewed_by = 'admin', review_note = $2, reviewed_at = NOW()
+     WHERE id = $3 AND status = 'pending_review'
+     RETURNING id, module_key, original_name, sha256, status, reviewed_by, review_note, reviewed_at`,
+    [status, note, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Không tìm thấy tệp đang chờ kiểm duyệt.' });
+  await db.query(
+    'INSERT INTO audit_logs (actor, action, entity, entity_id, metadata) VALUES ($1,$2,$3,$4,$5)',
+    ['admin', 'module.review', 'module-artifact', String(id), JSON.stringify({ status, sha256: rows[0].sha256 })]
+  );
+  return res.json({ artifact: rows[0] });
+});
+
+app.get('/api/admin/modules/:id/content', requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'ID không hợp lệ.' });
+  const { rows } = await db.query(
+    'SELECT original_name, mime_type, content, sha256 FROM module_artifacts WHERE id = $1',
+    [id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Không tìm thấy tệp module.' });
+  res.set({
+    'Content-Type': 'application/octet-stream',
+    'Content-Disposition': `attachment; filename="${encodeURIComponent(rows[0].original_name)}"`,
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'private, no-store',
+    'X-Artifact-SHA256': rows[0].sha256
+  });
+  return res.send(rows[0].content);
+});
+
 app.post('/api/admin/login', rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false }), async (req, res) => {
   if (!config.adminPassword) return res.status(503).json({ error: 'Chưa cấu hình ADMIN_PASSWORD trên Render.' });
   const username = String(req.body?.username || '');
@@ -690,7 +789,7 @@ app.get('*path', (req, res, next) => {
 app.use((error, _req, res, _next) => {
   if (res.headersSent) return;
   if (error?.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON gửi lên không hợp lệ.' });
-  if (error?.type === 'entity.too.large') return res.status(413).json({ error: 'Dữ liệu gửi lên vượt quá giới hạn 32 KB.' });
+  if (error?.type === 'entity.too.large') return res.status(413).json({ error: 'Tệp vượt quá giới hạn 1 MB hoặc dữ liệu JSON vượt quá 32 KB.' });
   if (error?.code === '23505') return res.status(409).json({ error: 'Mã dữ liệu đã tồn tại.' });
   console.error('Request failed:', error?.code || error?.name || 'UNKNOWN');
   res.status(500).json({ error: 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.' });

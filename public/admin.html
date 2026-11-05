@@ -19,6 +19,16 @@
       <section id="adminAutomations" class="automation-grid"><div class="panel skeleton">Đang tải tác vụ…</div></section>
       <section class="section-heading"><div><p class="eyebrow">BOT & TRẢI NGHIỆM</p><h2>Cấu hình menu Telegram</h2></div><span class="section-note">Tùy chỉnh riêng cho grammY và Aiogram</span></section>
       <section id="adminBotMenus" class="automation-grid"><div class="panel skeleton">Đang tải cấu hình menu…</div></section>
+      <section class="section-heading"><div><p class="eyebrow">MODULE LIFECYCLE</p><h2>Kho module & kiểm duyệt tệp</h2></div><span class="section-note">Không thực thi mã tải lên</span></section>
+      <section class="panel ticket-panel">
+        <p class="muted">Chỉ nhận JSON, Markdown, TXT hoặc CSS UTF-8, tối đa 1 MB. Tệp được lưu chờ duyệt; không tự chạy hoặc tự deploy.</p>
+        <form id="moduleUploadForm" class="form-grid two-col">
+          <label>Mã module<input name="module_key" pattern="[a-z][a-z0-9-]{1,62}" placeholder="customer-center" required></label>
+          <label>Tệp module<input name="artifact" type="file" accept=".json,.md,.txt,.css" required></label>
+          <button class="button primary" type="submit">Tải lên chờ duyệt</button><span id="moduleFeedback" class="form-feedback" aria-live="polite"></span>
+        </form>
+      </section>
+      <section id="adminModules" class="ticket-stack"><div class="panel skeleton">Đang tải kho module…</div></section>
       <section class="summary-grid admin-stats" id="statsGrid"></section>
       <section class="section-heading"><div><p class="eyebrow">DANH MỤC</p><h2>Quản lý dịch vụ</h2></div></section>
       <section class="panel ticket-panel">

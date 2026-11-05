@@ -102,8 +102,9 @@ services:
           name: hendydichvumang-api
           envVarKey: PGSSLMODE
       - key: PUBLIC_APP_URL
-        sync: false
-      - key: LEGACY_CUSTOMER_URL
-        sync: false
+        fromService:
+          type: web
+          name: hendydichvumang-api
+          envVarKey: PUBLIC_APP_URL
       - key: AIOGRAM_FSM_TTL_HOURS
         value: "24"

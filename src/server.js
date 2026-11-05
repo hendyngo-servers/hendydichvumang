@@ -11,6 +11,7 @@ import { createPool, migrate, closePool } from './db.js';
 import { createBot } from './bot.js';
 import { createSessionToken, hashSessionToken, safeEqual, verifyTelegramInitData, verifyWebhookSecret } from './security.js';
 import { AUTOMATION_CODES, runAutomation, runDueAutomations } from './automation.js';
+import { BOT_MENU_KEYS, normalizeMenuConfig, validateMenuConfigInput } from './menu-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
@@ -189,8 +190,14 @@ app.post('/internal/bot/users/upsert', requireBotService, async (req, res) => {
       'SELECT COALESCE(balance, 0)::text AS balance FROM wallets WHERE user_id = $1',
       [userId]
     );
+    const menuResult = await client.query('SELECT * FROM bot_menu_configs WHERE bot_key = $1', ['aiogram']);
     await client.query('COMMIT');
-    res.json({ user: user.rows[0], balance: wallet.rows[0]?.balance || '0.00' });
+    res.json({
+      user: user.rows[0],
+      balance: wallet.rows[0]?.balance || '0.00',
+      is_admin: Boolean(config.adminTelegramId && telegramId === config.adminTelegramId),
+      menu: normalizeMenuConfig(menuResult.rows[0] || {}, 'aiogram')
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -409,6 +416,75 @@ app.post(internalAdminPath + '/automations/:code/run', requireBotService, requir
     [req.telegramAdminId, 'automation.run', 'automation', code, JSON.stringify({ status: result.status, source: 'aiogram' })]
   );
   return res.json({ result });
+});
+
+
+app.get('/internal/bot/menu/:botKey', requireBotService, async (req, res) => {
+  const botKey = String(req.params.botKey || '');
+  if (!BOT_MENU_KEYS.includes(botKey)) {
+    return res.status(404).json({ error: 'Không tìm thấy cấu hình menu của bot.' });
+  }
+  const { rows } = await db.query('SELECT * FROM bot_menu_configs WHERE bot_key = $1', [botKey]);
+  return res.json({ menu: normalizeMenuConfig(rows[0] || {}, botKey) });
+});
+
+app.get('/api/admin/bot-menus', requireAuth, requireAdmin, async (_req, res) => {
+  const { rows } = await db.query('SELECT * FROM bot_menu_configs ORDER BY bot_key');
+  return res.json({
+    menus: BOT_MENU_KEYS.map((key) => {
+      const row = rows.find((item) => item.bot_key === key);
+      return normalizeMenuConfig(row || {}, key);
+    })
+  });
+});
+
+app.patch('/api/admin/bot-menus/:botKey', requireAuth, requireAdmin, async (req, res) => {
+  const botKey = String(req.params.botKey || '');
+  if (!BOT_MENU_KEYS.includes(botKey)) {
+    return res.status(404).json({ error: 'Không tìm thấy cấu hình menu của bot.' });
+  }
+
+  let menu;
+  try {
+    menu = validateMenuConfigInput(req.body, botKey);
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Cấu hình menu không hợp lệ.' });
+  }
+
+  const { rows } = await db.query(
+    \`INSERT INTO bot_menu_configs
+      (bot_key, intro_text, menu_columns, persistent_keyboard, resize_keyboard,
+       button_order, button_labels, button_icons, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, NOW())
+     ON CONFLICT (bot_key) DO UPDATE SET
+       intro_text = EXCLUDED.intro_text,
+       menu_columns = EXCLUDED.menu_columns,
+       persistent_keyboard = EXCLUDED.persistent_keyboard,
+       resize_keyboard = EXCLUDED.resize_keyboard,
+       button_order = EXCLUDED.button_order,
+       button_labels = EXCLUDED.button_labels,
+       button_icons = EXCLUDED.button_icons,
+       updated_at = NOW()
+     RETURNING *\`,
+    [
+      botKey,
+      menu.introText,
+      menu.menuColumns,
+      menu.persistentKeyboard,
+      menu.resizeKeyboard,
+      JSON.stringify(menu.buttonOrder),
+      JSON.stringify(menu.buttonLabels),
+      JSON.stringify(menu.buttonIcons)
+    ]
+  );
+  await db.query(
+    'INSERT INTO audit_logs (actor, action, entity, entity_id, metadata) VALUES ($1, $2, $3, $4, $5)',
+    ['admin', 'bot-menu.update', 'bot-menu', botKey, JSON.stringify({
+      menuColumns: menu.menuColumns,
+      buttonOrder: menu.buttonOrder
+    })]
+  );
+  return res.json({ menu: normalizeMenuConfig(rows[0], botKey) });
 });
 
 app.post('/api/admin/login', rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false }), async (req, res) => {

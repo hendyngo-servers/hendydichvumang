@@ -8,7 +8,7 @@ Mã nguồn được triển khai theo kiến trúc tách biệt: **Render Stati
 |---|---|
 | Render Static Site | Giao diện Trung tâm khách hàng và Admin Dashboard; HTML/CSS/JS thuần, responsive, tiếng Việt; phân phối CDN |
 | Render Web Service | Node.js 22, Express 5, REST API, xác thực Telegram Mini App, Telegram webhook, đăng nhập Admin |
-| PostgreSQL | Hồ sơ khách hàng, ví, sổ giao dịch, danh mục dịch vụ, ticket, session, audit log, cấu hình/lịch sử automation |
+| PostgreSQL | Hồ sơ khách hàng, ví, sổ giao dịch, danh mục dịch vụ, ticket, session, audit log, cấu hình/lịch sử automation và kho module chờ duyệt |
 | Telegram Bot | grammY là bot chính; aiogram 3.31.0 là bot thử nghiệm Python riêng với token khác; cả hai dùng Node API và PostgreSQL chung |
 | Automation scheduler | Dọn session, báo ticket mới, nhắc ticket đang chờ; PostgreSQL advisory lock tránh chạy trùng |
 | Aiogram Pilot | Bot Python riêng, Router/Filters/FSM, webhook có secret, PostgreSQL FSM; gọi Node API bằng service key |
@@ -261,3 +261,32 @@ Biến cần cấu hình cho dịch vụ Python: `AIOGRAM_BOT_TOKEN` (token bot 
 
 
 
+
+## 10. Kho module có kiểm duyệt (tích hợp chọn lọc từ HENDY-BOT-CYBERTECH)
+
+Hệ thống hỗ trợ lưu trữ artifact/module trong PostgreSQL để quản trị viên gửi tệp, kiểm tra checksum SHA-256 và duyệt trước khi đưa vào quy trình phát hành. Đây là kho tệp không thực thi mã.
+
+- Chỉ nhận JSON, Markdown, TXT và CSS UTF-8, tối đa 1 MB/tệp.
+- Từ chối PHP, JavaScript, HTML, SVG, archive và mọi MIME không nằm trong allowlist.
+- Tệp được lưu dạng BYTEA trong PostgreSQL với trạng thái pending_review; API không đưa nội dung tệp ra frontend công khai.
+- Chỉ quản trị viên đã đăng nhập mới được liệt kê, tải nội dung hoặc duyệt.
+- Duyệt chỉ đổi trạng thái thành approved hoặc rejected; không có chức năng chạy file, ghi đè source code hoặc tự deploy.
+- Mọi thao tác upload/review đều có audit log và SHA-256 để đối chiếu.
+
+API:
+| Method | Path | Chức năng |
+|---|---|---|
+| GET | /api/admin/modules | Danh sách artifact |
+| POST | /api/admin/modules/:moduleKey | Upload raw body application/octet-stream; tên file ở X-File-Name, MIME ở X-Artifact-Mime |
+| PATCH | /api/admin/modules/:id/review | Duyệt hoặc từ chối artifact đang chờ |
+| GET | /api/admin/modules/:id/content | Tải artifact nội bộ với quyền Admin |
+
+Migration 005_module_artifacts.sql tạo bảng lưu trữ. Đây là phần có thể tái sử dụng an toàn từ ý tưởng ModuleRegistry của archive. Không sao chép PHP runtime hoặc chạy tệp upload trong Node/Python. Muốn phát hành code phải tạo pull request, qua review và CI rồi mới deploy.
+
+### Những phần archive chưa được nhập nguyên xi
+
+- PHP BotService.php / ApiController.php: không chép vào Node/grammY/Aiogram vì sẽ tạo backend nghiệp vụ thứ hai.
+- Schema ví, đơn hàng, giao dịch D1/MySQL: không nhập vào PostgreSQL hiện tại và không dual-write.
+- Ratchet WebSocket: ý tưởng event log + PostgreSQL NOTIFY có thể port riêng; không mang nguyên PHP process vào Render Node service.
+- App Store / Google Play / Microsoft Store connectors: chưa có credential/tài khoản nhà phát hành và một số adapter chỉ là khung; không bật tính năng publish.
+- Queue/Vietsub/payment: chỉ tích hợp khi có provider thật, chữ ký webhook, idempotency, retry và đối soát.

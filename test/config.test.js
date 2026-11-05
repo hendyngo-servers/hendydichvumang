@@ -66,3 +66,16 @@ test('development config defaults to local URL and does not require admin secret
   assert.deepEqual(config.allowedOrigins, ['http://localhost:10000']);
   assert.equal(config.databaseSslMode, 'disable');
 });
+
+test('production Mini App URL must use HTTPS when Telegram Bot is enabled', () => {
+  assert.throws(() => loadConfig({
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://db',
+    ADMIN_USERNAME: 'owner',
+    ADMIN_PASSWORD: 'long-unique-password-123',
+    BOT_TOKEN: '123:token',
+    TELEGRAM_WEBHOOK_SECRET: 'render-generated-secret',
+    PUBLIC_API_URL: 'https://api.example.com',
+    PUBLIC_APP_URL: 'http://customer.example.com'
+  }), /PUBLIC_APP_URL.*HTTPS/);
+});

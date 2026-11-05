@@ -52,6 +52,9 @@ export function loadConfig(env = process.env) {
   if (isProduction && botToken && !publicApiUrl.startsWith('https://')) {
     throw new Error('PUBLIC_API_URL phải là HTTPS khi bật Telegram Bot.');
   }
+  if (isProduction && botToken && !publicAppUrl.startsWith('https://')) {
+    throw new Error('PUBLIC_APP_URL phải là HTTPS khi bật Telegram Mini App.');
+  }
 
   const origins = String(env.ALLOWED_ORIGINS || '')
     .split(',').map((item) => item.trim().replace(/\/+$/, '')).filter(Boolean);

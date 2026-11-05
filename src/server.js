@@ -16,7 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
 const db = createPool(config.databaseUrl, { sslMode: config.databaseSslMode, sslCa: config.databaseSslCa, max: config.databasePoolMax });
 const app = express();
-const bot = createBot({ token: config.botToken, db, appUrl: config.publicAppUrl });
+const bot = createBot({ token: config.botToken, db, appUrl: config.publicAppUrl, legacyCustomerUrl: config.legacyCustomerUrl });
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -386,8 +386,16 @@ if (bot && config.webhookSecret && config.publicApiUrl.startsWith('https://')) {
       { command: 'services', description: 'Xem danh sách dịch vụ' },
       { command: 'balance', description: 'Kiểm tra số dư' },
       { command: 'support', description: 'Trung tâm hỗ trợ' },
+      { command: 'customer', description: 'Trung tâm khách hàng' },
       { command: 'help', description: 'Hướng dẫn sử dụng' }
-    ])
+    ]),
+    bot.api.setChatMenuButton({
+      menu_button: {
+        type: 'web_app',
+        text: 'Trung tâm KH',
+        web_app: { url: config.publicAppUrl }
+      }
+    })
   ]).then(() => console.log('Telegram webhook và menu lệnh đã được đăng ký.'))
     .catch((error) => console.error('Không thể cấu hình Telegram Bot:', error?.error_code || error?.name || 'UNKNOWN'));
 }

@@ -5,13 +5,13 @@ import { normalizeWebhookSecret } from './security.js';
 const token = String(process.env.BOT_TOKEN || '').trim();
 const secret = normalizeWebhookSecret(process.env.TELEGRAM_WEBHOOK_SECRET || '');
 const base = String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
+const appUrl = String(process.env.PUBLIC_APP_URL || '').trim().replace(/\/+$/, '');
 
-if (!token || !secret || !base.startsWith('https://')) {
-  console.error('Cần BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET và URL API HTTPS.');
+if (!token || !secret || !base.startsWith('https://') || !appUrl.startsWith('https://')) {
+  console.error('Cần BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, PUBLIC_API_URL và PUBLIC_APP_URL HTTPS.');
   process.exit(1);
 }
 
-const appUrl = String(process.env.PUBLIC_APP_URL || base).trim().replace(/\/+$/, '');
 const bot = new Bot(token);
 await bot.api.setWebhook(base + '/telegram/webhook', {
   secret_token: secret,
@@ -19,9 +19,17 @@ await bot.api.setWebhook(base + '/telegram/webhook', {
 });
 await bot.api.setMyCommands([
   { command: 'start', description: 'Mở menu HENDY' },
+  { command: 'customer', description: 'Trung tâm khách hàng' },
   { command: 'services', description: 'Xem danh sách dịch vụ' },
   { command: 'balance', description: 'Kiểm tra số dư' },
   { command: 'support', description: 'Trung tâm hỗ trợ' },
   { command: 'help', description: 'Hướng dẫn sử dụng' }
 ]);
-console.log('Đã đăng ký Telegram webhook trên API; Mini App:', appUrl);
+await bot.api.setChatMenuButton({
+  menu_button: {
+    type: 'web_app',
+    text: 'Trung tâm KH',
+    web_app: { url: appUrl }
+  }
+});
+console.log('Đã đăng ký webhook API và nút Mini App:', appUrl);

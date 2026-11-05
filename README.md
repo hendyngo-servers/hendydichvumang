@@ -9,7 +9,7 @@ Mã nguồn được triển khai theo kiến trúc tách biệt: **Render Stati
 | Render Static Site | Giao diện Trung tâm khách hàng và Admin Dashboard; HTML/CSS/JS thuần, responsive, tiếng Việt; phân phối CDN |
 | Render Web Service | Node.js 22, Express 5, REST API, xác thực Telegram Mini App, Telegram webhook, đăng nhập Admin |
 | PostgreSQL | Hồ sơ khách hàng, ví, sổ giao dịch, danh mục dịch vụ, ticket, session, audit log, cấu hình/lịch sử automation |
-| Telegram Bot | Menu tiếng Việt, lệnh /start, /services, /balance, /support, /help; thông báo ticket cho Admin |
+| Telegram Bot | Menu tiếng Việt, lệnh /start, /customer, /services, /balance, /support, /help; nút Menu mở Mini App; có đường dẫn Web cũ tùy chọn |
 | Automation scheduler | Dọn session, báo ticket mới, nhắc ticket đang chờ; PostgreSQL advisory lock tránh chạy trùng |
 | GitHub Actions | Kiểm tra cú pháp, chạy test với PostgreSQL 18 và build thử Static Site |
 
@@ -130,6 +130,7 @@ Biến API cần khai báo:
 | `BOT_TOKEN` | Tùy chọn | Token BotFather; để trống nếu chưa bật bot |
 | `TELEGRAM_WEBHOOK_SECRET` | Khi bật bot | Blueprint tự sinh |
 | `ADMIN_TELEGRAM_ID` | Tùy chọn | Telegram ID nhận thông báo ticket |
+| `LEGACY_CUSTOMER_URL` | Tùy chọn | URL HTTPS trang khách hàng PHP cũ, không kèm token/secret |
 | `PGSSL_CA_CERT` | Tùy chọn | CA PEM nếu dùng `verify-full` |
 | `ALLOWED_ORIGINS` | Tùy chọn | Origin bổ sung, phân tách bằng dấu phẩy |
 

@@ -17,6 +17,18 @@ function normalizeBaseUrl(value, fallback, name) {
   return url.origin;
 }
 
+function normalizeWebAppUrl(value, fallback, name) {
+  const raw = String(value || fallback).trim();
+  let url;
+  try { url = new URL(raw); } catch { throw new Error(name + ' không phải URL hợp lệ.'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error(name + ' phải là URL HTTP(S), không chứa thông tin đăng nhập, query hoặc fragment.');
+  }
+  let pathname = url.pathname;
+  while (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+  return url.origin + (pathname === '/' ? '' : pathname);
+}
+
 export function loadConfig(env = process.env) {
   const isProduction = env.NODE_ENV === 'production';
   const databaseUrl = String(env.DATABASE_URL || env.EXTERNAL_DATABASE_URL || '').trim();
@@ -49,11 +61,22 @@ export function loadConfig(env = process.env) {
     'PUBLIC_API_URL'
   );
   const publicAppUrl = normalizeBaseUrl(env.PUBLIC_APP_URL, publicApiUrl, 'PUBLIC_APP_URL');
+  const publicMiniAppUrl = normalizeWebAppUrl(
+    env.PUBLIC_MINI_APP_URL,
+    publicAppUrl + '/app',
+    'PUBLIC_MINI_APP_URL'
+  );
+  if (new URL(publicMiniAppUrl).origin !== publicAppUrl) {
+    throw new Error('PUBLIC_MINI_APP_URL phải cùng origin với PUBLIC_APP_URL.');
+  }
   if (isProduction && botToken && !publicApiUrl.startsWith('https://')) {
     throw new Error('PUBLIC_API_URL phải là HTTPS khi bật Telegram Bot.');
   }
   if (isProduction && botToken && !publicAppUrl.startsWith('https://')) {
     throw new Error('PUBLIC_APP_URL phải là HTTPS khi bật Telegram Mini App.');
+  }
+  if (isProduction && botToken && !publicMiniAppUrl.startsWith('https://')) {
+    throw new Error('PUBLIC_MINI_APP_URL phải là HTTPS khi bật Telegram Mini App.');
   }
 
   const origins = String(env.ALLOWED_ORIGINS || '')
@@ -81,6 +104,7 @@ export function loadConfig(env = process.env) {
     renderWorkspaceId: String(env.RENDER_WORKSPACE_ID || '').trim(),
     publicApiUrl,
     publicAppUrl,
+    publicMiniAppUrl,
     allowedOrigins: [...new Set([publicApiUrl, publicAppUrl, ...origins])],
     initDataMaxAgeSeconds: readPositiveInteger(env.TELEGRAM_INITDATA_MAX_AGE_SECONDS, 86400, 'TELEGRAM_INITDATA_MAX_AGE_SECONDS', 604800),
     sessionTtlSeconds: readPositiveInteger(env.SESSION_TTL_SECONDS, 604800, 'SESSION_TTL_SECONDS', 2_592_000)

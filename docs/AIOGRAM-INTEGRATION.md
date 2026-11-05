@@ -156,7 +156,7 @@ Tất cả route nội bộ yêu cầu header `X-Hendy-Service-Key`. API xác mi
 ## 5. Các file tích hợp
 
 ```text
-services/aiogram_bot/
+apps/bot_phu/
 ├── main.py
 ├── config.py
 ├── api_client.py
@@ -193,7 +193,7 @@ Blueprint khai báo `hendydichvumang-aiogram-bot` (Python 3.12.10). Cần cấu 
 - `AIOGRAM_WEBHOOK_SECRET`: Render tự sinh.
 - `HENDY_API_BASE_URL`, `HENDY_BOT_SERVICE_KEY`: liên kết Node API.
 - `DATABASE_URL`, `PGSSLMODE`, `PGSSL_CA_CERT`: liên kết PostgreSQL.
-- `PUBLIC_APP_URL`: URL Render Static Site.
+- `PUBLIC_APP_URL`: origin Render Static Site; `PUBLIC_MINI_APP_URL`: URL Mini App tại `/app`.
 - `AIOGRAM_FSM_TTL_HOURS`: 1–168 giờ, mặc định 24.
 
 Triển khai Node API/migrations trước, sau đó mới deploy Python service. Free Web Service có thể sleep; cấu hình Free chỉ phù hợp pilot, không phải bot production 24/7.

@@ -36,6 +36,16 @@ def _legacy_url(value: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
 
 
+def _https_url(value: str, key: str) -> str:
+    parsed = urlsplit(value.strip())
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError(f"{key} phải là URL HTTPS công khai, không chứa thông tin đăng nhập.")
+    if parsed.query or parsed.fragment:
+        raise ValueError(f"{key} không được chứa query hoặc fragment.")
+    path = parsed.path.rstrip("/")
+    return f"https://{parsed.netloc}{path}"
+
+
 def normalize_webhook_secret(value: str) -> str:
     digest = hashlib.sha256(value.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
@@ -83,7 +93,11 @@ class Settings:
             raise ValueError("HENDY_BOT_SERVICE_KEY phải có ít nhất 32 ký tự.")
 
         api_url = _https_origin(_required(source, "HENDY_API_BASE_URL"), "HENDY_API_BASE_URL")
-        app_url = _https_origin(_required(source, "PUBLIC_APP_URL"), "PUBLIC_APP_URL")
+        public_origin = _https_origin(_required(source, "PUBLIC_APP_URL"), "PUBLIC_APP_URL")
+        mini_app_value = str(source.get("PUBLIC_MINI_APP_URL", "")).strip() or (public_origin + "/app")
+        app_url = _https_url(mini_app_value, "PUBLIC_MINI_APP_URL")
+        if urlsplit(app_url).netloc != urlsplit(public_origin).netloc:
+            raise ValueError("PUBLIC_MINI_APP_URL phải cùng domain với PUBLIC_APP_URL.")
         webhook_url = _https_origin(
             _required(source, "AIOGRAM_PUBLIC_URL") if source.get("AIOGRAM_PUBLIC_URL") else _required(source, "RENDER_EXTERNAL_URL"),
             "AIOGRAM_PUBLIC_URL/RENDER_EXTERNAL_URL",

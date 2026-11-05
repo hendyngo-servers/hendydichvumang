@@ -19,7 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
 const db = createPool(config.databaseUrl, { sslMode: config.databaseSslMode, sslCa: config.databaseSslCa, max: config.databasePoolMax });
 const app = express();
-const bot = createBot({ token: config.botToken, db, appUrl: config.publicAppUrl, legacyCustomerUrl: config.legacyCustomerUrl });
+const bot = createBot({ token: config.botToken, db, appUrl: config.publicMiniAppUrl, legacyCustomerUrl: config.legacyCustomerUrl });
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -59,7 +59,7 @@ app.get('/healthz', async (_req, res) => {
 });
 
 app.get('/api/config', (_req, res) => {
-  res.json({ brand: 'HENDY DỊCH VỤ MẠNG', appUrl: config.publicAppUrl, apiBaseUrl: config.publicApiUrl, language: 'vi', telegramBotConfigured: Boolean(bot) });
+  res.json({ brand: 'HENDY DỊCH VỤ MẠNG', appUrl: config.publicAppUrl, miniAppUrl: config.publicMiniAppUrl, apiBaseUrl: config.publicApiUrl, language: 'vi', telegramBotConfigured: Boolean(bot) });
 });
 
 app.post('/telegram/webhook', rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false }), async (req, res) => {

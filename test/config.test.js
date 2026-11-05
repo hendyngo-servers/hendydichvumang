@@ -29,6 +29,7 @@ test('production config separates API URL and Static Site URL', () => {
   });
   assert.equal(config.publicApiUrl, 'https://api-hendy.onrender.com');
   assert.equal(config.publicAppUrl, 'https://hendy-customer.onrender.com');
+  assert.equal(config.publicMiniAppUrl, 'https://hendy-customer.onrender.com/app');
   assert.deepEqual(config.allowedOrigins, ['https://api-hendy.onrender.com', 'https://hendy-customer.onrender.com']);
   assert.match(config.webhookSecret, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(config.databaseSslMode, 'require');
@@ -63,6 +64,7 @@ test('development config defaults to local URL and does not require admin secret
   const config = loadConfig({ DATABASE_URL: 'postgres://localhost/db' });
   assert.equal(config.publicApiUrl, 'http://localhost:10000');
   assert.equal(config.publicAppUrl, 'http://localhost:10000');
+  assert.equal(config.publicMiniAppUrl, 'http://localhost:10000/app');
   assert.deepEqual(config.allowedOrigins, ['http://localhost:10000']);
   assert.equal(config.databaseSslMode, 'disable');
 });
@@ -91,4 +93,17 @@ test('bot service key is optional for grammY-only operation and is read when con
   };
   assert.equal(loadConfig(base).botServiceKey, '');
   assert.equal(loadConfig({ ...base, BOT_SERVICE_KEY: 'x'.repeat(48) }).botServiceKey, 'x'.repeat(48));
+});
+
+test('Mini App URL must remain on the configured Static Site origin', () => {
+  assert.throws(() => loadConfig({
+    DATABASE_URL: 'postgres://localhost/db',
+    PUBLIC_APP_URL: 'https://hendy-site.onrender.com',
+    PUBLIC_MINI_APP_URL: 'https://other-site.onrender.com/app'
+  }), /cùng origin/);
+  assert.throws(() => loadConfig({
+    DATABASE_URL: 'postgres://localhost/db',
+    PUBLIC_APP_URL: 'https://hendy-site.onrender.com',
+    PUBLIC_MINI_APP_URL: 'https://hendy-site.onrender.com/app?token=secret'
+  }), /query/);
 });

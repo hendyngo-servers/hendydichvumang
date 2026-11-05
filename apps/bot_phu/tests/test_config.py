@@ -22,9 +22,19 @@ class SettingsTests(unittest.TestCase):
         settings = Settings.from_env(self.valid_env())
         self.assertEqual(settings.webhook_base_url, "https://aiogram.onrender.com")
         self.assertEqual(settings.api_base_url, "https://api-hendy.onrender.com")
+        self.assertEqual(settings.public_app_url, "https://hendy-site.onrender.com/app")
         self.assertEqual(settings.database_ssl_mode, "require")
         self.assertNotIn("sslmode", settings.database_url)
         self.assertEqual(settings.webhook_path, "/telegram/webhook")
+
+    def test_mini_app_url_keeps_route_and_rejects_query(self) -> None:
+        env = self.valid_env()
+        env["PUBLIC_MINI_APP_URL"] = "https://hendy-site.onrender.com/app"
+        settings = Settings.from_env(env)
+        self.assertEqual(settings.public_app_url, "https://hendy-site.onrender.com/app")
+        env["PUBLIC_MINI_APP_URL"] = "https://hendy-site.onrender.com/app?token=unsafe"
+        with self.assertRaisesRegex(ValueError, "query"):
+            Settings.from_env(env)
 
     def test_webhook_secret_is_url_safe(self) -> None:
         normalized = normalize_webhook_secret("render-value+/=")

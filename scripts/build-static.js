@@ -13,6 +13,9 @@ const source = path.resolve('public');
 const output = path.resolve('dist-site');
 await fs.rm(output, { recursive: true, force: true });
 await fs.cp(source, output, { recursive: true });
+const websiteIndex = path.resolve('apps/website/index.html');
+await fs.access(websiteIndex);
+await fs.copyFile(websiteIndex, path.join(output, 'index.html'));
 const config = 'window.HENDY_CONFIG = Object.freeze(' +
   JSON.stringify({ apiBaseUrl: parsed.origin }) + ');\n';
 await fs.writeFile(path.join(output, 'config.js'), config, 'utf8');

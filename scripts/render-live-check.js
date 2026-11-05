@@ -102,15 +102,21 @@ async function fetchPublic(url, label) {
   return { response, body: await response.text() };
 }
 async function checkStaticSite(siteUrl, apiUrl) {
-  const [home, admin, config] = await Promise.all([
-    fetchPublic(siteUrl + '/', 'Static Site trang chủ'),
+  const [home, miniApp, admin, config] = await Promise.all([
+    fetchPublic(siteUrl + '/', 'Static Site trang giới thiệu'),
+    fetchPublic(siteUrl + '/app', 'Static Site Mini App'),
     fetchPublic(siteUrl + '/admin', 'Static Site trang Admin'),
     fetchPublic(siteUrl + '/config.js', 'Static Site config.js')
   ]);
-  if (!/HENDY/i.test(home.body) || !/Trung tâm khách hàng/i.test(home.body)) throw new Error('Trang chủ không trả về nội dung Trung tâm khách hàng HENDY.');
+  if (!/HENDY/i.test(home.body) || !/CÔNG NGHỆ KẾT NỐI|DỊCH VỤ MẠNG/i.test(home.body)) {
+    throw new Error('Trang chủ chưa trả về nội dung giới thiệu HENDY.');
+  }
+  if (!/HENDY|Trung tâm khách hàng/i.test(miniApp.body) || !/telegram-web-app\.js/i.test(miniApp.body)) {
+    throw new Error('Đường dẫn /app không trả về Telegram Mini App.');
+  }
   if (!/HENDY|Trung tâm quản trị/i.test(admin.body) || !/Đăng nhập quản trị/i.test(admin.body)) throw new Error('Đường dẫn /admin không trả về trang đăng nhập quản trị.');
   if (!config.body.includes(apiUrl)) throw new Error('config.js trên Static Site chưa trỏ đến API URL đã cấu hình: ' + apiUrl);
-  return { home: home.response.status, admin: admin.response.status, config: config.response.status };
+  return { home: home.response.status, miniApp: miniApp.response.status, admin: admin.response.status, config: config.response.status };
 }
 async function checkApi(apiUrl, siteUrl) {
   const health = await fetchPublic(apiUrl + '/healthz', 'API health check');
@@ -122,10 +128,14 @@ async function checkApi(apiUrl, siteUrl) {
   let publicConfig;
   try { publicConfig = JSON.parse(configResult.body); } catch { throw new Error('/api/config không trả về JSON hợp lệ.'); }
   const configuredApi = normalizeHttpsOrigin(publicConfig.apiBaseUrl, 'API public config');
-  const configuredSite = normalizeHttpsOrigin(publicConfig.appUrl, 'Mini App public config');
+  const configuredSite = normalizeHttpsOrigin(publicConfig.appUrl, 'Website public config');
+  const miniAppUrl = new URL(String(publicConfig.miniAppUrl || ''));
+  if (miniAppUrl.protocol !== 'https:' || miniAppUrl.origin !== siteUrl || miniAppUrl.pathname !== '/app' || miniAppUrl.search || miniAppUrl.hash) {
+    throw new Error('PUBLIC_MINI_APP_URL phải trỏ đến đúng đường dẫn HTTPS /app của Static Site.');
+  }
   if (configuredApi !== apiUrl) throw new Error('PUBLIC_API_URL trong API không trùng URL service.');
   if (configuredSite !== siteUrl) throw new Error('PUBLIC_APP_URL trong API chưa trỏ đến Static Site.');
-  return { health: health.response.status, database: healthJson.database, config: configResult.response.status, appUrl: configuredSite };
+  return { health: health.response.status, database: healthJson.database, config: configResult.response.status, appUrl: configuredSite, miniAppUrl: miniAppUrl.toString() };
 }
 async function resolveService(apiKey, workspaceId, serviceId, expected) {
   if (serviceId) {

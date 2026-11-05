@@ -6,7 +6,7 @@ Mã nguồn được triển khai theo kiến trúc tách biệt: **Render Stati
 
 | Thành phần | Trách nhiệm |
 |---|---|
-| Render Static Site | Giao diện Trung tâm khách hàng và Admin Dashboard; HTML/CSS/JS thuần, responsive, tiếng Việt; phân phối CDN |
+| Render Static Site | Trang chủ giới thiệu HENDY tại `/`, Mini App khách hàng tại `/app`, Admin Dashboard tại `/admin`; HTML/CSS/JS thuần, responsive, tiếng Việt; phân phối CDN |
 | Render Web Service | Node.js 22, Express 5, REST API, xác thực Telegram Mini App, Telegram webhook, đăng nhập Admin |
 | PostgreSQL | Hồ sơ khách hàng, ví, sổ giao dịch, danh mục dịch vụ, ticket, session, audit log, cấu hình/lịch sử automation và kho module chờ duyệt |
 | Telegram Bot | grammY là bot chính; aiogram 3.31.0 là bot thử nghiệm Python riêng với token khác; cả hai dùng Node API và PostgreSQL chung |
@@ -20,27 +20,17 @@ Static Site chỉ chứa tài nguyên frontend, không giữ secret và không k
 
 ```text
 .
+├── apps/
+│   ├── bot_chinh/        # grammY — bot Telegram production chính
+│   ├── bot_phu/          # Aiogram — bot Telegram thử nghiệm/phụ
+│   └── website/          # Nguồn trang chủ giới thiệu
 ├── .github/workflows/
 │   ├── ci.yml
 │   └── render-live-check.yml
 ├── migrations/
-│   ├── 001_init.sql
-│   ├── 002_remove_placeholders.sql
-│   ├── 003_automations.sql
-│   └── 004_aiogram_fsm.sql
-├── services/aiogram_bot/
-│   ├── main.py
-│   ├── config.py
-│   ├── api_client.py
-│   ├── fsm_storage.py
-│   ├── middlewares.py
-│   ├── routers/
-│   └── tests/
-├── docs/AIOGRAM-INTEGRATION.md
 ├── public/
-│   ├── index.html
+│   ├── app.html          # Mini App khách hàng
 │   ├── admin.html
-│   ├── config.js
 │   ├── app.js
 │   ├── admin.js
 │   └── styles.css
@@ -48,19 +38,16 @@ Static Site chỉ chứa tài nguyên frontend, không giữ secret và không k
 │   ├── build-static.js
 │   ├── render-live-check.js
 │   └── run-automations.js
-├── src/
-│   ├── automation.js
-│   ├── bot.js
-│   ├── config.js
-│   ├── db.js
-│   ├── security.js
-│   ├── server.js
-│   └── set-webhook.js
+├── src/                  # API, PostgreSQL, bảo mật và nghiệp vụ
 ├── test/
+├── services/aiogram_bot/ # __init__.py tương thích import cũ
 ├── .env.example
 ├── package.json
 └── render.yaml
 ```
+
+Bot grammY chính được đặt trong `apps/bot_chinh/`; Aiogram phụ trong `apps/bot_phu/`. Hai bot có token riêng và gọi chung API nghiệp vụ Node.js. Thư mục `services/aiogram_bot/` chỉ còn package tương thích trong thời gian chuyển đổi, không còn chứa source bot.
+
 ## 3. Tự động hóa
 
 Trong Admin Dashboard, mục **Điều phối tác vụ hệ thống** hỗ trợ bật/tắt từng tác vụ, chọn chu kỳ chạy, xem lần chạy gần nhất/trạng thái và bấm **Chạy ngay**.
@@ -117,7 +104,7 @@ Mở [Render Blueprint](https://dashboard.render.com/blueprint/new?repo=https://
 Blueprint khai báo ba dịch vụ, không tạo database:
 
 - `hendydichvumang-api`: Node.js Web Service, Node 22, health check `/healthz`.
-- `hendydichvumang-site`: Static Site, build ra `dist-site`, CDN, route `/admin` đến trang quản trị.
+- `hendydichvumang-site`: Static Site, build ra `dist-site`, CDN; `/` là trang giới thiệu, `/app` là Mini App, `/admin` là trang quản trị.
 - `hendydichvumang-aiogram-bot`: Python Web Service thử nghiệm, chạy bot aiogram độc lập với grammY.
 
 Sau khi tạo:
@@ -126,11 +113,11 @@ Sau khi tạo:
 2. Giữ `PGSSLMODE=require` cho PostgreSQL bên ngoài.
 3. Đặt `ADMIN_USERNAME` và `ADMIN_PASSWORD` mạnh, tối thiểu 16 ký tự.
 4. Đặt `BOT_TOKEN` nếu dùng grammY chính và `ADMIN_TELEGRAM_ID` để nhận thông báo ticket. `BOT_SERVICE_KEY` được Blueprint tự sinh để xác thực dịch vụ aiogram.
-5. Đợi Static Site deploy xong, lấy URL dạng `https://<ten-site>.onrender.com`, rồi đặt URL này vào `PUBLIC_APP_URL` của API.
+5. Đặt `PUBLIC_APP_URL` là origin website (ví dụ `https://<ten-site>.onrender.com`) và `PUBLIC_MINI_APP_URL` là URL Mini App đầy đủ, kết thúc bằng `/app`.
 6. Giữ `TELEGRAM_WEBHOOK_SECRET` do Blueprint tự sinh. Khi API có HTTPS và BOT_TOKEN, webhook tự đăng ký vào API URL; Mini App sử dụng URL Static Site.
 7. Kiểm tra `https://<api-url>/healthz`, cần có `status: ok` và `database: ready`.
-8. Mở `https://<static-site-url>/` và `https://<static-site-url>/admin`. Đặt URL Static Site làm Mini App URL trong BotFather.
-9. Nếu bật aiogram pilot, nhập `AIOGRAM_BOT_TOKEN` của một bot thử nghiệm khác grammY; giữ `AIOGRAM_WEBHOOK_SECRET` do Render tự sinh; đặt `PUBLIC_APP_URL` về Static Site. Chỉ deploy Python service sau khi API và migration PostgreSQL đã Live.
+8. Mở `https://<static-site-url>/` để xem trang chủ giới thiệu, `https://<static-site-url>/app` để mở Mini App từ Telegram, và `https://<static-site-url>/admin` để vào trang quản trị. Đặt URL `.../app` làm Mini App URL trong BotFather.
+9. Nếu bật Aiogram, nhập `AIOGRAM_BOT_TOKEN` khác grammY; giữ `AIOGRAM_WEBHOOK_SECRET` do Render tự sinh. Aiogram nhận `PUBLIC_APP_URL` và `PUBLIC_MINI_APP_URL` từ API qua Blueprint. Chỉ deploy Python service sau khi API và migration PostgreSQL đã Live.
 
 Biến API cần khai báo:
 
@@ -141,7 +128,8 @@ Biến API cần khai báo:
 | `PGSSLMODE` | Có | Mặc định `require` |
 | `ADMIN_USERNAME` | Có | Tên đăng nhập Admin |
 | `ADMIN_PASSWORD` | Có | Tối thiểu 16 ký tự |
-| `PUBLIC_APP_URL` | Có | URL HTTPS của Static Site |
+| `PUBLIC_APP_URL` | Có | Origin HTTPS của trang chủ Static Site, không có path |
+| `PUBLIC_MINI_APP_URL` | Có | URL HTTPS đầy đủ của Mini App, kết thúc bằng `/app` |
 | `BOT_TOKEN` | Tùy chọn | Token BotFather của grammY chính; để trống nếu chưa bật bot |
 | `BOT_SERVICE_KEY` | Tùy chọn | Blueprint tự sinh; khóa riêng cho dịch vụ aiogram gọi API nội bộ |
 | `TELEGRAM_WEBHOOK_SECRET` | Khi bật bot | Blueprint tự sinh |
@@ -162,7 +150,7 @@ npm run verify
 npm start
 ```
 
-Mở `http://localhost:10000/`. Đăng nhập Mini App yêu cầu mở từ Telegram để có initData hợp lệ. Admin ở `/admin`.
+API local chạy tại `http://localhost:10000` (health check `/healthz`). Build Static Site để tạo trang giới thiệu tại `/`, Mini App tại `/app` và Admin tại `/admin` trong `dist-site`.
 
 Build Static Site riêng:
 
@@ -290,3 +278,21 @@ Migration 006_module_artifacts.sql tạo bảng lưu trữ. Đây là phần có
 - Ratchet WebSocket: ý tưởng event log + PostgreSQL NOTIFY có thể port riêng; không mang nguyên PHP process vào Render Node service.
 - App Store / Google Play / Microsoft Store connectors: chưa có credential/tài khoản nhà phát hành và một số adapter chỉ là khung; không bật tính năng publish.
 - Queue/Vietsub/payment: chỉ tích hợp khi có provider thật, chữ ký webhook, idempotency, retry và đối soát.
+
+
+## Cấu trúc ứng dụng sau khi chuẩn hóa
+
+- `apps/bot_chinh/`: mã nguồn grammY cho bot production `@HendyBot_Bot`.
+- `apps/bot_phu/`: mã nguồn Python Aiogram cho bot pilot; dùng token riêng.
+- `apps/website/`: nguồn trang chủ giới thiệu HENDY; build ra `dist-site/index.html`.
+- `public/app.html`: giao diện Mini App hiện hữu; Render rewrite `/app` đến file này.
+- `src/`: API, PostgreSQL, bảo mật, cấu hình và nghiệp vụ dùng chung.
+- `services/aiogram_bot/__init__.py`: package tương thích cho các import cũ; source chính thức đã chuyển sang `apps/bot_phu/`.
+
+### URL Mini App tách khỏi URL trang chủ
+
+`PUBLIC_APP_URL` là origin website để API kiểm tra CORS. `PUBLIC_MINI_APP_URL` là URL đầy đủ của Telegram Mini App, kết thúc bằng `/app`. Khi đổi tên Static Site hoặc gắn custom domain, cập nhật hai URL này trên API; Aiogram nhận URL Mini App qua Blueprint `fromService`.
+
+### Đổi tên Static Site hiện hữu trên Render
+
+Blueprint hiện tạm giữ tên resource `hendydichvumang-site` để khớp service đang chạy, tránh tạo một Static Site thứ hai. Hãy đổi tên resource hiện hữu trực tiếp trong Render Dashboard trước; sau khi service đã đổi tên tại chỗ, cập nhật trường `name` trong `render.yaml` thành `hendydichvumang` rồi mới đồng bộ Blueprint. Không đổi riêng tên trong Blueprint trước khi resource cũ được đổi tên.

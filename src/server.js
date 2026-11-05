@@ -169,7 +169,7 @@ app.post('/internal/bot/users/upsert', requireBotService, async (req, res) => {
   try {
     await client.query('BEGIN');
     const user = await client.query(
-      \`INSERT INTO users (telegram_id, username, first_name, last_name, language_code)
+      `INSERT INTO users (telegram_id, username, first_name, last_name, language_code)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (telegram_id) DO UPDATE SET
          username = EXCLUDED.username,
@@ -177,7 +177,7 @@ app.post('/internal/bot/users/upsert', requireBotService, async (req, res) => {
          last_name = EXCLUDED.last_name,
          language_code = EXCLUDED.language_code,
          updated_at = NOW()
-       RETURNING id, telegram_id, username, first_name, last_name, language_code, created_at\`,
+       RETURNING id, telegram_id, username, first_name, last_name, language_code, created_at`,
       [telegramId, username, firstName, lastName, languageCode]
     );
     const userId = user.rows[0].id;
@@ -203,9 +203,9 @@ app.get('/internal/bot/users/:telegramId/balance', requireBotService, async (req
   const telegramId = String(req.params.telegramId || '');
   if (!/^\d{5,20}$/.test(telegramId)) return res.status(400).json({ error: 'Telegram ID không hợp lệ.' });
   const { rows } = await db.query(
-    \`SELECT u.telegram_id, COALESCE(w.balance, 0)::text AS balance
+    `SELECT u.telegram_id, COALESCE(w.balance, 0)::text AS balance
      FROM users u LEFT JOIN wallets w ON w.user_id = u.id
-     WHERE u.telegram_id = $1 LIMIT 1\`,
+     WHERE u.telegram_id = $1 LIMIT 1`,
     [telegramId]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Chưa tìm thấy tài khoản HENDY. Hãy gửi /start trước.' });
@@ -236,8 +236,8 @@ app.post('/internal/bot/tickets', requireBotService, async (req, res) => {
     }
 
     const recent = await client.query(
-      \`SELECT COUNT(*)::int AS count FROM tickets
-       WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'\`,
+      `SELECT COUNT(*)::int AS count FROM tickets
+       WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
       [user.rows[0].id]
     );
     if (recent.rows[0].count >= 5) {
@@ -246,14 +246,14 @@ app.post('/internal/bot/tickets', requireBotService, async (req, res) => {
     }
 
     const ticket = await client.query(
-      \`INSERT INTO tickets (user_id, subject, message)
+      `INSERT INTO tickets (user_id, subject, message)
        VALUES ($1, $2, $3)
-       RETURNING id, subject, status, created_at\`,
+       RETURNING id, subject, status, created_at`,
       [user.rows[0].id, subject, message]
     );
     await client.query(
-      \`INSERT INTO audit_logs (actor, action, entity, entity_id, metadata)
-       VALUES ($1, $2, $3, $4, $5)\`,
+      `INSERT INTO audit_logs (actor, action, entity, entity_id, metadata)
+       VALUES ($1, $2, $3, $4, $5)`,
       [telegramId, 'ticket.create', 'ticket', String(ticket.rows[0].id), JSON.stringify({ source: 'aiogram' })]
     );
     await client.query('COMMIT');

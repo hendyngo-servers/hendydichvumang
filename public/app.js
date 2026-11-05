@@ -15,7 +15,7 @@ async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}), ...(options.headers || {}) }
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Lỗi HTTP ${response.status}`);
+  if (!response.ok) { const error = new Error(payload.error || `Lỗi HTTP ${response.status}`); error.status = response.status; throw error; }
   return payload;
 }
 
@@ -30,8 +30,8 @@ function renderServices(services) {
     </article>`).join('') : '<div class="panel skeleton">Chưa có dịch vụ nào được công khai.</div>';
 }
 
-function renderTickets(tickets) {
-  $('ticketCount').textContent = String(tickets.length);
+function renderTickets(tickets, totalCount = tickets.length) {
+  $('ticketCount').textContent = String(totalCount);
   $('ticketList').innerHTML = tickets.length ? tickets.map((ticket) => `
     <article class="ticket-row"><div><strong>#${ticket.id} · ${escapeHtml(ticket.subject)}</strong><small>${new Date(ticket.created_at).toLocaleString('vi-VN')}</small>${ticket.admin_note ? `<small>Phản hồi: ${escapeHtml(ticket.admin_note)}</small>` : ''}</div>
     <span class="status ${ticket.status}">${statusText(ticket.status)}</span></article>`).join('') : '<p class="muted">Chưa có yêu cầu hỗ trợ.</p>';
@@ -50,11 +50,15 @@ async function bootstrap() {
   } catch (error) { $('serviceList').textContent = error.message; }
 
   const initData = tg?.initData || '';
-  if (!state.token && initData) {
+  const signIn = async () => {
+    if (!initData) return false;
     const session = await api('/api/telegram/auth', { method: 'POST', body: JSON.stringify({ initData }) });
     state.token = session.token;
     sessionStorage.setItem('hendy_session', state.token);
-  }
+    return true;
+  };
+
+  if (!state.token && initData) await signIn();
   if (!state.token) {
     $('connectionStatus').innerHTML = '<i></i> Chưa đăng nhập';
     $('ticketForm').hidden = true;
@@ -63,12 +67,24 @@ async function bootstrap() {
     $('userName').textContent = 'bạn';
     return;
   }
-  const [me, dashboard, tickets] = await Promise.all([api('/api/me'), api('/api/dashboard'), api('/api/tickets')]);
+
+  let privateData;
+  try {
+    privateData = await Promise.all([api('/api/me'), api('/api/dashboard'), api('/api/tickets')]);
+  } catch (error) {
+    if (error.status !== 401 || !initData) throw error;
+    state.token = '';
+    sessionStorage.removeItem('hendy_session');
+    await signIn();
+    privateData = await Promise.all([api('/api/me'), api('/api/dashboard'), api('/api/tickets')]);
+  }
+
+  const [me, dashboard, tickets] = privateData;
   state.me = me.user;
   $('userName').textContent = me.user.first_name || 'bạn';
   $('balanceValue').innerHTML = `${money(dashboard.balance)} <small>VNĐ</small>`;
   $('connectionStatus').innerHTML = '<i></i> Đã xác thực';
-  renderTickets(tickets.tickets);
+  renderTickets(tickets.tickets, Number(me.user.ticket_count));
 }
 
 $('ticketForm').addEventListener('submit', async (event) => {
@@ -81,8 +97,8 @@ $('ticketForm').addEventListener('submit', async (event) => {
     $('ticketForm').reset();
     $('ticketFeedback').textContent = 'Yêu cầu đã được ghi nhận.';
     toast('Đã gửi yêu cầu hỗ trợ.');
-    const result = await api('/api/tickets');
-    renderTickets(result.tickets);
+    const [result, me] = await Promise.all([api('/api/tickets'), api('/api/me')]);
+    renderTickets(result.tickets, Number(me.user.ticket_count));
   } catch (error) { $('ticketFeedback').textContent = error.message; toast(error.message); }
   finally { button.disabled = false; }
 });

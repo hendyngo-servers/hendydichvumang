@@ -77,6 +77,3 @@ CREATE INDEX IF NOT EXISTS wallet_tx_user_created_idx ON wallet_transactions(use
 CREATE INDEX IF NOT EXISTS service_catalog_active_sort_idx ON service_catalog(is_active, sort_order, id);
 CREATE INDEX IF NOT EXISTS audit_logs_created_idx ON audit_logs(created_at DESC);
 
--- Remove placeholder rows from the previous starter build. Admin can add real catalog entries.
-DELETE FROM service_catalog
-WHERE code IN ('tool-live', 'proxy', 'vip', 'source-code');

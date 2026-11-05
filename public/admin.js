@@ -108,15 +108,23 @@ async function loadAdmin() {
 }
 
 const MENU_ACTION_META = {
-  customer: { label: 'Trung tâm khách hàng', hint: 'Mở trang tài khoản' },
+  minigame: { label: 'Minigame Live', hint: 'Đang khóa đến khi game và chống gian lận hoàn chỉnh' },
+  otp_proxy: { label: 'OTP & Proxy', hint: 'Chỉ mở khi backend nhà cung cấp đã kiểm thử' },
+  topup: { label: 'Nạp tiền', hint: 'Khóa đến khi cổng thanh toán và đối soát hoạt động' },
+  vip: { label: 'Trung tâm VIP', hint: 'Khóa đến khi cấp bậc, thời hạn và quyền lợi hoàn chỉnh' },
+  catalog: { label: 'Mua lì xì · Code màn · Code Tele', hint: 'Mở danh mục dịch vụ hiện có; chưa xử lý mua hàng' },
+  customer: { label: 'Trung tâm khách hàng', hint: 'Mở Mini App và tài khoản' },
+  group: { label: 'Nhóm chat', hint: 'Mở liên kết Telegram được cấu hình' },
+  channel: { label: 'Kênh thông báo', hint: 'Mở liên kết Telegram được cấu hình' },
+  upcoming: { label: 'Dịch vụ sắp triển khai', hint: 'Thông báo trạng thái phát triển' },
   balance: { label: 'Số dư', hint: 'Tra cứu ví' },
-  services: { label: 'Dịch vụ', hint: 'Danh mục dịch vụ' },
+  services: { label: 'Dịch vụ', hint: 'Danh mục dịch vụ Aiogram' },
   support: { label: 'Hỗ trợ', hint: 'Tạo yêu cầu CSKH' },
   admin: { label: 'Quản trị', hint: 'Trung tâm quản trị Aiogram' },
   automation: { label: 'Tự động hóa', hint: 'Quản lý tác vụ Aiogram' }
 };
 const MENU_ACTIONS_BY_BOT = {
-  grammy: ['customer', 'balance', 'services', 'support'],
+  grammy: ['minigame', 'otp_proxy', 'topup', 'vip', 'catalog', 'customer', 'group', 'channel', 'upcoming'],
   aiogram: ['customer', 'balance', 'services', 'support', 'admin', 'automation']
 };
 

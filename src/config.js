@@ -29,6 +29,19 @@ function normalizeWebAppUrl(value, fallback, name) {
   return url.origin + (pathname === '/' ? '' : pathname);
 }
 
+function normalizeTelegramLink(value, name) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  let url;
+  try { url = new URL(raw); } catch { throw new Error(name + ' không phải URL hợp lệ.'); }
+  const allowedHosts = new Set(['t.me', 'www.t.me', 'telegram.me', 'www.telegram.me']);
+  if (url.protocol !== 'https:' || !allowedHosts.has(url.hostname.toLowerCase()) ||
+      url.username || url.password || url.hash) {
+    throw new Error(name + ' phải là liên kết HTTPS công khai từ t.me hoặc telegram.me.');
+  }
+  return url.toString();
+}
+
 export function loadConfig(env = process.env) {
   const isProduction = env.NODE_ENV === 'production';
   const databaseUrl = String(env.DATABASE_URL || env.EXTERNAL_DATABASE_URL || '').trim();
@@ -81,6 +94,8 @@ export function loadConfig(env = process.env) {
 
   const origins = String(env.ALLOWED_ORIGINS || '')
     .split(',').map((item) => item.trim().replace(/\/+$/, '')).filter(Boolean);
+  const telegramGroupUrl = normalizeTelegramLink(env.TELEGRAM_GROUP_URL, 'TELEGRAM_GROUP_URL');
+  const telegramChannelUrl = normalizeTelegramLink(env.TELEGRAM_CHANNEL_URL, 'TELEGRAM_CHANNEL_URL');
   const adminTelegramId = String(env.ADMIN_TELEGRAM_ID || '').trim();
   if (adminTelegramId && !/^-?\d{5,20}$/.test(adminTelegramId)) {
     throw new Error('ADMIN_TELEGRAM_ID không hợp lệ.');
@@ -105,6 +120,8 @@ export function loadConfig(env = process.env) {
     publicApiUrl,
     publicAppUrl,
     publicMiniAppUrl,
+    telegramGroupUrl,
+    telegramChannelUrl,
     allowedOrigins: [...new Set([publicApiUrl, publicAppUrl, ...origins])],
     initDataMaxAgeSeconds: readPositiveInteger(env.TELEGRAM_INITDATA_MAX_AGE_SECONDS, 86400, 'TELEGRAM_INITDATA_MAX_AGE_SECONDS', 604800),
     sessionTtlSeconds: readPositiveInteger(env.SESSION_TTL_SECONDS, 604800, 'SESSION_TTL_SECONDS', 2_592_000)

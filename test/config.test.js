@@ -141,3 +141,17 @@ test('BOT1_TOKEN takes precedence and BOT_TOKEN remains a temporary alias', () =
   });
   assert.equal(legacy.botToken, '222:primary-legacy');
 });
+
+test('Telegram group and channel links must be HTTPS t.me links', () => {
+  const config = loadConfig({
+    DATABASE_URL: 'postgres://localhost/db',
+    TELEGRAM_GROUP_URL: 'https://t.me/hendy_group',
+    TELEGRAM_CHANNEL_URL: 'https://t.me/hendy_channel'
+  });
+  assert.equal(config.telegramGroupUrl, 'https://t.me/hendy_group');
+  assert.equal(config.telegramChannelUrl, 'https://t.me/hendy_channel');
+  assert.throws(() => loadConfig({
+    DATABASE_URL: 'postgres://localhost/db',
+    TELEGRAM_GROUP_URL: 'https://evil.example/group'
+  }), /t.me hoặc telegram.me/);
+});

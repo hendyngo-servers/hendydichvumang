@@ -307,3 +307,12 @@ Mini App hiện tại giữ nguyên xác thực Telegram và API Node.js. Giao d
 Migration `007_commerce_readiness.sql` chuẩn bị schema riêng cho thanh toán, đơn hàng, VIP, Voucher, Giftcode, referral, Video Jobs, ledger và đối soát. Tất cả module được khóa mặc định. Xem [điều kiện mở module](docs/COMMERCE-MODULES-READINESS.md).
 
 Tên token chuẩn: `BOT1_TOKEN` cho grammY và `BOT2_TOKEN` cho Aiogram. `BOT_TOKEN` và `AIOGRAM_BOT_TOKEN` chỉ là bí danh tương thích chuyển tiếp. Không ghi token thật vào source code, log, URL hoặc frontend. Mật khẩu quản trị production yêu cầu tối thiểu 13 ký tự.
+
+
+### Menu Bot chính grammY
+
+Menu Bot 1 có 9 nút theo ảnh tham chiếu: Minigame Live, OTP & Proxy, Nạp tiền, Trung tâm VIP, Mua lì xì/Code màn/Code Tele, Trung tâm khách hàng, Nhóm chat, Kênh thông báo và Dịch vụ sắp triển khai.
+
+Telegram Reply Keyboard hỗ trợ kiểu màu chuẩn `danger`, `success`, `primary`; màu/gradient tùy chỉnh khác do Telegram client kiểm soát. Hai liên kết nhóm/kênh được cấu hình bằng `TELEGRAM_GROUP_URL` và `TELEGRAM_CHANNEL_URL` (chỉ HTTPS `t.me` hoặc `telegram.me`).
+
+Các nút nạp tiền, VIP, Minigame và OTP/Proxy hiện hiển thị thông báo đang hoàn thiện; không tạo giao dịch giả. Nút danh mục chỉ liệt kê dịch vụ được quản trị viên công khai, chưa thực hiện mua hàng.

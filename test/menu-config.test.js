@@ -20,13 +20,13 @@ test('default menu configuration is separate for grammY and Aiogram', () => {
 
 test('menu normalization discards unknown actions and restores customer entry', () => {
   const config = normalizeMenuConfig({
-    buttonOrder: ['dangerous-action', 'support', 'support'],
+    buttonOrder: ['dangerous-action', 'catalog', 'catalog'],
     menuColumns: 99,
-    buttonLabels: { support: 'Liên hệ CSKH', unknown: 'Injected' }
+    buttonLabels: { catalog: 'Liên hệ danh mục', unknown: 'Injected' }
   }, 'grammy');
-  assert.deepEqual(config.buttonOrder, ['customer', 'support']);
+  assert.deepEqual(config.buttonOrder, ['customer', 'catalog']);
   assert.equal(config.menuColumns, 2);
-  assert.equal(config.buttonLabels.support, 'Liên hệ CSKH');
+  assert.equal(config.buttonLabels.catalog, 'Liên hệ danh mục');
   assert.equal(config.buttonLabels.unknown, undefined);
 });
 
@@ -81,4 +81,29 @@ test('menu input validation rejects long labels, invalid columns and unsupported
     /Số cột/
   );
   assert.equal(MENU_ACTIONS.grammy.includes('automation'), false);
+});
+
+test('grammY screenshot menu uses the requested nine actions and full-width rows', () => {
+  const config = defaultMenuConfig('grammy');
+  const rows = buildMenuRows(config, false);
+  assert.deepEqual(config.buttonOrder, [
+    'minigame', 'otp_proxy', 'topup', 'vip', 'catalog', 'customer', 'group', 'channel', 'upcoming'
+  ]);
+  assert.deepEqual(rows.map((row) => row.map((item) => item.action)), [
+    ['minigame', 'otp_proxy'],
+    ['topup', 'vip'],
+    ['catalog'],
+    ['customer'],
+    ['group', 'channel'],
+    ['upcoming']
+  ]);
+});
+
+test('grammY menu supports custom labels and safe legacy buttons', () => {
+  const config = defaultMenuConfig('grammy');
+  config.buttonLabels.catalog = 'Kho Code HENDY';
+  assert.equal(menuButtonText(config, 'catalog'), '🎁 Kho Code HENDY');
+  assert.equal(resolveMenuAction('🎁 Kho Code HENDY', config), 'catalog');
+  assert.equal(resolveMenuAction('🎫 Hỗ trợ', config), 'support');
+  assert.equal(resolveMenuAction('xóa ví', config), null);
 });

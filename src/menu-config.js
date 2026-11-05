@@ -1,30 +1,46 @@
 export const BOT_MENU_KEYS = Object.freeze(["grammy", "aiogram"]);
 
 export const MENU_ACTIONS = Object.freeze({
-  grammy: ["customer", "balance", "services", "support"],
+  grammy: ["minigame", "otp_proxy", "topup", "vip", "catalog", "customer", "group", "channel", "upcoming"],
   aiogram: ["customer", "balance", "services", "support", "admin", "automation"]
 });
 
 const DEFAULT_LABELS = Object.freeze({
-  customer: "Trung tâm khách hàng",
-  balance: "Số dư",
-  services: "Dịch vụ",
-  support: "Hỗ trợ",
+  customer: "TRUNG TÂM KHÁCH HÀNG",
+  balance: "SỐ DƯ",
+  services: "DỊCH VỤ",
+  support: "HỖ TRỢ",
+  minigame: "MINIGAME LIVE",
+  otp_proxy: "OTP & PROXY",
+  topup: "NẠP TIỀN",
+  vip: "TRUNG TÂM VIP",
+  catalog: "MUA LÌ XÌ - CODE MÀN - CODE TELE",
+  group: "NHÓM CHAT",
+  channel: "KÊNH THÔNG BÁO",
+  upcoming: "DỊCH VỤ SẮP TRIỂN KHAI",
   admin: "Quản trị",
   automation: "Tự động hóa"
 });
 
 const DEFAULT_ICONS = Object.freeze({
-  customer: "👤",
+  customer: "💠",
   balance: "💳",
   services: "🛍",
   support: "🎫",
+  minigame: "🚀",
+  otp_proxy: "🎟",
+  topup: "💳",
+  vip: "🏆",
+  catalog: "🎁",
+  group: "👥",
+  channel: "📢",
+  upcoming: "⏳",
   admin: "🛠",
   automation: "⚙️"
 });
 
 const DEFAULT_ORDER = Object.freeze({
-  grammy: ["customer", "balance", "services", "support"],
+  grammy: ["minigame", "otp_proxy", "topup", "vip", "catalog", "customer", "group", "channel", "upcoming"],
   aiogram: ["customer", "balance", "services", "support", "admin", "automation"]
 });
 
@@ -144,15 +160,32 @@ export function visibleMenuActions(config, isAdmin = false) {
   });
 }
 
+const FULL_WIDTH_GRAMMY_ACTIONS = new Set(["catalog", "customer", "upcoming"]);
+
 export function buildMenuRows(config, isAdmin = false) {
   const actions = visibleMenuActions(config, isAdmin);
   const rows = [];
-  for (let index = 0; index < actions.length; index += config.menuColumns) {
-    rows.push(actions.slice(index, index + config.menuColumns).map((action) => ({
-      action,
-      text: menuButtonText(config, action)
-    })));
+  let pending = [];
+
+  const flush = () => {
+    while (pending.length) {
+      rows.push(pending.splice(0, config.menuColumns).map((action) => ({
+        action,
+        text: menuButtonText(config, action)
+      })));
+    }
+  };
+
+  for (const action of actions) {
+    if (config.botKey === "grammy" && FULL_WIDTH_GRAMMY_ACTIONS.has(action)) {
+      flush();
+      rows.push([{ action, text: menuButtonText(config, action) }]);
+    } else {
+      pending.push(action);
+      if (pending.length === config.menuColumns) flush();
+    }
   }
+  flush();
   return rows;
 }
 
@@ -172,5 +205,8 @@ export function resolveMenuAction(text, config, isAdmin = false) {
   for (const action of visibleMenuActions(config, isAdmin)) {
     if ((legacy[action] || []).includes(value)) return action;
   }
+  // Existing Telegram clients may still display the previous persistent keyboard.
+  if (config.botKey === "grammy" && value === "🎫 Hỗ trợ") return "support";
+  if (config.botKey === "grammy" && value === "🛍 Dịch vụ") return "services";
   return null;
 }

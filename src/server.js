@@ -20,7 +20,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = loadConfig();
 const db = createPool(config.databaseUrl, { sslMode: config.databaseSslMode, sslCa: config.databaseSslCa, max: config.databasePoolMax });
 const app = express();
-const bot = createBot({ token: config.botToken, db, appUrl: config.publicMiniAppUrl, legacyCustomerUrl: config.legacyCustomerUrl });
+const bot = createBot({
+  token: config.botToken,
+  db,
+  appUrl: config.publicMiniAppUrl,
+  legacyCustomerUrl: config.legacyCustomerUrl,
+  groupUrl: config.telegramGroupUrl,
+  channelUrl: config.telegramChannelUrl
+});
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -872,9 +879,11 @@ app.get('/api/admin/operations/config', requireAuth, requireAdmin, (_req, res) =
     {
       name: 'Telegram grammY (bot chính)',
       items: [
-        ['BOT_TOKEN', Boolean(config.botToken), true],
+        ['BOT1_TOKEN', Boolean(config.botToken), true],
         ['TELEGRAM_WEBHOOK_SECRET', Boolean(process.env.TELEGRAM_WEBHOOK_SECRET), true],
-        ['ADMIN_TELEGRAM_ID', Boolean(config.adminTelegramId), false]
+        ['ADMIN_TELEGRAM_ID', Boolean(config.adminTelegramId), false],
+        ['TELEGRAM_GROUP_URL', Boolean(config.telegramGroupUrl), false],
+        ['TELEGRAM_CHANNEL_URL', Boolean(config.telegramChannelUrl), false]
       ]
     },
     {

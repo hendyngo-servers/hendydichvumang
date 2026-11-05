@@ -53,6 +53,9 @@ services:
         generateValue: true
       - key: BOT_SERVICE_KEY
         generateValue: true
+      - key: BOT1_TOKEN
+        sync: false
+      # Bí danh cũ; chỉ gỡ sau khi BOT1_TOKEN hoạt động ổn định.
       - key: BOT_TOKEN
         sync: false
       - key: ADMIN_USERNAME
@@ -61,6 +64,10 @@ services:
         sync: false
       - key: ADMIN_TELEGRAM_ID
         sync: false
+      - key: TELEGRAM_GROUP_URL
+        value: ""
+      - key: TELEGRAM_CHANNEL_URL
+        value: ""
       - key: PUBLIC_APP_URL
         sync: false
       - key: PUBLIC_MINI_APP_URL
@@ -70,7 +77,7 @@ services:
       - key: RENDER_WORKSPACE_ID
         sync: false
 
-  # Python aiogram pilot bot. AIOGRAM_BOT_TOKEN must differ from grammY's BOT_TOKEN.
+  # Python aiogram pilot bot. BOT2_TOKEN must differ from grammY's BOT1_TOKEN.
   - type: web
     name: hendydichvumang-aiogram-bot
     runtime: python
@@ -83,6 +90,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.10"
+      - key: BOT2_TOKEN
+        sync: false
+      # Bí danh cũ; chỉ gỡ sau khi BOT2_TOKEN hoạt động ổn định.
       - key: AIOGRAM_BOT_TOKEN
         sync: false
       - key: AIOGRAM_WEBHOOK_SECRET

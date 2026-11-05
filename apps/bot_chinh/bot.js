@@ -1,4 +1,4 @@
-import { Bot, Keyboard, InlineKeyboard } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import { buildMenuRows, defaultMenuConfig, normalizeMenuConfig, resolveMenuAction } from '../../src/menu-config.js';
 
 function escapeHtml(value) {
@@ -31,18 +31,37 @@ async function loadMenuConfig(db, botKey = 'grammy') {
   }
 }
 
-function mainMenu(appUrl, isPrivate = true, isAdmin = false, menuConfig = defaultMenuConfig('grammy')) {
+const REPLY_BUTTON_STYLES = Object.freeze({
+  minigame: 'danger',
+  otp_proxy: 'primary',
+  topup: 'danger',
+  vip: 'primary',
+  catalog: 'success',
+  customer: 'primary',
+  group: 'primary',
+  channel: 'primary',
+  upcoming: 'primary'
+});
+
+export function buildMainMenu(appUrl, isPrivate = true, isAdmin = false, menuConfig = defaultMenuConfig('grammy')) {
   const config = normalizeMenuConfig(menuConfig, 'grammy');
-  const keyboard = new Keyboard();
-  const rows = buildMenuRows(config, isAdmin);
-  rows.forEach((row, index) => {
-    for (const button of row) keyboard.text(button.text);
-    if (index < rows.length - 1) keyboard.row();
-  });
-  if (isPrivate && appUrl.startsWith('https://')) {
-    keyboard.row().webApp('🌐 Mở Mini App', appUrl);
+  const keyboard = buildMenuRows(config, isAdmin).map((row) => row.map((button) => ({
+    text: button.text,
+    ...(REPLY_BUTTON_STYLES[button.action] ? { style: REPLY_BUTTON_STYLES[button.action] } : {})
+  })));
+  if (isPrivate && typeof appUrl === 'string' && appUrl.startsWith('https://')) {
+    keyboard.push([{ text: '🌐 MỞ MINI APP', web_app: { url: appUrl } }]);
   }
-  return keyboard.resized(config.resizeKeyboard).persistent(config.persistentKeyboard);
+  return {
+    keyboard,
+    resize_keyboard: config.resizeKeyboard,
+    is_persistent: config.persistentKeyboard,
+    input_field_placeholder: 'Chọn chức năng HENDY…'
+  };
+}
+
+function mainMenu(...args) {
+  return buildMainMenu(...args);
 }
 
 export function buildCustomerCenterKeyboard({ appUrl = '', legacyCustomerUrl = '', isPrivate = true } = {}) {
@@ -84,7 +103,7 @@ async function sendCustomerCenter(ctx, appUrl, legacyCustomerUrl, menuConfig) {
   });
 }
 
-export function createBot({ token, db, appUrl, legacyCustomerUrl = '' }) {
+export function createBot({ token, db, appUrl, legacyCustomerUrl = '', groupUrl = '', channelUrl = '' }) {
   if (!token) return null;
   const bot = new Bot(token);
 
@@ -142,7 +161,12 @@ export function createBot({ token, db, appUrl, legacyCustomerUrl = '' }) {
       return;
     }
     if (action === 'balance') return sendBalance(ctx, db);
-    if (action === 'services') return sendServices(ctx, db);
+    if (action === 'services' || action === 'catalog') return sendServices(ctx, db);
+    if (action === 'group') return sendTelegramLink(ctx, 'Nhóm chat HENDY', groupUrl);
+    if (action === 'channel') return sendTelegramLink(ctx, 'Kênh thông báo HENDY', channelUrl);
+    if (['minigame', 'otp_proxy', 'topup', 'vip', 'upcoming'].includes(action)) {
+      return sendFeatureNotice(ctx, action, menu);
+    }
     await ctx.reply('Mình chưa nhận diện chức năng này. Hãy chọn nút trong menu hoặc gửi /help.', { reply_markup: menu });
   });
 
@@ -160,6 +184,27 @@ async function sendBalance(ctx, db) {
     '💳 Số dư hiện tại: <b>' + balance + ' đ</b>\n\nSố dư chỉ thay đổi sau khi giao dịch được hệ thống đối soát hợp lệ.',
     { parse_mode: 'HTML' }
   );
+}
+
+async function sendTelegramLink(ctx, title, url) {
+  if (!url) {
+    return ctx.reply('🔧 ' + title + ' chưa được cấu hình liên kết. Vui lòng liên hệ quản trị viên HENDY.');
+  }
+  const keyboard = new InlineKeyboard().url('MỞ ' + title.toLocaleUpperCase('vi'), url);
+  return ctx.reply('🔗 ' + title + ':', { reply_markup: keyboard });
+}
+
+const FEATURE_NOTICES = Object.freeze({
+  minigame: '🎮 MINIGAME LIVE đang được hoàn thiện. Chức năng sẽ chỉ mở sau khi hệ thống game, điểm thưởng và chống gian lận được kiểm thử.',
+  otp_proxy: '🔐 OTP & PROXY đang được chuẩn bị. Chưa có dịch vụ nào được bán hoặc kích hoạt từ nút này.',
+  topup: '💳 NẠP TIỀN chưa mở. Vui lòng không chuyển khoản vào tài khoản không được xác nhận; số dư chỉ tăng sau khi cổng thanh toán và đối soát hoàn tất.',
+  vip: '🏆 TRUNG TÂM VIP đang được hoàn thiện. Quyền lợi và thời hạn VIP sẽ chỉ hiển thị khi backend đã sẵn sàng.',
+  upcoming: '⏳ Các dịch vụ đang phát triển sẽ được công bố tại đây sau khi hoàn tất kiểm thử.'
+});
+
+async function sendFeatureNotice(ctx, action, menu) {
+  const message = FEATURE_NOTICES[action] || FEATURE_NOTICES.upcoming;
+  return ctx.reply(message, { reply_markup: menu });
 }
 
 async function sendServices(ctx, db) {

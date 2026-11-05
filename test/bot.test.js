@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCustomerCenterKeyboard } from '../src/bot.js';
+import { buildCustomerCenterKeyboard, buildMainMenu } from '../apps/bot_chinh/bot.js';
 
 test('customer center keyboard offers Telegram Mini App and legacy web fallback', () => {
   const keyboard = buildCustomerCenterKeyboard({
@@ -23,4 +23,14 @@ test('customer center keyboard omits Mini App inline button outside private chat
   assert.equal(keyboard.inline_keyboard.length, 1);
   assert.equal(keyboard.inline_keyboard[0][0].web_app, undefined);
   assert.equal(keyboard.inline_keyboard[0][0].url, 'https://legacy.example.com/customer');
+});
+
+test('grammY main menu has nine styled buttons with two-column and full-width rows', () => {
+  const menu = buildMainMenu('https://hendy-site.onrender.com/app');
+  assert.deepEqual(menu.keyboard.map((row) => row.length), [2, 2, 1, 1, 2, 1, 1]);
+  assert.equal(menu.keyboard[0][0].style, 'danger');
+  assert.equal(menu.keyboard[1][0].style, 'danger');
+  assert.equal(menu.keyboard[2][0].style, 'success');
+  assert.equal(menu.keyboard[3][0].text, '💠 TRUNG TÂM KHÁCH HÀNG');
+  assert.equal(menu.keyboard.at(-1)[0].web_app.url, 'https://hendy-site.onrender.com/app');
 });

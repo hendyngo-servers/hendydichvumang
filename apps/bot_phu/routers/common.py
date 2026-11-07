@@ -6,13 +6,10 @@ from aiogram.types import (
     KeyboardButton,
     Message,
     ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
     WebAppInfo,
 )
 
-
 from apps.bot_phu.config import Settings
-from apps.bot_phu.api_client import HendyApiClient
 from apps.bot_phu.menu_config import build_menu_rows, normalize_menu_config
 
 common_router = Router(name="hendy-common")
@@ -29,10 +26,12 @@ def main_menu(
         for row in build_menu_rows(config, is_admin)
     ]
     if settings.public_app_url.startswith("https://"):
-        rows.append([KeyboardButton(
-            text="🌐 Mở Mini App",
-            web_app=WebAppInfo(url=settings.public_app_url),
-        )])
+        rows.append([
+            KeyboardButton(
+                text="🌐 Mở Mini App",
+                web_app=WebAppInfo(url=settings.public_app_url),
+            )
+        ])
     return ReplyKeyboardMarkup(
         keyboard=rows,
         resize_keyboard=config["resizeKeyboard"],
@@ -82,9 +81,18 @@ async def command_help(
 
 
 @common_router.message(Command("cancel"), F.chat.type == "private")
-async def command_cancel(message: Message, state) -> None:
+async def command_cancel(
+    message: Message,
+    state,
+    settings: Settings,
+    hendy_menu_config: dict | None = None,
+    hendy_is_admin: bool = False,
+) -> None:
     await state.clear()
-    await message.answer("Đã hủy thao tác hiện tại.", reply_markup=ReplyKeyboardRemove())
+    await message.answer(
+        "Đã hủy thao tác hiện tại. Bạn có thể chọn chức năng khác trong menu HENDY.",
+        reply_markup=main_menu(settings, hendy_menu_config, is_admin=hendy_is_admin),
+    )
 
 
 @common_router.message(F.chat.type != "private")

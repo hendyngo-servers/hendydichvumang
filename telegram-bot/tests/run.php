@@ -49,15 +49,20 @@ $assert(TelegramLink::normalize('https://user@t.me/HendySupportGroup') === '', '
 $assert(TelegramLink::normalize('https://t.me/hendy_cyber_bot?start=old') === 'https://t.me/hendy_cyber_bot', 'chuẩn hóa public URL bot và loại query có sẵn');
 $assert(TelegramLink::normalize('https://example.com/hendy_cyber_bot') === '', 'từ chối URL public bot ngoài Telegram');
 
-$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','otp','wallet','vip','codes','customer','group','news','vip-coming-soon'], 'menu chính khớp các mục trong thiết kế được duyệt');
-$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet','vip'],['codes'],['customer'],['group','news'],['vip-coming-soon'],['admin']], 'layout Inline Menu khớp ảnh tham chiếu; Admin là nút riêng tư');
+$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','otp','wallet','vip','codes','customer','music-ai','image-ai','group','news','vip-coming-soon'], 'menu chính có AI music và AI image theo yêu cầu');
+$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet','vip'],['codes'],['customer'],['music-ai','image-ai'],['group','news'],['vip-coming-soon'],['admin']], 'layout Inline Menu khớp ảnh và có hai nút AI');
 $botServiceSource = file_get_contents(dirname(__DIR__) . '/app/BotService.php');
 $assert(str_contains($botServiceSource, "'menu_mode' => 'inline_keyboard'"), 'menu mặc định là Inline Keyboard');
 $assert(str_contains($botServiceSource, "return ['inline_keyboard' => \$rows];"), 'menu luôn gửi Inline Keyboard, kể cả cấu hình cũ');
 $assert(str_contains($botServiceSource, "if (\$item['action'] === 'miniapp')") && str_contains($botServiceSource, "'web_app' => ['url' => \$url]"), 'nút Mở Mini App dùng Telegram Web App trực tiếp');
 $assert(str_contains($botServiceSource, '$this->telegram->answerCallback($callbackId);') && !str_contains($botServiceSource, 'Đã nhận, đang xử lý…'), 'callback được xác nhận ngầm, không hiện thông báo kỹ thuật');
 $assert(str_contains($botServiceSource, '👋 Chào mừng bạn đến với HENDY BOT!') && !str_contains($botServiceSource, '♻️ Menu HENDY đã chuyển sang Inline Menu mới.'), 'gỡ Reply Keyboard bằng lời chào tự nhiên thay cho thông báo kỹ thuật');
-$assert(str_contains($botServiceSource, 'https://i.postimg.cc/rcD583NW/anh-quan-cao.png?dl=1') && str_contains($botServiceSource, "Env::get('BOT_HOME_PHOTO'"), 'banner Telegram dùng URL direct-image có thể thay đổi bằng Environment');
+$assert(str_contains($botServiceSource, 'https://i.postimg.cc/rcD583NW/anh-quan-cao.png') && str_contains($botServiceSource, '$this->telegram->sendPhotoFromUrl'), 'banner Telegram được tải ở backend và upload multipart thay vì Telegram tự fetch URL');
+$telegramApiSource = file_get_contents(dirname(__DIR__) . '/app/TelegramApi.php');
+$assert(str_contains($telegramApiSource, 'BOT_HOME_PHOTO_ALLOWED_HOSTS') && str_contains($telegramApiSource, 'sendPhotoFile') && str_contains($telegramApiSource, 'CURLOPT_SSL_VERIFYPEER'), 'banner download validates HTTPS host, MIME and uploads bytes securely');
+$aiServiceSource = file_get_contents(dirname(__DIR__) . '/app/AiMediaService.php');
+$assert(str_contains($aiServiceSource, 'AI_MEDIA_QUEUE_ENABLED') && str_contains($aiServiceSource, 'ELEVENLABS_API_KEY') && str_contains($aiServiceSource, 'OPENAI_API_KEY'), 'AI generation uses server-side secrets and an explicit queue toggle');
+$assert(str_contains($botServiceSource, "case 'music-ai':") && str_contains($botServiceSource, "case 'image-ai':") && str_contains($botServiceSource, "'ai_image_photo'"), 'AI menu actions start guarded prompt/photo flows');
 $assert(str_contains($botServiceSource, 'HENDY DIGITAL ECOSYSTEM') && str_contains($botServiceSource, 'Ví NYC:') && !str_contains($botServiceSource, 'Luồng dịch vụ riêng'), 'welcome caption khớp mẫu và dùng dữ liệu động');
 $assert(str_contains($botServiceSource, 'TÍNH NĂNG ĐANG PHÁT TRIỂN'), 'mục chưa triển khai có thông báo trạng thái rõ ràng');
 $assert(str_contains($botServiceSource, 'OperationsService::forBot') && str_contains($botServiceSource, '/status'), 'bot kiểm tra trạng thái bảo trì/nâng cấp và cho phép xem /status');

@@ -104,7 +104,7 @@ final class NeonStorage
                 throw new RuntimeException('Không tải được tệp AI Cover từ Neon Storage (HTTP ' . $status . ')' . ($error !== '' ? ': ' . $error : '.'));
             }
             return ['path' => $temporary, 'size' => $size];
-        } catch (\\Throwable $error) {
+        } catch (\Throwable $error) {
             if (is_file($temporary)) @unlink($temporary);
             throw $error;
         } finally {

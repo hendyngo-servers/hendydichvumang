@@ -25,9 +25,17 @@ else
     echo "RUN_MIGRATIONS_ON_START=false; bỏ qua migration lúc khởi động."
 fi
 
-# Telegram webhook registration failure must not prevent the website from starting.
-if ! php bin/register-webhooks.php; then
-    echo "CẢNH BÁO: Không thể đăng ký webhook lúc khởi động; website vẫn sẽ được chạy." >&2
+# Start independent workers only when explicitly enabled. All secrets are read from
+# Render Environment; they are never passed on command lines or printed to logs.
+background_pids=()
+if [[ "${AI_MEDIA_QUEUE_ENABLED:-false}" == "true" ]]; then
+    if [[ -z "${OPENAI_API_KEY:-}" && -z "${ELEVENLABS_API_KEY:-}" ]]; then
+        echo "AI_MEDIA_QUEUE_ENABLED=true nhưng chưa có OPENAI_API_KEY hoặc ELEVENLABS_API_KEY." >&2
+        exit 1
+    fi
+    php bin/ai-worker.php &
+    background_pids+=("$!")
+    echo "HENDY AI media worker đã khởi chạy."
 fi
 
 if [[ "${WEBSOCKET_ENABLED:-false}" == "true" ]]; then
@@ -36,24 +44,26 @@ if [[ "${WEBSOCKET_ENABLED:-false}" == "true" ]]; then
         exit 1
     fi
     php bin/websocket.php &
-    websocket_pid=$!
-    apache2-foreground &
-    apache_pid=$!
-
-    cleanup() {
-        kill "$websocket_pid" "$apache_pid" 2>/dev/null || true
-        wait "$websocket_pid" "$apache_pid" 2>/dev/null || true
-    }
-    trap cleanup EXIT INT TERM
-
-    echo "HENDY website + WebSocket started; Apache port=$port, internal WS port=${WEBSOCKET_PORT:-10001}."
-    # Restart the Render service if either essential process exits unexpectedly.
-    set +e
-    wait -n "$websocket_pid" "$apache_pid"
-    status=$?
-    set -e
-    echo "Một tiến trình HENDY đã dừng (exit=$status); kết thúc container để Render khởi động lại." >&2
-    exit "$status"
+    background_pids+=("$!")
 fi
 
-exec apache2-foreground
+apache2-foreground &
+background_pids+=("$!")
+
+cleanup() {
+    for pid in "${background_pids[@]}"; do
+        kill "$pid" 2>/dev/null || true
+    done
+    for pid in "${background_pids[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+}
+trap cleanup EXIT INT TERM
+
+echo "HENDY services started; Apache port=$port; AI queue=${AI_MEDIA_QUEUE_ENABLED:-false}; WebSocket=${WEBSOCKET_ENABLED:-false}."
+set +e
+wait -n "${background_pids[@]}"
+status=$?
+set -e
+echo "Một tiến trình HENDY đã dừng (exit=$status); kết thúc container để Render khởi động lại." >&2
+exit "$status"

@@ -504,6 +504,14 @@ final class ApiController
                     (SELECT COUNT(*) FROM code_telegram_codes c WHERE c.source_id = s.id AND c.status = 'pending_review') AS pending_codes
                  FROM code_telegram_sources s ORDER BY s.created_at DESC LIMIT 200"
             );
+            $sources = array_map(static function (array $row): array {
+                $row['is_active'] = filter_var($row['is_active'], FILTER_VALIDATE_BOOLEAN);
+                $row['auto_publish'] = filter_var($row['auto_publish'], FILTER_VALIDATE_BOOLEAN);
+                $row['post_count'] = (int) $row['post_count'];
+                $row['active_codes'] = (int) $row['active_codes'];
+                $row['pending_codes'] = (int) $row['pending_codes'];
+                return $row;
+            }, $sources);
             $codes = Database::all(
                 "SELECT c.*, s.title AS source_title, p.source_link, p.media_kind
                  FROM code_telegram_codes c
@@ -542,8 +550,9 @@ final class ApiController
             }
 
             try {
-                $telegram = new TelegramApi(TelegramAuth::token('primary'));
-                if (TelegramAuth::token('primary') === '') throw new RuntimeException('Bot chính chưa cấu hình token.');
+                $primaryToken = TelegramAuth::token('primary');
+                if ($primaryToken === '') throw new RuntimeException('Bot chính chưa cấu hình token.');
+                $telegram = new TelegramApi($primaryToken);
                 $chat = $telegram->call('getChat', ['chat_id' => $sourceInput], 15, 5);
                 if (($chat['type'] ?? '') !== 'channel') throw new RuntimeException('Nguồn được chọn không phải Telegram channel.');
                 $bot = $telegram->call('getMe', [], 15, 5);

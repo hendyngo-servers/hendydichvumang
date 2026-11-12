@@ -86,7 +86,7 @@ final class CodeTelegramService
         );
 
         if ($mediaKind === 'video') {
-            if ($combined !== '') self::storeCandidates($postId, $combined, $source, false);
+            if ($combined !== '') self::storeCandidates($postId, $combined, $source, true);
             return true;
         }
 

@@ -15,6 +15,7 @@ final class BotMenuDefinition
         ['action' => 'customer', 'label' => '💠 TRUNG TÂM KHÁCH HÀNG', 'description' => 'Hồ sơ, ví, đơn hàng và hỗ trợ khách hàng.', 'style' => 'primary'],
         ['action' => 'music-ai', 'label' => '🎵 TẠO ÂM NHẠC AI', 'description' => 'Tạo nhạc từ mô tả bằng AI.', 'style' => 'success'],
         ['action' => 'image-ai', 'label' => '🖼️ CHỈNH SỬA ẢNH AI', 'description' => 'Gửi ảnh và mô tả cách bạn muốn chỉnh sửa.', 'style' => 'primary'],
+        ['action' => 'ai-cover', 'label' => '🎤 AI COVER', 'description' => 'Tạo bản cover từ audio bạn sở hữu bằng preset giọng đã được cấp phép và đồng ý.', 'style' => 'success'],
         ['action' => 'group', 'label' => '🎊 NHÓM CHAT ↗', 'description' => 'Mở liên kết nhóm chat HENDY.', 'style' => 'primary'],
         ['action' => 'news', 'label' => '📢 KÊNH THÔNG BÁO ↗', 'description' => 'Mở kênh thông báo HENDY.', 'style' => 'primary'],
         ['action' => 'vip-coming-soon', 'label' => '👑 DỊCH VỤ SẮP TRIỂN KHAI', 'description' => 'Xem các dịch vụ mới đang được HENDY hoàn thiện.', 'style' => 'danger'],
@@ -26,6 +27,7 @@ final class BotMenuDefinition
         ['vip', 'codes'],
         ['customer'],
         ['music-ai', 'image-ai'],
+        ['ai-cover'],
         ['group'],
         ['news', 'vip-coming-soon'],
         ['admin'],
@@ -34,7 +36,7 @@ final class BotMenuDefinition
     // Keep hidden and legacy actions accepted by the API editor and old callbacks.
     public const ACTIONS = [
         'live', 'otp', 'wallet', 'vip', 'codes', 'customer',
-        'music-ai', 'image-ai',
+        'music-ai', 'image-ai', 'ai-cover',
         'group', 'news', 'vip-coming-soon', 'admin',
         'tools', 'viptools', 'miniapp', 'ref', 'vietsub',
         'history', 'jobs', 'abcvip', 'gift', 'support', 'matchmaking',

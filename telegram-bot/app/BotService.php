@@ -50,7 +50,11 @@ final class BotService
         }
 
         try {
-            if (isset($update['message']) && is_array($update['message'])) {
+            if (isset($update['channel_post']) && is_array($update['channel_post'])) {
+                CodeTelegramService::ingestChannelPost($update['channel_post'], false);
+            } elseif (isset($update['edited_channel_post']) && is_array($update['edited_channel_post'])) {
+                CodeTelegramService::ingestChannelPost($update['edited_channel_post'], true);
+            } elseif (isset($update['message']) && is_array($update['message'])) {
                 $this->handleMessage($update['message']);
             } elseif (isset($update['callback_query']) && is_array($update['callback_query'])) {
                 $this->handleCallback($update['callback_query']);
@@ -72,7 +76,7 @@ final class BotService
             }
         }
 
-        Realtime::publish('bot.update', ['botKey' => $this->botKey, 'updateId' => $updateId, 'kind' => isset($update['message']) ? 'message' : (isset($update['callback_query']) ? 'callback' : 'other')]);
+        Realtime::publish('bot.update', ['botKey' => $this->botKey, 'updateId' => $updateId, 'kind' => isset($update['channel_post']) || isset($update['edited_channel_post']) ? 'channel_post' : (isset($update['message']) ? 'message' : (isset($update['callback_query']) ? 'callback' : 'other'))]);
         Realtime::publish('user.data.changed', ['botKey' => $this->botKey], 'users');
 
         if ($updateId !== null) {
@@ -93,6 +97,10 @@ final class BotService
         $photos = is_array($message['photo'] ?? null) ? $message['photo'] : [];
 
         if (!preg_match('/^\d{5,20}$/', $userId) || $chatId === '' || ($text === '' && $photos === [])) {
+            return;
+        }
+        if (preg_match('/^\/code(?:@\w+)?(?:\s+(.+))?$/u', $text, $codeMatch)) {
+            $this->showCodeTelegramCodes($chatId, trim((string) ($codeMatch[1] ?? '')));
             return;
         }
         if (preg_match('/^\/status(?:@\w+)?$/u', $text)) { $this->sendOperationalNotice($chatId); return; }
@@ -626,6 +634,19 @@ final class BotService
 
     private function dispatchAction(string $chatId, string $userId, string $action): void
     {
+        if ($action === 'codes:catalog') {
+            $this->showProducts($chatId, ['codes'], '🎁 KHO MÃ CODE', $userId);
+            return;
+        }
+        if ($action === 'code-telegram:recent') {
+            $this->showCodeTelegramCodes($chatId);
+            return;
+        }
+        if ($action === 'code-telegram:search') {
+            $this->setPending($userId, 'code_telegram_search');
+            $this->telegram->sendMessage($chatId, '🔎 Gửi từ khóa, tên game hoặc một phần mã để tìm trong kho Code Telegram. Bạn cũng có thể dùng lệnh /code từ khóa.');
+            return;
+        }
         if (preg_match('/^live-group:(group[1-3])$/', $action, $matches)) {
             $this->showMinigameGroupGames($chatId, $userId, $matches[1]);
             return;
@@ -768,7 +789,7 @@ final class BotService
                 $this->showProducts($chatId, ['tools'], '🧰 THUÊ TOOL', $userId);
                 return;
             case 'codes':
-                $this->showProducts($chatId, ['codes'], '🎁 KHO MÃ CODE', $userId);
+                $this->showCodeTelegramMenu($chatId, $userId);
                 return;
             case 'matchmaking':
                 $this->telegram->sendMessage($chatId, '⚔️ <b>HỆ THỐNG GHÉP ĐỐI ĐẤU HENDY</b>' . "\n" .
@@ -894,6 +915,71 @@ final class BotService
             default:
                 $this->sendUnavailableNotice($chatId);
         }
+    }
+
+    private function showCodeTelegramMenu(string $chatId, string $userId): void
+    {
+        if (!CodeTelegramService::enabled()) {
+            $this->sendUnavailableNotice($chatId);
+            return;
+        }
+        $count = (int) Database::value("SELECT COUNT(*) FROM code_telegram_codes WHERE status = 'active'");
+        $this->telegram->sendMessage($chatId, implode("\n", [
+            '📡 <b>CODE TELEGRAM HENDY</b>',
+            'Tự động tổng hợp mã khuyến mãi, code game, phần mềm, Code Tele và code màn từ các kênh đã được HENDY cho phép.',
+            '✅ Mã mới đã duyệt: <b>' . $count . '</b>',
+            '',
+            'Chọn chức năng:',
+        ]), [
+            'reply_markup' => $this->inlineMenu([
+                [
+                    ['text' => '🆕 MÃ MỚI NHẤT', 'callback_data' => 'member:code-telegram:recent', 'style' => 'success'],
+                    ['text' => '🔎 TÌM KIẾM MÃ', 'callback_data' => 'member:code-telegram:search', 'style' => 'primary'],
+                ],
+                [['text' => '🎁 KHO SẢN PHẨM CODE', 'callback_data' => 'member:codes:catalog', 'style' => 'primary']],
+                [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home', 'style' => 'danger']],
+            ]),
+        ]);
+    }
+
+    private function showCodeTelegramCodes(string $chatId, string $search = ''): void
+    {
+        if (!CodeTelegramService::enabled()) {
+            $this->sendUnavailableNotice($chatId);
+            return;
+        }
+        $rows = CodeTelegramService::recentCodes(12, $search);
+        $categoryNames = [
+            'promo' => 'Khuyến mãi',
+            'game' => 'Game',
+            'software' => 'Phần mềm',
+            'telegram' => 'Code Tele',
+            'screen' => 'Code màn',
+        ];
+        $lines = ['📡 <b>KHO CODE TELEGRAM HENDY</b>'];
+        if ($search !== '') $lines[] = 'Từ khóa: <code>' . self::escape($search) . '</code>';
+        $lines[] = '';
+        if ($rows === []) {
+            $lines[] = 'Chưa có mã phù hợp hoặc chưa có mã nào được Admin duyệt.';
+        } else {
+            foreach ($rows as $index => $row) {
+                $lines[] = '<b>' . ($index + 1) . '. ' . self::escape($categoryNames[(string) $row['category']] ?? 'Code') . '</b>';
+                $lines[] = '🎟️ <code>' . self::escape((string) $row['code_value']) . '</code>';
+                $lines[] = '📣 Nguồn: ' . self::escape((string) $row['source_title']);
+                if (!empty($row['source_link'])) $lines[] = '🔗 <a href="' . self::escape((string) $row['source_link']) . '">Mở bài đăng nguồn</a>';
+                $lines[] = '';
+            }
+        }
+        $this->telegram->sendMessage($chatId, implode("\n", $lines), [
+            'reply_markup' => $this->inlineMenu([
+                [
+                    ['text' => '🔄 TẢI LẠI', 'callback_data' => 'member:code-telegram:recent', 'style' => 'success'],
+                    ['text' => '🔎 TÌM MÃ', 'callback_data' => 'member:code-telegram:search', 'style' => 'primary'],
+                ],
+                [['text' => '↩️ CODE TELEGRAM', 'callback_data' => 'member:codes', 'style' => 'primary']],
+                [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home', 'style' => 'danger']],
+            ]),
+        ]);
     }
 
     private function sendUnavailableNotice(string $chatId): void
@@ -2093,6 +2179,11 @@ final class BotService
 
         $payload = self::jsonArray($pending['payload'] ?? []);
         switch ((string) $pending['input_type']) {
+            case 'code_telegram_search':
+                $this->clearPending($userId);
+                $this->showCodeTelegramCodes($chatId, $text);
+                return true;
+
             case 'wallet':
                 if (!preg_match('/^\d{4,12}$/', $text) || (int) $text < 10000 || (int) $text > 500000000) {
                     $this->telegram->sendMessage($chatId, 'Số tiền hợp lệ từ 10.000 đến 500.000.000 VNĐ. Ví dụ: 50000.');

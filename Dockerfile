@@ -10,8 +10,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /var/www/html
 COPY . /var/www/html/
-RUN mkdir -p /var/www/html/uploads/screenshots \
- && chown -R www-data:www-data /var/www/html/uploads \
+RUN mkdir -p /var/www/html/uploads/screenshots /var/www/html/app_store/uploads/screenshots \
+ && chown -R www-data:www-data /var/www/html/uploads /var/www/html/app_store/uploads \
  && find /var/www/html -type d -exec chmod 755 {} \; \
  && find /var/www/html -type f -exec chmod 644 {} \;
 EXPOSE 10000

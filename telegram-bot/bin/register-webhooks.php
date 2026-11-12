@@ -34,22 +34,12 @@ $bots = [
         'path' => '/webhook/telegram',
         'label' => 'bot chính',
     ],
-    'secondary' => [
-        'token' => Hendy\TelegramAuth::token('secondary'),
-        'secret' => Hendy\TelegramAuth::webhookSecret('secondary'),
-        'path' => '/webhook/telegram/secondary',
-        'label' => 'bot thử nghiệm',
-    ],
 ];
 
 $failed = [];
 foreach ($bots as $key => $config) {
     if ($config['token'] === '') {
-        if ($key === 'secondary') {
-            fwrite(STDOUT, "BOT2_TOKEN đang trống; bỏ qua bot thử nghiệm.\n");
-        } else {
-            $failed[] = 'BOT1_TOKEN đang trống; chưa thể đăng ký webhook bot chính.';
-        }
+        $failed[] = 'BOT1_TOKEN đang trống; chưa thể đăng ký webhook bot chính.';
         continue;
     }
 

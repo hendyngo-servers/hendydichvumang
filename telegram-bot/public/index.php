@@ -190,9 +190,8 @@ try {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'");
-        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-website.onrender.com'), '/');
+        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-szad.onrender.com'), '/');
         header('Location: ' . $websiteUrl . '/', true, 302);
-        exit;
         exit;
     }
 
@@ -201,18 +200,16 @@ try {
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: public, max-age=1800');
         header("Content-Security-Policy: default-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'; object-src 'none'; frame-ancestors 'self'");
-        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-website.onrender.com'), '/');
+        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-szad.onrender.com'), '/');
         header('Location: ' . $websiteUrl . '/privacy', true, 302);
-        exit;
         exit;
     }
     if ($method === 'GET' && in_array($path, ['/terms', '/terms/'], true)) {
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: public, max-age=1800');
         header("Content-Security-Policy: default-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'; object-src 'none'; frame-ancestors 'self'");
-        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-website.onrender.com'), '/');
+        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-szad.onrender.com'), '/');
         header('Location: ' . $websiteUrl . '/terms', true, 302);
-        exit;
         exit;
     }
 

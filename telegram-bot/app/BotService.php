@@ -1246,7 +1246,10 @@ final class BotService
         $user = $this->getUser($userId);
         $price = (int) $product['price'];
         $balance = (int) ($user['balance'] ?? 0);
-        $enough = $balance >= $price;
+        $requiredVip = (int) ($product['vip_level'] ?? 0);
+        $memberVip = (int) ($user['vip_level'] ?? 0);
+        $vipEligible = $memberVip >= $requiredVip;
+        $enough = $balance >= $price && $vipEligible;
         $stock = $product['stock'] === null
             ? 'Không giới hạn'
             : number_format((int) $product['stock'], 0, ',', '.') . ' sản phẩm';
@@ -1268,10 +1271,12 @@ final class BotService
         $lines[] = '';
         $lines[] = 'Phương thức: <b>Ví Chính</b>';
         $lines[] = 'Số dư hiện tại: <b>' . self::money($balance) . '</b>';
-        if (!$enough) {
+        if (!$vipEligible) {
+            $lines[] = '⚠️ Gói này yêu cầu VIP ' . $requiredVip . '. Hạng hiện tại của bạn là VIP ' . $memberVip . '.';
+        } elseif ($balance < $price) {
             $lines[] = '⚠️ Ví Chính chưa đủ. Bạn cần nạp thêm ' . self::money($price - $balance) . ' để thanh toán.';
         } else {
-            $lines[] = '✅ Ví Chính đủ số dư. Bấm xác nhận để thanh toán và tạo đơn hàng.';
+            $lines[] = '✅ Ví Chính đủ số dư và hạng VIP phù hợp. Bấm xác nhận để thanh toán và tạo đơn hàng.';
         }
         $lines[] = 'Sau khi thanh toán, đơn được ghi nhận trong lịch sử và chuyển Admin xử lý/bàn giao.';
 
@@ -1281,6 +1286,12 @@ final class BotService
                 'text' => '💳 XÁC NHẬN THANH TOÁN ' . self::money($price),
                 'callback_data' => 'member:live-buy:' . $brand . ':' . $productId,
                 'style' => 'success',
+            ]];
+        } elseif (!$vipEligible) {
+            $rows[] = [[
+                'text' => '👑 XEM QUYỀN LỢI VIP',
+                'callback_data' => 'member:vip',
+                'style' => 'primary',
             ]];
         } else {
             $rows[] = [[
@@ -1481,7 +1492,11 @@ final class BotService
             } else {
                 $product = Database::one('SELECT * FROM products WHERE id = ? AND is_active = TRUE FOR UPDATE', [$productId]);
             }
-            if ($product === null) throw new RuntimeException('Sản phẩm không còn được bán.');
+            if ($product === null) {
+                throw new RuntimeException($expectedBrand !== null
+                    ? 'Gói MiniGame đã ngừng bán, hết hàng hoặc không thuộc nhà cái đã chọn.'
+                    : 'Sản phẩm không còn được bán.');
+            }
             if ($product['stock'] !== null && (int) $product['stock'] <= 0) throw new RuntimeException('Sản phẩm đã hết hàng.');
 
             if ($expectedBrand !== null) {
@@ -1507,7 +1522,8 @@ final class BotService
             $available = (int) ($user[$walletColumn] ?? 0);
             $price = (int) $product['price'];
             if ($available < $price) {
-                throw new RuntimeException('Số dư ví ' . $walletType . ' không đủ. Cần ' . self::money($price) . '.');
+                $walletLabel = $walletType === 'MAIN' ? 'Chính' : 'NYC';
+                throw new RuntimeException('Số dư Ví ' . $walletLabel . ' không đủ. Cần ' . self::money($price) . '.');
             }
 
             $orderCode = 'HD' . strtoupper(base_convert((string) time(), 10, 36)) . strtoupper(bin2hex(random_bytes(3)));

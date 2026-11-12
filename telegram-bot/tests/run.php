@@ -111,9 +111,9 @@ $syncScript = file_get_contents(dirname(__DIR__) . '/scripts/sync-render-env.sh'
 $websiteDbBootstrap = file_get_contents($repoRoot . '/includes/db.php');
 $websiteHeader = file_get_contents($repoRoot . '/includes/header.php');
 $assert(str_contains($landingSource, $productionHost) && str_contains($privacySource, $productionHost) && str_contains($termsSource, $productionHost), 'SEO metadata uses the new isolated Telegram Bot service hostname');
-$assert(str_contains($renderSource, 'name: hendydichvumang-telegram-bot') && str_contains($renderSource, 'rootDir: telegram-bot') && str_contains($renderSource, 'key: DATABASE_URL'), 'Render Blueprint deploys the Bot from its isolated subdirectory with its own PostgreSQL URL');
-$assert(!str_contains($renderSource, 'BOT2_TOKEN') && str_contains($renderSource, 'key: BOT1_TOKEN'), 'production Blueprint enables only the primary Telegram Bot');
-$assert(str_contains($renderSource, 'key: HOMEPROXY_ENCRYPTION_KEY') && str_contains($envManifest, 'HOMEPROXY_ENCRYPTION_KEY'), 'HomeProxy encryption secret remains declared');
+$assert(str_contains($renderSource, 'name: hendydichvumang-telegram-bot') && str_contains($renderSource, 'dockerfilePath: ./telegram-bot/Dockerfile') && str_contains($renderSource, 'dockerContext: ./telegram-bot') && !str_contains($renderSource, 'rootDir: telegram-bot'), 'Render Blueprint adopts the existing Bot service using the verified Docker context and file paths');
+$assert(!str_contains($renderSource, 'BOT2_TOKEN') && str_contains($renderSource, 'BOT1_TOKEN') && str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY'), 'production Blueprint documents the primary bot and existing private secrets without copying secret values');
+$assert(str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY') && str_contains($envManifest, 'HOMEPROXY_ENCRYPTION_KEY'), 'HomeProxy encryption secret remains documented in Blueprint and env manifest');
 $assert(str_contains($runtimeWorkflow, 'working-directory: telegram-bot') && str_contains($runtimeWorkflow, 'composer test'), 'monorepo CI runs Bot tests from the isolated application directory');
 $assert(str_contains($sitemapSource, $productionHost) && str_contains($robotsSource, $productionHost), 'sitemap and robots reference the Bot service hostname');
 $assert(str_contains($databaseSchema, $productionHost) && str_contains($databaseSchema, "'https://hendy-bot-tele.onrender.com'"), 'Bot PostgreSQL migration uses the new URL and keeps legacy URL migration rules');

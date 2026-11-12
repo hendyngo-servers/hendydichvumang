@@ -1,62 +1,53 @@
 <?php
-require_once 'includes/db.php';
+declare(strict_types=1);
+require_once __DIR__ . '/includes/db.php';
+if (current_user()) redirect('index.php');
+
 $error = '';
-$success = '';
-
+$name = '';
+$email = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = trim($_POST['username']);
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
+    verify_csrf();
+    $name = trim((string)($_POST['name'] ?? ''));
+    $email = strtolower(trim((string)($_POST['email'] ?? '')));
+    $password = (string)($_POST['password'] ?? '');
 
-    if (empty($username) || empty($email) || empty($password)) {
-        $error = 'Vui lòng điền đầy đủ tất cả các trường!';
+    if (mb_strlen($name) < 2 || mb_strlen($name) > 100) {
+        $error = 'Tên phải từ 2 đến 100 ký tự.';
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'Email không hợp lệ.';
+    } elseif (strlen($password) < 10) {
+        $error = 'Mật khẩu cần tối thiểu 10 ký tự.';
     } else {
-        $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
-        $stmt->execute([$username, $email]);
-        
-        if ($stmt->rowCount() > 0) {
-            $error = 'Tên đăng nhập hoặc Email đã tồn tại!';
-        } else {
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
-            if ($stmt->execute([$username, $email, $hashed_password])) {
-                $success = 'Đăng ký thành công! Bạn có thể <a href="login.php">đăng nhập ngay</a>.';
-            } else {
-                $error = 'Đã có lỗi xảy ra, vui lòng thử lại.';
-            }
+        try {
+            $statement = $pdo->prepare("INSERT INTO users(name,email,password,role) VALUES(?,?,?,'user')");
+            $statement->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT)]);
+            flash('Tạo tài khoản thành công. Hãy đăng nhập.');
+            redirect('login.php');
+        } catch (PDOException $exception) {
+            $error = in_array((string)$exception->getCode(), ['23000', '23505'], true)
+                ? 'Email này đã được đăng ký.'
+                : 'Không thể tạo tài khoản lúc này.';
         }
     }
 }
+$pageTitle = 'Đăng ký | HENDY';
+require __DIR__ . '/includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Đăng ký tài khoản - AppStore</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body class="auth-body">
-    <div class="auth-card">
-        <h2>Tạo tài khoản AppStore</h2>
-        <?php if (!empty($error)): ?><div class="alert error"><?php echo $error; ?></div><?php endif; ?>
-        <?php if (!empty($success)): ?><div class="alert success"><?php echo $success; ?></div><?php endif; ?>
-
-        <form action="register.php" method="POST">
-            <div class="form-group">
-                <label>Tên đăng nhập</label>
-                <input type="text" name="username" required>
-            </div>
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" name="email" required>
-            </div>
-            <div class="form-group">
-                <label>Mật khẩu</label>
-                <input type="password" name="password" required>
-            </div>
-            <button type="submit" class="btn-submit">Đăng ký</button>
-        </form>
-        <p class="auth-redirect">Đã có tài khoản? <a href="login.php">Đăng nhập</a></p>
-    </div>
-</body>
-</html>
+<div class="auth-wrap">
+  <form class="auth-card" method="post" action="register.php">
+    <div class="eyebrow">JOIN HENDY</div><h1>Tạo tài khoản</h1>
+    <p class="muted">Đăng ký để sử dụng tiện ích thành viên.</p>
+    <?php if ($error): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
+    <input type="hidden" name="_csrf" value="<?=e(csrf_token())?>">
+    <label for="name">Họ và tên</label>
+    <input id="name" name="name" value="<?=e($name)?>" maxlength="100" required autocomplete="name">
+    <label for="email">Email</label>
+    <input id="email" type="email" name="email" value="<?=e($email)?>" required autocomplete="email">
+    <label for="password">Mật khẩu (ít nhất 10 ký tự)</label>
+    <input id="password" type="password" name="password" minlength="10" required autocomplete="new-password">
+    <button class="button primary full" type="submit">Tạo tài khoản</button>
+    <p class="auth-foot">Đã có tài khoản? <a href="login.php">Đăng nhập</a></p>
+  </form>
+</div>
+<?php require __DIR__ . '/includes/footer.php'; ?>

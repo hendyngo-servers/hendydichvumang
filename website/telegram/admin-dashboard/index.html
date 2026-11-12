@@ -997,10 +997,10 @@
         '<div class="field"><label>Chế độ vận hành</label><select name="mode"><option value="off"'+(bot.mode==='off'?' selected':'')+'>Hoạt động bình thường</option><option value="maintenance"'+(bot.mode==='maintenance'?' selected':'')+'>Bảo trì</option><option value="upgrade"'+(bot.mode==='upgrade'?' selected':'')+'>Đang nâng cấp</option></select></div>'+
         '<div class="field"><label>Thông báo gửi thành viên</label><textarea name="message" maxlength="1000">'+escapeHtml(bot.message||'')+'</textarea></div>'+
         '<div class="field"><label>Dự kiến kết thúc (giờ trên thiết bị)</label><input type="datetime-local" name="until" value="'+escapeHtml(untilValue)+'"></div>'+
-        '<button class="primary">Lưu trạng thái '+(key==='primary'?'Bot chính':'Bot thử nghiệm')+'</button></form>';
+        '<button class="primary">Lưu trạng thái HENDY BOT+'</button></form>';
     };
     return '<div class="app-banner"><div><b>🛠️ BẢO TRÌ & NÂNG CẤP BOT</b><small>Tạm dừng tương tác thành viên; Admin vẫn được phép quản trị.</small></div><span class="banner-icon">🛰️</span></div>'+
-      formFor('primary','🤖 BOT CHÍNH')+formFor('secondary','🧪 BOT THỬ NGHIỆM')+
+      formFor('primary','🤖 HENDY BOT DUY NHẤT')+
       '<div class="notice warn">Khi bật bảo trì/nâng cấp, thành viên không thể gọi chức năng Bot hoặc thao tác Inline Menu. Lệnh /status vẫn hiển thị thông báo. Admin được miễn giới hạn. Hẹn giờ kết thúc tự hết hiệu lực, không cần restart thủ công.</div>';
   }
 

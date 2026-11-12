@@ -71,7 +71,7 @@ foreach ($bots as $key => $config) {
         $message = $error->getMessage();
         if (preg_match('/(?:Telegram API lỗi )?401\b|Unauthorized/i', $message)) {
             $failed[] = $config['label'] . ': Telegram từ chối token (401 Unauthorized). Hãy kiểm tra biến ' .
-                ($key === 'primary' ? 'BOT1_TOKEN' : 'BOT2_TOKEN') . ' trong Render Environment.';
+                'BOT1_TOKEN' . ' trong Render Environment.';
         } else {
             $failed[] = $config['label'] . ': không đăng ký được webhook: ' . $message;
         }

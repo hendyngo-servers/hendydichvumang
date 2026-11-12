@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/db.php';
 $id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT);
+$service=null;
 if($id){
  $s=$pdo->prepare("SELECT * FROM network_services WHERE id=? AND status='published'");$s->execute([$id]);$service=$s->fetch();
 }

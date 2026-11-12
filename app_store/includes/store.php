@@ -46,8 +46,9 @@ function app_store_image_url(?string $path): string
 function app_store_delete_image(string $path): void
 {
     if(str_starts_with($path,'app_store/uploads/screenshots/')){
-        $base=realpath(__DIR__.'/../uploads/screenshots');
-        $file=realpath(__DIR__.'/../'.$path);
+        $root=dirname(__DIR__,2);
+        $base=realpath($root.'/app_store/uploads/screenshots');
+        $file=realpath($root.'/'.$path);
         if($base&&$file&&str_starts_with($file,$base.DIRECTORY_SEPARATOR)&&is_file($file))@unlink($file);
         return;
     }

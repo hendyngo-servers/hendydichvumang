@@ -482,7 +482,7 @@ final class BotService
 
         foreach (BotMenuDefinition::ITEMS as $item) {
             $action = $item['action'];
-            $configuredLabel = (string) ($labels[$action] ?? $item['label']);
+            $configuredLabel = $action === 'codes' ? $item['label'] : (string) ($labels[$action] ?? $item['label']);
             if ($action === 'customer' && (str_contains($configuredLabel, 'TRUNG TÂM KHÁCH HÀNG') || str_contains($configuredLabel, 'TRUNG TÂM QUẢN LÝ TÀI KHOẢN'))) {
                 $configuredLabel = '💠 TRUNG TÂM KHÁCH HÀNG HENDY';
             }
@@ -636,6 +636,15 @@ final class BotService
     {
         if ($action === 'codes:catalog') {
             $this->showProducts($chatId, ['codes'], '🎁 KHO MÃ CODE', $userId);
+            return;
+        }
+        if (preg_match('/^code-telegram:service:(\\d{1,18})$/', $action, $serviceMatch)) {
+            $this->showCodeTelegramService($chatId, $userId, (int) $serviceMatch[1]);
+            return;
+        }
+        if ($action === 'code-telegram:cancel') {
+            $this->clearPending($userId);
+            $this->showCodeTelegramMenu($chatId, $userId);
             return;
         }
         if ($action === 'code-telegram:recent') {
@@ -923,22 +932,93 @@ final class BotService
             $this->sendUnavailableNotice($chatId);
             return;
         }
-        $count = (int) Database::value("SELECT COUNT(*) FROM code_telegram_codes WHERE status = 'active'");
-        $this->telegram->sendMessage($chatId, implode("\n", [
-            '📡 <b>CODE TELEGRAM HENDY</b>',
-            'Tự động tổng hợp mã khuyến mãi, code game, phần mềm, Code Tele và code màn từ các kênh đã được HENDY cho phép.',
-            '✅ Mã mới đã duyệt: <b>' . $count . '</b>',
-            '',
-            'Chọn chức năng:',
-        ]), [
-            'reply_markup' => $this->inlineMenu([
-                [
-                    ['text' => '🆕 MÃ MỚI NHẤT', 'callback_data' => 'member:code-telegram:recent', 'style' => 'success'],
-                    ['text' => '🔎 TÌM KIẾM MÃ', 'callback_data' => 'member:code-telegram:search', 'style' => 'primary'],
-                ],
-                [['text' => '🎁 KHO SẢN PHẨM CODE', 'callback_data' => 'member:codes:catalog', 'style' => 'primary']],
-                [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home', 'style' => 'danger']],
-            ]),
+        $services = Database::all(
+            'SELECT id, service_key, brand, display_name, code_type, price_min, price_max, max_accounts, daily_limit ' .
+            'FROM code_telegram_services WHERE is_active = TRUE ORDER BY sort_order ASC, id ASC'
+        );
+        if ($services === []) {
+            $this->sendUnavailableNotice($chatId);
+            return;
+        }
+
+        $lines = [
+            '📡 <b>CODE TELEGRAM</b>',
+            'Tool tự đọc code từ các kênh Telegram (video và tin chữ), sau đó tiếp nhận tên đăng nhập để tạo yêu cầu.',
+            'XX88 và LLWIN có 2 loại: <b>Thường</b> (mã video) và <b>VIP</b> (mã tin chữ).',
+            '✅ <b>Chỉ tính phí khi xử lý thành công.</b>',
+            '🔐 Chỉ gửi tên đăng nhập. Không gửi mật khẩu, PIN hoặc OTP.',
+        ];
+        $buttons = [];
+        foreach ($services as $service) {
+            $priceMin = (int) $service['price_min'];
+            $priceMax = (int) $service['price_max'];
+            $price = $priceMin === $priceMax
+                ? number_format($priceMin, 0, ',', '.') . 'đ'
+                : number_format($priceMin, 0, ',', '.') . '–' . number_format($priceMax, 0, ',', '.') . 'đ';
+            $label = self::truncate((string) $service['display_name'] . ' · ' . $price, 55);
+            $buttons[] = [
+                'text' => $label,
+                'callback_data' => 'member:code-telegram:service:' . (int) $service['id'],
+                'style' => $service['code_type'] === 'text' ? 'primary' : 'success',
+            ];
+        }
+        $keyboard = [];
+        foreach (array_chunk($buttons, 2) as $row) {
+            $keyboard[] = $row;
+        }
+        $keyboard[] = [[
+            'text' => '« NHÓM DỊCH VỤ',
+            'callback_data' => 'member:home',
+            'style' => 'danger',
+        ]];
+
+        $this->telegram->sendMessage($chatId, implode("\n", $lines), [
+            'reply_markup' => ['inline_keyboard' => $keyboard],
+        ]);
+    }
+
+    private function showCodeTelegramService(string $chatId, string $userId, int $serviceId): void
+    {
+        if (!CodeTelegramService::enabled()) {
+            $this->sendUnavailableNotice($chatId);
+            return;
+        }
+        $service = Database::one(
+            'SELECT id, service_key, brand, display_name, code_type, price_min, price_max, max_accounts, daily_limit ' .
+            'FROM code_telegram_services WHERE id = ? AND is_active = TRUE LIMIT 1',
+            [$serviceId]
+        );
+        if ($service === null) {
+            $this->telegram->sendMessage($chatId, 'Dịch vụ không còn mở. Vui lòng chọn lại Code Telegram.');
+            $this->showCodeTelegramMenu($chatId, $userId);
+            return;
+        }
+
+        $typeLabel = $service['code_type'] === 'text' ? 'VIP · mã tin chữ' : 'Thường · mã video';
+        $priceMin = (int) $service['price_min'];
+        $priceMax = (int) $service['price_max'];
+        $price = $priceMin === $priceMax
+            ? number_format($priceMin, 0, ',', '.') . 'đ'
+            : number_format($priceMin, 0, ',', '.') . '–' . number_format($priceMax, 0, ',', '.') . 'đ';
+        $this->setPending($userId, 'code_telegram_accounts', ['service_id' => (int) $service['id']]);
+
+        $lines = [
+            '🎟️ <b>' . self::escape((string) $service['display_name']) . ' · ' . self::escape($price) . '/lần thành công</b>',
+            'Loại mã: <b>' . self::escape($typeLabel) . '</b>.',
+            $service['code_type'] === 'text'
+                ? 'Gói VIP nhận mã được đăng trong tin chữ từ kênh nguồn đã kết nối.'
+                : 'Gói Thường chỉ nhận mã xuất hiện trong video. Mã đăng dạng tin chữ thuộc gói Code VIP.',
+            'Bạn chỉ cần gửi tên đăng nhập, không cần mật khẩu.',
+            'Mỗi tài khoản tối đa 1 mã/ngày. Gửi mỗi tên đăng nhập trên một dòng; tối đa ' . (int) $service['max_accounts'] . ' tài khoản/lần.',
+            'Bot chuẩn hóa tên đăng nhập thành chữ thường. Ví dụ:',
+            '<code>taikhoan1</code>',
+            '<code>taikhoan2</code>',
+            'Có thể gửi nhiều tài khoản trong một lần. Phí chỉ được trừ sau khi mã đã được xử lý thành công.',
+        ];
+        $this->telegram->sendMessage($chatId, implode("\n\n", $lines), [
+            'reply_markup' => $this->inlineMenu([[
+                ['text' => '❌ HỦY', 'callback_data' => 'member:code-telegram:cancel', 'style' => 'danger'],
+            ]]),
         ]);
     }
 
@@ -2179,6 +2259,99 @@ final class BotService
 
         $payload = self::jsonArray($pending['payload'] ?? []);
         switch ((string) $pending['input_type']) {
+            case 'code_telegram_accounts':
+                $serviceId = (int) (($payload['service_id'] ?? 0));
+                $service = Database::one(
+                    'SELECT id, brand, display_name, code_type, price_min, price_max, max_accounts FROM code_telegram_services WHERE id = ? AND is_active = TRUE LIMIT 1',
+                    [$serviceId]
+                );
+                if ($service === null) {
+                    $this->clearPending($userId);
+                    $this->telegram->sendMessage($chatId, 'Dịch vụ đã đóng. Hãy mở lại 📡 CODE TELEGRAM để chọn dịch vụ khác.');
+                    return true;
+                }
+                $usernames = [];
+                foreach (preg_split('/\\R/u', trim($text)) ?: [] as $candidate) {
+                    $candidate = mb_strtolower(trim($candidate), 'UTF-8');
+                    if ($candidate === '') continue;
+                    if (mb_strlen($candidate, 'UTF-8') < 3 || mb_strlen($candidate, 'UTF-8') > 64 ||
+                        preg_match('/^[a-z0-9][a-z0-9_.-]*$/', $candidate) !== 1) {
+                        $this->telegram->sendMessage($chatId, 'Tên đăng nhập không hợp lệ: <code>' . self::escape($candidate) . '</code>. Hãy gửi lại, mỗi dòng một username (3–64 ký tự), không gửi mật khẩu/OTP.');
+                        return true;
+                    }
+                    $usernames[$candidate] = true;
+                }
+                $usernames = array_keys($usernames);
+                $maximum = max(1, min(20, (int) $service['max_accounts']));
+                if ($usernames === [] || count($usernames) > $maximum) {
+                    $this->telegram->sendMessage($chatId, 'Vui lòng gửi từ 1 đến ' . $maximum . ' tên đăng nhập, mỗi dòng một tài khoản.');
+                    return true;
+                }
+                $duplicates = Database::all(
+                    "SELECT DISTINCT a.username_normalized
+                     FROM code_telegram_request_accounts a
+                     JOIN code_telegram_requests r ON r.id = a.request_id
+                     WHERE r.service_id = ? AND a.username_normalized = ANY(?::text[])
+                       AND a.created_at >= date_trunc('day', NOW())
+                       AND a.status IN ('queued','processing','completed')",
+                    [$serviceId, '{' . implode(',', array_map(static fn(string $name): string => '"' . str_replace('"', '\"', $name) . '"', $usernames)) . '}']
+                );
+                if ($duplicates !== []) {
+                    $duplicateNames = array_column($duplicates, 'username_normalized');
+                    $this->telegram->sendMessage($chatId, 'Các tài khoản đã có yêu cầu trong hôm nay: ' .
+                        implode(', ', array_map(static fn(string $name): string => '<code>' . self::escape($name) . '</code>', $duplicateNames)) .
+                        '. Mỗi tài khoản chỉ nhận tối đa 1 mã/ngày. Bạn có thể gửi lại danh sách đã loại bỏ các tài khoản này.');
+                    return true;
+                }
+
+                $request = Database::transaction(function () use ($userId, $service, $usernames): array {
+                    $created = Database::one(
+                        "INSERT INTO code_telegram_requests
+                            (user_id, service_id, service_key_snapshot, service_name_snapshot, brand_snapshot,
+                             code_type_snapshot, price_min_snapshot, price_max_snapshot, account_count)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                        [
+                            $userId, (int) $service['id'], (string) $service['service_key'],
+                            (string) $service['display_name'], (string) $service['brand'],
+                            (string) $service['code_type'], (int) $service['price_min'],
+                            (int) $service['price_max'], count($usernames),
+                        ]
+                    );
+                    if ($created === null) throw new RuntimeException('Không thể tạo yêu cầu Code Telegram.');
+                    foreach ($usernames as $username) {
+                        Database::run(
+                            'INSERT INTO code_telegram_request_accounts (request_id, username, username_normalized) VALUES (?, ?, ?)',
+                            [(int) $created['id'], $username, $username]
+                        );
+                    }
+                    return $created;
+                });
+                $this->clearPending($userId);
+                $this->telegram->sendMessage($chatId, implode("
+", [
+                    '✅ <b>ĐÃ TIẾP NHẬN YÊU CẦU CODE TELEGRAM</b>',
+                    'Mã yêu cầu: <code>CT' . (int) $request['id'] . '</code>',
+                    'Dịch vụ: <b>' . self::escape((string) $service['display_name']) . '</b>',
+                    'Tài khoản: <b>' . count($usernames) . '</b>',
+                    'Trạng thái: <b>Đang chờ xử lý</b>.',
+                    '💰 Chưa trừ tiền. HENDY chỉ tính phí từng tài khoản khi mã được xác nhận xử lý thành công.',
+                ]));
+                $this->notifyAdmins(
+                    '📡 <b>YÊU CẦU CODE TELEGRAM MỚI</b>' . "
+" .
+                    'Mã: <code>CT' . (int) $request['id'] . '</code>' . "
+" .
+                    'Dịch vụ: <b>' . self::escape((string) $service['display_name']) . '</b>' . "
+" .
+                    'User: <code>' . self::escape($userId) . '</code>' . "
+" .
+                    'Số tài khoản: <b>' . count($usernames) . '</b>' . "
+" .
+                    'Tài khoản: ' . self::escape(implode(', ', $usernames)),
+                    $this->inlineMenu([[['text' => '📡 MỞ CODE TELEGRAM ADMIN', 'callback_data' => 'member:admin']]])
+                );
+                return true;
+
             case 'code_telegram_search':
                 $this->clearPending($userId);
                 $this->showCodeTelegramCodes($chatId, $text);

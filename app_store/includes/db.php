@@ -251,13 +251,33 @@ function telegram_bot_url(): ?string
     return $url;
 }
 
-// Seed the initial admin once, only when an operator configured credentials in Render.
-$adminEmail = trim((string) envv('ADMIN_EMAIL', ''));
+// Safe, idempotent first-admin bootstrap. Never overwrite an existing password.
+$adminEmail = strtolower(trim((string) envv('ADMIN_EMAIL', '')));
 $adminPassword = (string) envv('ADMIN_PASSWORD', '');
 if ($adminEmail !== '' && $adminPassword !== '' && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
-    $count = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
-    if ($count === 0) {
-        $statement = $pdo->prepare("INSERT INTO users(name,email,password,role) VALUES(?,?,?,'admin')");
-        $statement->execute(['HENDY Administrator', strtolower($adminEmail), password_hash($adminPassword, PASSWORD_DEFAULT)]);
+    try {
+        $pdo->beginTransaction();
+        $adminCount = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
+        if ($adminCount === 0) {
+            $lookup = $pdo->prepare('SELECT id,password,role FROM users WHERE LOWER(email)=? LIMIT 1 FOR UPDATE');
+            $lookup->execute([$adminEmail]);
+            $existing = $lookup->fetch();
+            if ($existing !== false) {
+                if (password_verify($adminPassword, (string) $existing['password'])) {
+                    $promote = $pdo->prepare("UPDATE users SET role='admin' WHERE id=? AND role<>'admin'");
+                    $promote->execute([(int) $existing['id']]);
+                } else {
+                    error_log('Website admin bootstrap skipped: configured email already exists but bootstrap password does not match. Existing account left unchanged.');
+                }
+            } else {
+                $hash = password_hash($adminPassword, PASSWORD_DEFAULT);
+                $insert = $pdo->prepare("INSERT INTO users(name,email,password,role) VALUES(?,?,?,'admin') ON CONFLICT (email) DO NOTHING");
+                $insert->execute(['HENDY Administrator', $adminEmail, $hash]);
+            }
+        }
+        $pdo->commit();
+    } catch (Throwable $bootstrapError) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('Website admin bootstrap failed safely (' . $bootstrapError::class . ', code ' . (string) $bootstrapError->getCode() . ').');
     }
 }

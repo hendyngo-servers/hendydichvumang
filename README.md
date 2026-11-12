@@ -38,7 +38,7 @@ Legacy products/screenshots and App Store apps/app_screenshots/network_services 
 
 ## Telegram Bot
 
-The primary production bot uses BOT1_TOKEN and one webhook /webhook/telegram. The main Inline Keyboard follows the supplied reference image and includes AI music/image actions. The welcome caption uses live Telegram/profile/wallet data. Home artwork is fetched by the Bot backend, validated against BOT_HOME_PHOTO_ALLOWED_HOSTS, then uploaded to Telegram as multipart bytes. Default URL: https://i.postimg.cc/rcD583NW/anh-quan-cao.png.
+The primary production bot uses BOT1_TOKEN and one webhook /webhook/telegram. The main Inline Keyboard follows the supplied reference image and includes AI music/image actions. The welcome caption uses live Telegram/profile/wallet data. Home artwork is fetched by the Bot backend, validated against BOT_HOME_PHOTO_ALLOWED_HOSTS, then uploaded to Telegram as multipart bytes. Default URL: https://i.postimg.cc/02qznt32/anh-quan-cao.png.
 
 AI Media is optional and disabled by default. It uses a PostgreSQL ai_media_jobs queue, an optional worker, OpenAI Images Edit and ElevenLabs Music v2.5. Enable only after the additive migration is approved/applied and provider API keys are set in Render Environment. The beta queue is rate-limited and does not deduct member wallets.
 

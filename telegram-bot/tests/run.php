@@ -160,7 +160,7 @@ $assert(str_contains($runtimeWorkflow, 'working-directory: telegram-bot') && str
 $assert(str_contains($sitemapSource, 'hendydichvumang-szad.onrender.com') && str_contains($robotsSource, 'hendydichvumang-szad.onrender.com'), 'sitemap and robots reference the new Static Site hostname');
 $assert(str_contains($databaseSchema, 'https://hendydichvumang-szad.onrender.com') && str_contains($databaseSchema, "'https://hendy-bot-tele.onrender.com'"), 'Bot PostgreSQL migration seeds the new Static Site URL and keeps legacy URL migration rules');
 $assert(str_contains($deployScript, '${APP_URL:?') && str_contains($syncScript, 'RENDER_EXTERNAL_URL') && !str_contains($syncScript, 'hendy-bot-cybertech-1.onrender.com'), 'operational scripts resolve the active Render URL instead of hardcoding the former service');
-$assert(str_contains($botServiceSource, 'https://hendydichvumang.onrender.com/') && !str_contains($botServiceSource, 'https://hendydichvumang-telegram-bot.onrender.com/'), 'Bot welcome links fall back to the public Static Site rather than the Bot API host');
+$assert(str_contains($botServiceSource, 'https://hendydichvumang-szad.onrender.com/') && !str_contains($botServiceSource, 'https://hendydichvumang-telegram-bot.onrender.com/'), 'Bot welcome links fall back to the verified public Static Site rather than the Bot API host');
 $assert(str_contains($websiteDbBootstrap, 'HENDY DIGITAL ECOSYSTEM') && str_contains($websiteDbBootstrap, 'CODE TELEGRAM'), 'Static Website contains only public-facing ecosystem content');
 $assert(str_contains($websiteHeader, 'Quản trị ↗') && str_contains($websiteHeader, '/admin'), 'Website navigation links to the Bot without exposing a token');
 $publicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');

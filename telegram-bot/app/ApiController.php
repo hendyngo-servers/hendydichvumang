@@ -1277,37 +1277,44 @@ final class ApiController
             throw new HttpException(400, 'Login ticket hoặc phạm vi đăng nhập không hợp lệ.');
         }
 
-        $identity = Database::transaction(function () use ($ticket, $scope): array {
-            $hash = hash('sha256', $ticket);
-            $found = Database::one(
-                'SELECT user_id, bot_key FROM legacy_login_tickets WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > NOW() FOR UPDATE',
-                [$hash]
-            );
-            if ($found === null) {
-                throw new HttpException(401, 'Link đăng nhập đã hết hạn hoặc đã được sử dụng.');
-            }
-            Database::run('UPDATE legacy_login_tickets SET consumed_at = NOW() WHERE token_hash = ?', [$hash]);
-            $user = Database::one('SELECT user_id, name, username, vip_level, balance FROM users WHERE user_id = ?', [$found['user_id']]);
-            if ($user === null) {
-                throw new HttpException(404, 'Không tìm thấy hồ sơ thành viên.');
-            }
-            if ($scope === 'admin' && !TelegramAuth::isAdmin((string) $user['user_id'])) {
-                throw new HttpException(403, 'Tài khoản này không nằm trong danh sách Admin được phép.');
-            }
-            return ['identity' => $found, 'user' => $user];
-        });
+        // Claim the one-time ticket with one atomic UPDATE. This is concurrency-safe
+        // and avoids leaving a pooled PostgreSQL connection inside an aborted transaction.
+        $hash = hash('sha256', $ticket);
+        $identity = Database::one(
+            "UPDATE legacy_login_tickets
+                SET consumed_at = NOW()
+              WHERE token_hash = ?
+                AND bot_key = 'primary'
+                AND consumed_at IS NULL
+                AND expires_at > NOW()
+          RETURNING user_id, bot_key",
+            [$hash]
+        );
+        if ($identity === null) {
+            throw new HttpException(401, 'Link đăng nhập đã hết hạn hoặc đã được sử dụng. Hãy quay lại HENDY BOT và tạo link mới.');
+        }
 
-        $botKey = (string) $identity['identity']['bot_key'];
+        $user = Database::one(
+            'SELECT user_id, name, username, vip_level, balance FROM users WHERE user_id = ?',
+            [$identity['user_id']]
+        );
+        if ($user === null) {
+            throw new HttpException(404, 'Không tìm thấy hồ sơ thành viên. Hãy tạo lại phiên đăng nhập từ HENDY BOT.');
+        }
+        if ($scope === 'admin' && !TelegramAuth::isAdmin((string) $user['user_id'])) {
+            throw new HttpException(403, 'Tài khoản này không nằm trong danh sách Admin được phép.');
+        }
+
+        $botKey = 'primary';
         $secret = TelegramAuth::websiteSessionSecret($botKey);
-
         $now = time();
         $header = self::base64Url(json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
         $sessionTtl = max(900, min(43200, Env::int('WEBSITE_SESSION_TTL_SECONDS', 43200)));
         $payload = self::base64Url(json_encode([
-            'sub' => (string) $identity['user']['user_id'],
-            'name' => (string) $identity['user']['name'],
-            'username' => (string) $identity['user']['username'],
-            'bot' => (string) $identity['identity']['bot_key'],
+            'sub' => (string) $user['user_id'],
+            'name' => (string) $user['name'],
+            'username' => (string) $user['username'],
+            'bot' => $botKey,
             'aud' => $scope === 'admin' ? 'hendy-admin-dashboard' : 'hendy-legacy-account',
             'iat' => $now,
             'exp' => $now + $sessionTtl,
@@ -1315,25 +1322,25 @@ final class ApiController
         $unsigned = $header . '.' . $payload;
         $signature = self::base64Url(hash_hmac('sha256', $unsigned, $secret, true));
         $sessionToken = $unsigned . '.' . $signature;
-        $cookieSecure = true;
+
         setcookie('hendy_web_session', $sessionToken, [
             'expires' => $now + $sessionTtl,
             'path' => '/',
-            'secure' => $cookieSecure,
+            'secure' => true,
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
         return self::response([
             'authenticated' => true,
             'scope' => $scope,
-            'botKey' => (string) $identity['identity']['bot_key'],
+            'botKey' => $botKey,
             'expiresInSeconds' => $sessionTtl,
             'user' => [
-                'id' => (string) $identity['user']['user_id'],
-                'name' => (string) $identity['user']['name'],
-                'username' => (string) $identity['user']['username'],
-                'vipLevel' => (int) $identity['user']['vip_level'],
-                'balance' => (int) $identity['user']['balance'],
+                'id' => (string) $user['user_id'],
+                'name' => (string) $user['name'],
+                'username' => (string) $user['username'],
+                'vipLevel' => (int) $user['vip_level'],
+                'balance' => (int) $user['balance'],
             ],
         ]);
     }

@@ -907,7 +907,7 @@ final class BotService
                     $this->telegram->sendMessage($chatId, 'Mini App chưa được cấu hình APP_URL HTTPS.');
                     return;
                 }
-                $this->telegram->sendMessage($chatId, '🌈 <b>MINI APP HENDY</b> — Mở giao diện dịch vụ của bot này.', ['reply_markup' => $this->inlineMenu([[['text' => '🚀 MỞ MINI APP', 'web_app' => ['url' => $url]]]])]);
+                $this->telegram->sendMessage($chatId, '🌈 <b>TRUNG TÂM KHÁCH HÀNG</b> — Mở giao diện dịch vụ của bot này.', ['reply_markup' => $this->inlineMenu([[['text' => '🚀 MỞ MINI APP', 'web_app' => ['url' => $url]]]])]);
                 return;
             case 'admin':
                 $this->openAdmin($chatId, $userId);

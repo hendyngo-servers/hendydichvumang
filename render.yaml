@@ -57,8 +57,6 @@ services:
         sync: false
       - key: BOT1_TOKEN
         sync: false
-      - key: BOT2_TOKEN
-        value: ""
       - key: ADMIN_ID
         sync: false
       - key: ADMIN_IDS

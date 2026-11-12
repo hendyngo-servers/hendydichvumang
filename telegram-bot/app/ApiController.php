@@ -496,6 +496,123 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && $path === '/api/admin/code-telegram') {
+            $sources = Database::all(
+                "SELECT s.*,
+                    (SELECT COUNT(*) FROM code_telegram_posts p WHERE p.source_id = s.id) AS post_count,
+                    (SELECT COUNT(*) FROM code_telegram_codes c WHERE c.source_id = s.id AND c.status = 'active') AS active_codes,
+                    (SELECT COUNT(*) FROM code_telegram_codes c WHERE c.source_id = s.id AND c.status = 'pending_review') AS pending_codes
+                 FROM code_telegram_sources s ORDER BY s.created_at DESC LIMIT 200"
+            );
+            $codes = Database::all(
+                "SELECT c.*, s.title AS source_title, p.source_link, p.media_kind
+                 FROM code_telegram_codes c
+                 JOIN code_telegram_sources s ON s.id = c.source_id
+                 JOIN code_telegram_posts p ON p.id = c.post_id
+                 ORDER BY CASE c.status WHEN 'pending_review' THEN 0 ELSE 1 END, c.created_at DESC
+                 LIMIT 100"
+            );
+            $posts = Database::all(
+                "SELECT p.id, p.telegram_message_id, p.media_kind, p.status, p.extracted_count,
+                        p.error_message, p.source_link, p.created_at, s.title AS source_title
+                 FROM code_telegram_posts p JOIN code_telegram_sources s ON s.id = p.source_id
+                 ORDER BY p.created_at DESC LIMIT 50"
+            );
+            return self::response([
+                'enabled' => CodeTelegramService::enabled(),
+                'sources' => $sources,
+                'codes' => $codes,
+                'posts' => $posts,
+                'stats' => [
+                    'sources' => (int) Database::value('SELECT COUNT(*) FROM code_telegram_sources'),
+                    'activeSources' => (int) Database::value('SELECT COUNT(*) FROM code_telegram_sources WHERE is_active = TRUE'),
+                    'queuedPosts' => (int) Database::value("SELECT COUNT(*) FROM code_telegram_posts WHERE status = 'queued'"),
+                    'failedPosts' => (int) Database::value("SELECT COUNT(*) FROM code_telegram_posts WHERE status = 'failed'"),
+                    'pendingCodes' => (int) Database::value("SELECT COUNT(*) FROM code_telegram_codes WHERE status = 'pending_review'"),
+                    'activeCodes' => (int) Database::value("SELECT COUNT(*) FROM code_telegram_codes WHERE status = 'active'"),
+                ],
+            ]);
+        }
+
+        if ($method === 'POST' && $path === '/api/admin/code-telegram/sources') {
+            $sourceInput = $this->text($this->body['chat'] ?? '', 100);
+            if ($sourceInput === '') throw new HttpException(400, 'Nhập @username hoặc channel ID.');
+            if (!preg_match('/^(?:@[A-Za-z0-9_]{5,32}|-100[0-9]{5,18})$/', $sourceInput)) {
+                throw new HttpException(400, 'Nguồn phải là @username kênh công khai hoặc channel ID dạng -100...');
+            }
+
+            try {
+                $telegram = new TelegramApi(TelegramAuth::token('primary'));
+                if (TelegramAuth::token('primary') === '') throw new RuntimeException('Bot chính chưa cấu hình token.');
+                $chat = $telegram->call('getChat', ['chat_id' => $sourceInput], 15, 5);
+                if (($chat['type'] ?? '') !== 'channel') throw new RuntimeException('Nguồn được chọn không phải Telegram channel.');
+                $bot = $telegram->call('getMe', [], 15, 5);
+                $member = $telegram->call('getChatMember', [
+                    'chat_id' => (string) $chat['id'],
+                    'user_id' => (int) $bot['id'],
+                ], 15, 5);
+                if (!in_array((string) ($member['status'] ?? ''), ['administrator', 'creator'], true)) {
+                    throw new RuntimeException('Hãy thêm Bot HENDY làm quản trị viên của kênh trước khi kết nối.');
+                }
+            } catch (Throwable $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+
+            $chatId = (string) $chat['id'];
+            $username = trim((string) ($chat['username'] ?? ''));
+            $title = $this->text($this->body['title'] ?? ($chat['title'] ?? $sourceInput), 160);
+            if ($title === '') $title = (string) ($chat['title'] ?? $sourceInput);
+            $autoPublish = $this->toBool($this->body['autoPublish'] ?? false);
+            $source = Database::one(
+                'INSERT INTO code_telegram_sources (chat_id, username, title, added_by, auto_publish) VALUES (?, ?, ?, ?, ?) ' .
+                'ON CONFLICT (chat_id) DO UPDATE SET username = EXCLUDED.username, title = EXCLUDED.title, is_active = TRUE, ' .
+                'auto_publish = EXCLUDED.auto_publish, updated_at = NOW() RETURNING id, chat_id, username, title, is_active, auto_publish',
+                [$chatId, $username, $title, (string) $this->user['id'], $autoPublish]
+            );
+            $this->audit('code_telegram.source.add', $chatId, ['title' => $title, 'autoPublish' => $autoPublish]);
+            Realtime::publish('admin.code_telegram.changed', ['sourceId' => (int) ($source['id'] ?? 0)], 'admin');
+            return self::response(['source' => $source, 'message' => 'Đã kết nối kênh. Bot đã xác minh quyền quản trị kênh.'], 201);
+        }
+
+        if (preg_match('#^/api/admin/code-telegram/sources/([0-9]+)$#', $path, $sourceMatch) && $method === 'PATCH') {
+            $sourceId = (int) $sourceMatch[1];
+            $active = array_key_exists('isActive', $this->body) ? $this->toBool($this->body['isActive']) : null;
+            $autoPublish = array_key_exists('autoPublish', $this->body) ? $this->toBool($this->body['autoPublish']) : null;
+            if ($active === null && $autoPublish === null) throw new HttpException(400, 'Không có trường cấu hình để cập nhật.');
+            $source = Database::one(
+                'UPDATE code_telegram_sources SET is_active = COALESCE(?, is_active), auto_publish = COALESCE(?, auto_publish), updated_at = NOW() WHERE id = ? RETURNING id, chat_id, title, is_active, auto_publish',
+                [$active, $autoPublish, $sourceId]
+            );
+            if ($source === null) throw new HttpException(404, 'Không tìm thấy kênh nguồn.');
+            $this->audit('code_telegram.source.update', (string) $sourceId, ['isActive' => $active, 'autoPublish' => $autoPublish]);
+            return self::response(['source' => $source, 'message' => 'Đã cập nhật kênh nguồn.']);
+        }
+
+        if (preg_match('#^/api/admin/code-telegram/codes/([0-9]+)$#', $path, $codeMatch) && $method === 'PATCH') {
+            $status = $this->text($this->body['status'] ?? '', 24);
+            if (!in_array($status, ['active', 'used', 'rejected', 'expired'], true)) {
+                throw new HttpException(400, 'Trạng thái mã không hợp lệ.');
+            }
+            $code = Database::one(
+                'UPDATE code_telegram_codes SET status = ?, reviewed_by = ?, reviewed_at = NOW(), updated_at = NOW() WHERE id = ? RETURNING id, code_value, category, status',
+                [$status, (string) $this->user['id'], (int) $codeMatch[1]]
+            );
+            if ($code === null) throw new HttpException(404, 'Không tìm thấy mã Code Telegram.');
+            $this->audit('code_telegram.code.' . $status, (string) $codeMatch[1], ['code' => (string) $code['code_value']]);
+            Realtime::publish('admin.code_telegram.changed', ['codeId' => (int) $codeMatch[1]], 'admin');
+            return self::response(['code' => $code, 'message' => 'Đã cập nhật trạng thái mã.']);
+        }
+
+        if (preg_match('#^/api/admin/code-telegram/posts/([0-9]+)/retry$#', $path, $postMatch) && $method === 'POST') {
+            $post = Database::one(
+                "UPDATE code_telegram_posts SET status = 'queued', attempts = 0, error_message = '', updated_at = NOW() WHERE id = ? AND status = 'failed' RETURNING id",
+                [(int) $postMatch[1]]
+            );
+            if ($post === null) throw new HttpException(409, 'Bài đăng không ở trạng thái lỗi hoặc không tồn tại.');
+            $this->audit('code_telegram.post.retry', (string) $postMatch[1], []);
+            return self::response(['post' => $post, 'message' => 'Đã đưa bài đăng trở lại hàng chờ OCR.']);
+        }
+
         if ($method === 'GET' && $path === '/api/admin/payments') {
             return self::response(['payments' => PaymentService::pending(100), 'stats' => PaymentService::stats()]);
         }

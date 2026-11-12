@@ -198,19 +198,7 @@ final class CodeTelegramService
     {
         $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         if (trim($text) === '') return 0;
-        $candidates = [];
-        $patterns = [
-            '/(?:gift[\s_-]?code|promo(?:tional)?[\s_-]?code|code|mã\s*(?:khuyến\s*mãi|game|phần\s*mềm|tele|màn|code)?|mã\s*quà)\s*[:：=#-]?\s*[\'"“”]*([A-Z0-9][A-Z0-9_-]{4,31})/iu',
-            '/(?:^|\n)\s*[*#>\- ]*([A-Z0-9][A-Z0-9_-]{5,23})\s*[* ]*(?=$|\n)/m',
-        ];
-        foreach ($patterns as $pattern) {
-            if (preg_match_all($pattern, $text, $matches) > 0) {
-                foreach ($matches[1] as $candidate) {
-                    $candidate = strtoupper(trim((string) $candidate, " \t\n\r\0\x0B'\".,:;"));
-                    if (self::isLikelyCode($candidate)) $candidates[$candidate] = true;
-                }
-            }
-        }
+        $candidates = self::extractCandidates($text);
 
         $autoPublish = filter_var($source['auto_publish'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $status = $autoPublish && !$fromVideo ? 'active' : 'pending_review';
@@ -243,10 +231,31 @@ final class CodeTelegramService
         return $count;
     }
 
+    /** Return unique, normalized code-like tokens from a text/caption/OCR transcript. */
+    public static function extractCandidates(string $text): array
+    {
+        $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if (trim($text) === '') return [];
+        $candidates = [];
+        $patterns = [
+            '/(?:gift[\s_-]?code|promo(?:tional)?[\s_-]?code|code|mã\s*(?:khuyến\s*mãi|game|phần\s*mềm|tele|màn|code)?|mã\s*quà)\s*[:：=#-]?\s*[\'"“”]*([A-Z0-9][A-Z0-9_-]{4,31})/iu',
+            '/(?:^|\n)\s*[*#>\- ]*([A-Z0-9][A-Z0-9_-]{5,23})\s*[* ]*(?=$|\n)/m',
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match_all($pattern, $text, $matches) > 0) {
+                foreach ($matches[1] as $candidate) {
+                    $candidate = strtoupper(trim((string) $candidate, " \t\n\r\0\x0B'\".,:;"));
+                    if (self::isLikelyCode($candidate)) $candidates[$candidate] = true;
+                }
+            }
+        }
+        return array_keys($candidates);
+    }
+
     private static function isLikelyCode(string $candidate): bool
     {
         $length = strlen($candidate);
-        if ($length < 6 || $length > 32) return false;
+        if ($length < 5 || $length > 32) return false;
         if (!preg_match('/[A-Z]/', $candidate) || !preg_match('/[0-9]/', $candidate)) return false;
         if (preg_match('/^(.)\1{5,}$/', $candidate)) return false;
         return true;

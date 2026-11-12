@@ -11,7 +11,7 @@ final class BotMenuDefinition
         ['action' => 'otp', 'label' => '▦ OTP & PROXY', 'description' => 'Mở trung tâm OTP, Proxy và ví NYC.', 'style' => 'primary'],
         ['action' => 'wallet', 'label' => '💳 NẠP TIỀN', 'description' => 'Tạo yêu cầu nạp và xem trạng thái VietQR.', 'style' => 'success'],
         ['action' => 'vip', 'label' => '👑 TRUNG TÂM VIP', 'description' => 'Xem cấp VIP, quyền lợi và điểm danh.', 'style' => 'success'],
-        ['action' => 'codes', 'label' => '📡 CODE TELEGRAM', 'description' => 'Mở kho lì xì, mã màn hình và mã Telegram.', 'style' => 'success'],
+        ['action' => 'codes', 'label' => '📡 CODE TELEGRAM', 'description' => 'Mở Code Telegram, chọn dịch vụ và gửi tên đăng nhập để nhận mã.', 'style' => 'success'],
         ['action' => 'customer', 'label' => '💠 TRUNG TÂM KHÁCH HÀNG', 'description' => 'Hồ sơ, ví, đơn hàng và hỗ trợ khách hàng.', 'style' => 'primary'],
         ['action' => 'music-ai', 'label' => '🎵 TẠO ÂM NHẠC AI', 'description' => 'Tạo nhạc từ mô tả bằng AI.', 'style' => 'success'],
         ['action' => 'image-ai', 'label' => '🖼️ CHỈNH SỬA ẢNH AI', 'description' => 'Gửi ảnh và mô tả cách bạn muốn chỉnh sửa.', 'style' => 'primary'],

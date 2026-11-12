@@ -15,6 +15,9 @@ Website PHP/CSS/includes are consolidated under app_store/. Main routes:
 - /app_store/detail.php?id=... — App/game detail.
 - /app_store/dichvumang.php — Network services.
 - /admin.php — Central Website admin hub.
+- /admin-products.php — Website catalogue CRUD and image gallery.
+- /admin-users.php — Website member search and role management.
+- /admin-system.php — Website health and configuration status.
 - /app_store/admin.php — App Store admin.
 - /app_store/admin_services.php — Network service admin.
 - /login.php, /register.php, /logout.php — Single Website account/session.
@@ -35,6 +38,8 @@ Legacy products/screenshots and App Store apps/app_screenshots/network_services 
 
 ## Telegram Bot
 
-The primary production bot uses BOT1_TOKEN and one webhook /webhook/telegram. The main Inline Keyboard follows the supplied reference image. The welcome caption uses live Telegram/profile/wallet data. Home artwork is read from BOT_HOME_PHOTO; default URL: https://i.postimg.cc/rcD583NW/anh-quan-cao.png?dl=1.
+The primary production bot uses BOT1_TOKEN and one webhook /webhook/telegram. The main Inline Keyboard follows the supplied reference image and includes AI music/image actions. The welcome caption uses live Telegram/profile/wallet data. Home artwork is fetched by the Bot backend, validated against BOT_HOME_PHOTO_ALLOWED_HOSTS, then uploaded to Telegram as multipart bytes. Default URL: https://i.postimg.cc/rcD583NW/anh-quan-cao.png.
+
+AI Media is optional and disabled by default. It uses a PostgreSQL ai_media_jobs queue, an optional worker, OpenAI Images Edit and ElevenLabs Music v2.5. Enable only after the additive migration is approved/applied and provider API keys are set in Render Environment. The beta queue is rate-limited and does not deduct member wallets.
 
 Keep BOT1_TOKEN, DATABASE_URL, passwords and signing keys in Render Environment/GitHub Secrets. CI runs Website PHP lint, Bot Composer validate/lint/tests, secret scan and Neon Function build/tests.

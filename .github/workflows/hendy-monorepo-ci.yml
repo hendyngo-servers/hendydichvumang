@@ -1,30 +1,24 @@
 name: HENDY monorepo CI
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-
 permissions:
   contents: read
-
 jobs:
   website-php:
     name: Website PHP lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, fileinfo, pdo_mysql, gd
+          extensions: mbstring, fileinfo, pdo_mysql, pdo_pgsql, curl, gd
           coverage: none
       - name: Lint website PHP
-        run: |
-          find . -type f -name '*.php' -not -path './telegram-bot/*' -print0 | xargs -0 -r -n1 php -l
-
+        run: find . -type f -name '*.php' -not -path './telegram-bot/*' -print0 | xargs -0 -r -n1 php -l
   telegram-bot:
     name: Telegram Bot lint and tests
     runs-on: ubuntu-latest
@@ -33,35 +27,24 @@ jobs:
         working-directory: telegram-bot
     steps:
       - uses: actions/checkout@v4
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           extensions: curl, mbstring, pdo, pdo_pgsql
           coverage: none
-      - name: Validate Composer manifest
-        run: composer validate --no-check-publish
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-      - name: PHP lint
-        run: composer lint
-      - name: Unit tests
-        run: composer test
-      - name: Scan source for committed secrets
-        run: php scripts/secret-scan.php
-
+      - run: composer validate --no-check-publish
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: composer lint
+      - run: composer test
+      - run: php scripts/secret-scan.php
   neon-runtime:
     name: Neon Function build and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Install Neon config and TypeScript dependencies
-        run: npm install --no-audit --no-fund
-      - name: Build Neon runtime
-        run: npm run build
-      - name: Test Neon storage signing
-        run: npm test
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npm test

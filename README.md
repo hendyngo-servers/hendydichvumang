@@ -1,41 +1,49 @@
 # HENDY Cybertech — Website + Telegram Bot
 
-Repository hợp nhất hai ứng dụng HENDY nhưng giữ runtime và dữ liệu tách biệt.
+A single GitHub repository deploying two separate Render services with isolated Neon PostgreSQL databases.
 
-## Cấu trúc
+| App | Render service | Runtime | Neon database |
+|---|---|---|---|
+| Website/catalog | hendydichvumang-website | PHP 8.3 + Apache | hendydichvumang_website |
+| Single Telegram bot | hendydichvumang-telegram-bot | PHP 8.3 + Apache | hendydichvumang |
 
-- **Website danh mục** ở thư mục gốc: PHP 8.3 + Apache + MySQL. Có trang chủ, tìm kiếm sản phẩm, đăng ký/đăng nhập, chi tiết sản phẩm, Admin CRUD và upload ảnh.
-- **Telegram Bot** tại telegram-bot/: PHP 8.3 + Apache + PostgreSQL. Có Telegram webhook, Inline Keyboard, Mini App, Trung tâm khách hàng, Admin Dashboard, ví, đơn hàng, VIP, Proxy/OTP, Giftcode, REF và CSKH.
+## Website deployment
 
-## Nguyên tắc triển khai
+- Root Dockerfile, PHP 8.3, PDO PostgreSQL/MySQL, cURL, GD and fileinfo.
+- Health endpoint: `/healthz.php`.
+- Production uses Neon PostgreSQL with role `hendy_website_app`.
+- Existing MySQL configuration remains supported when DATABASE_URL is unset.
+- Screenshot uploads use the private Neon Object Storage bucket `uploads`; short-lived signed URLs are generated through the private Neon Function.
+- Configure `DATABASE_URL`, `DATABASE_SSL=true`, `NEON_STORAGE_FUNCTION_URL`, `NEON_STORAGE_FUNCTION_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` and optional `TELEGRAM_BOT_URL` directly in Render.
+- The first admin is created only when ADMIN_EMAIL and ADMIN_PASSWORD are both present and no admin exists. No default credentials are shipped.
 
-Hai ứng dụng chạy thành **hai Render Web Service riêng** và dùng **hai database riêng**:
+## Telegram Bot deployment
 
-| Ứng dụng | Thư mục / Docker context | Database |
-|---|---|---|
-| Website | Repository root (./Dockerfile) | MySQL/MariaDB qua DB_HOST, DB_NAME, DB_USER, DB_PASSWORD |
-| Telegram Bot | telegram-bot/ (telegram-bot/Dockerfile) | PostgreSQL qua DATABASE_URL |
+See `telegram-bot/README.md` and `docs/TELEGRAM-BOT-INTEGRATION.md`.
+- Only `BOT1_TOKEN` is used for the production Bot. BOT2_TOKEN remains unset.
+- `ADMIN_ID` or `ADMIN_IDS` must contain the numeric Telegram administrator ID.
+- Bot database uses Neon `hendydichvumang` with runtime role `hendy_bot_app`.
+- `RUN_MIGRATIONS_ON_START=false`; schema changes are managed separately.
+- `WEBHOOK_AUTO_REGISTER=true`; HTTPS service URL is read from Render.
+- Never commit Bot tokens, DATABASE_URL, passwords, S3 credentials or internal Function keys.
 
-Blueprint render.yaml chỉ khai báo service Telegram Bot. Không đổi Dockerfile hoặc biến môi trường của Web Service Website đang chạy.
+## Neon resources
 
-## Cấu hình website
+Project `calm-forest-79251169`, branch `production`, region `aws-ap-southeast-1`.
+- Website database: `hendydichvumang_website`, role `hendy_website_app`.
+- Bot database: `hendydichvumang`, role `hendy_bot_app`.
+- Private bucket: `uploads`.
+- Function: `hendystorage` (separate internal bearer keys for Website and Bot).
+- Neon Realtime is enabled; Bot currently uses its PostgreSQL LISTEN/NOTIFY WebSocket transport.
 
-Giữ các biến MySQL hiện tại. Có thể khai báo TELEGRAM_BOT_URL=https://t.me/your_bot_username để hiện liên kết Bot trong thanh điều hướng Website. Chỉ chấp nhận HTTPS thuộc t.me hoặc telegram.me.
+## Render Blueprint
 
-## Cấu hình Bot
-
-Đọc telegram-bot/README.md và docs/TELEGRAM-BOT-INTEGRATION.md.
-
-- Chỉ cấu hình một bot production: BOT1_TOKEN.
-- Cấu hình PostgreSQL riêng cho Bot bằng DATABASE_URL; tuyệt đối không trỏ vào MySQL website.
-- ADMIN_ID hoặc ADMIN_IDS chứa Telegram ID quản trị.
-- Render tự cấp URL HTTPS và ứng dụng dùng RENDER_EXTERNAL_URL để đăng ký webhook.
-- Không commit token, database URL, mật khẩu hoặc secret. Không điền giá trị thật vào .env.example.
+`render.yaml` declares both services. Root service uses `./Dockerfile`, Bot uses `telegram-bot/Dockerfile` with rootDir `telegram-bot`. Supply all `sync: false` values in Render; no production secrets belong in the repository.
 
 ## CI
 
-GitHub Actions kiểm tra cú pháp PHP website và chạy Composer lint/test của Bot. CI không cần credential production hoặc truy cập database thật.
+GitHub Actions runs root Website PHP lint, Bot Composer validate/lint/tests and secret scan, plus Node build/tests for the Neon Function. No production credentials are needed by CI.
 
-## Bảo toàn dữ liệu
+## Data boundaries
 
-Không có migration tự động giữa hai database. Không tự đồng bộ số dư, ví, đơn hàng hay tài khoản giữa MySQL và PostgreSQL. Liên kết tài khoản Website với Telegram cần quy trình xác minh/one-time code riêng trước khi triển khai.
+Website and Bot use separate databases and roles. There is no automatic transfer of balances, orders, products or user records between them. Account linking requires an explicit one-time verification process.

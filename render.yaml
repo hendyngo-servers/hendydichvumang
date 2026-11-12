@@ -1,6 +1,30 @@
-# Blueprint chỉ tạo service Telegram Bot riêng.
-# Website ở repository root tiếp tục dùng Web Service/MySQL hiện tại.
+# Two independent Render services and two independent Neon databases.
 services:
+  - type: web
+    name: hendydichvumang-website
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz.php
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: NEON_STORAGE_FUNCTION_URL
+        value: "https://br-wild-cell-az3siwry-hendystorage.compute.c-3.ap-southeast-1.aws.neon.tech"
+      - key: NEON_STORAGE_FUNCTION_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TELEGRAM_BOT_URL
+        sync: false
   - type: web
     name: hendydichvumang-telegram-bot
     runtime: docker
@@ -28,16 +52,16 @@ services:
       - key: DATABASE_SSL
         value: "true"
       - key: NEON_STORAGE_FUNCTION_URL
-        sync: false
+        value: "https://br-wild-cell-az3siwry-hendystorage.compute.c-3.ap-southeast-1.aws.neon.tech"
       - key: NEON_STORAGE_FUNCTION_KEY
         sync: false
       - key: BOT1_TOKEN
         sync: false
+      - key: BOT2_TOKEN
+        value: ""
       - key: ADMIN_ID
         sync: false
       - key: ADMIN_IDS
-        sync: false
-      - key: BOT1_PUBLIC_URL
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
         generateValue: true

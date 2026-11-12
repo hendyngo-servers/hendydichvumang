@@ -109,7 +109,7 @@ final class CodeTelegramService
                  JOIN code_telegram_sources s ON s.id = p.source_id
                  WHERE p.status = 'queued' AND s.is_active = TRUE
                  ORDER BY p.created_at ASC
-                 FOR UPDATE OF p SKIP LOCKED LIMIT 1"
+                 LIMIT 1 FOR UPDATE OF p SKIP LOCKED"
             );
             if ($row === null) return null;
             Database::run(
@@ -218,6 +218,15 @@ final class CodeTelegramService
         $context = mb_substr(trim(preg_replace('/\s+/', ' ', $text) ?? ''), 0, 500);
         $count = 0;
         foreach (array_keys($candidates) as $code) {
+            $duplicate = Database::one(
+                "SELECT id FROM code_telegram_codes
+                 WHERE normalized_code = ? AND post_id <> ? AND status IN ('pending_review','active','used')
+                 LIMIT 1",
+                [$code, $postId]
+            );
+            if ($duplicate !== null) {
+                continue;
+            }
             Database::run(
                 "INSERT INTO code_telegram_codes
                     (post_id, source_id, code_value, normalized_code, category, context_text, confidence, status)

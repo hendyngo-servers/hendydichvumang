@@ -51,8 +51,8 @@ $assert(TelegramLink::normalize('https://user@t.me/HendySupportGroup') === '', '
 $assert(TelegramLink::normalize('https://t.me/hendy_cyber_bot?start=old') === 'https://t.me/hendy_cyber_bot', 'chuẩn hóa public URL bot và loại query có sẵn');
 $assert(TelegramLink::normalize('https://example.com/hendy_cyber_bot') === '', 'từ chối URL public bot ngoài Telegram');
 
-$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','otp','wallet','vip','codes','customer','music-ai','image-ai','group','news','vip-coming-soon'], 'menu chính có AI music và AI image theo yêu cầu');
-$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet'],['vip','codes'],['customer'],['music-ai','image-ai'],['group'],['news','vip-coming-soon'],['admin']], 'layout Inline Menu dùng nhịp so le hai nút - một nút và có hai nút AI');
+$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','otp','wallet','vip','codes','customer','music-ai','image-ai','ai-cover','group','news','vip-coming-soon'], 'menu chính có AI music và AI image theo yêu cầu');
+$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet'],['vip','codes'],['customer'],['music-ai','image-ai'],['ai-cover'],['group'],['news','vip-coming-soon'],['admin']], 'layout Inline Menu dùng nhịp so le hai nút - một nút và có hai nút AI');
 $styles = array_column(BotMenuDefinition::ITEMS, 'style');
 $assert(count($styles) === count(BotMenuDefinition::ITEMS) && count(array_diff($styles, ['primary','success','danger'])) === 0, 'mọi nút menu chính đều có màu Telegram hợp lệ');
 $botServiceSource = file_get_contents(dirname(__DIR__) . '/app/BotService.php');

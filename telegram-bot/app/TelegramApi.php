@@ -295,6 +295,69 @@ final class TelegramApi
         return ['path' => $temporary, 'mime' => $mime];
     }
 
+    /**
+     * Download a channel video through the Bot API using its file_id.
+     * Official hosted Bot API downloads are limited to 20 MB; callers must
+     * enforce the configured size ceiling before invoking this method.
+     *
+     * @return array{path:string,mime:string,size:int}
+     */
+    public function downloadVideoToTemp(string $fileId, int $maxBytes = 20_971_520): array
+    {
+        if ($fileId === '' || strlen($fileId) > 512) {
+            throw new RuntimeException('Telegram video file_id không hợp lệ.');
+        }
+        $maxBytes = max(1_048_576, min(20_971_520, $maxBytes));
+        $file = $this->call('getFile', ['file_id' => $fileId], 15, 5);
+        $remotePath = (string) ($file['file_path'] ?? '');
+        $remoteSize = (int) ($file['file_size'] ?? 0);
+        if ($remotePath === '' || strlen($remotePath) > 512
+            || !preg_match('#\A[A-Za-z0-9_./-]+\z#D', $remotePath)
+            || str_contains($remotePath, '..')) {
+            throw new RuntimeException('Telegram trả về đường dẫn video không hợp lệ.');
+        }
+        if ($remoteSize > $maxBytes) {
+            throw new RuntimeException('Video vượt giới hạn tải về của Code Telegram.');
+        }
+
+        $curl = curl_init('https://api.telegram.org/file/bot' . $this->token . '/' . $remotePath);
+        if ($curl === false) throw new RuntimeException('Không thể khởi tạo tải video từ Telegram.');
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_MAXFILESIZE => $maxBytes,
+            CURLOPT_HTTPHEADER => ['Accept: video/mp4,video/quicktime,video/webm,application/octet-stream'],
+            CURLOPT_USERAGENT => 'HendyCodeTelegram/1.0',
+        ]);
+        $bytes = curl_exec($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($curl);
+        curl_close($curl);
+        if ($bytes === false || $status < 200 || $status >= 300) {
+            throw new RuntimeException('Không tải được video từ Telegram (HTTP ' . $status . ')' . ($error !== '' ? ': ' . $error : '.'));
+        }
+        if (!is_string($bytes) || strlen($bytes) < 128 || strlen($bytes) > $maxBytes) {
+            throw new RuntimeException('Video rỗng hoặc vượt giới hạn dung lượng.');
+        }
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes) ?: 'application/octet-stream';
+        if (!in_array($mime, ['video/mp4', 'video/quicktime', 'video/webm', 'application/octet-stream'], true)) {
+            throw new RuntimeException('Tệp Telegram không được nhận diện là video hợp lệ.');
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'hendy-code-video-');
+        if ($temporary === false) throw new RuntimeException('Không tạo được tệp video tạm.');
+        if (file_put_contents($temporary, $bytes, LOCK_EX) !== strlen($bytes)) {
+            @unlink($temporary);
+            throw new RuntimeException('Không lưu được video tạm.');
+        }
+        @chmod($temporary, 0600);
+        return ['path' => $temporary, 'mime' => $mime, 'size' => strlen($bytes)];
+    }
+
     public function answerCallback(string $callbackId, string $text = ''): void
     {
         $this->call('answerCallbackQuery', [
@@ -328,7 +391,7 @@ final class TelegramApi
         $this->call('setWebhook', [
             'url' => $url,
             'secret_token' => $secret,
-            'allowed_updates' => ['message', 'callback_query'],
+            'allowed_updates' => ['message', 'callback_query', 'channel_post', 'edited_channel_post'],
             'drop_pending_updates' => false,
         ]);
     }

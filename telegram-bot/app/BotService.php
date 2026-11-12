@@ -2294,7 +2294,7 @@ final class BotService
                          FROM code_telegram_request_accounts a
                          JOIN code_telegram_requests r ON r.id = a.request_id
                          WHERE r.service_id = ? AND a.username_normalized = ?
-                           AND a.created_at >= date_trunc('day', NOW())
+                           AND a.created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh')
                            AND a.status IN ('queued','processing','completed')
                          LIMIT 1",
                         [$serviceId, $candidateUsername]

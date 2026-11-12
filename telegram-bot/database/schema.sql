@@ -271,6 +271,17 @@ ALTER TABLE telegram_webhook_secrets
     ADD CONSTRAINT telegram_webhook_secrets_secret_value_check
     CHECK (char_length(secret_value) BETWEEN 32 AND 256 AND secret_value !~ '[^A-Za-z0-9_-]');
 
+-- Per-bot website session signing keys used by TelegramAuth::websiteSessionSecret().
+CREATE TABLE IF NOT EXISTS website_session_secrets (
+    bot_key TEXT PRIMARY KEY CHECK (bot_key IN ('primary','secondary')),
+    secret_value VARCHAR(256) NOT NULL CHECK (
+        char_length(secret_value) BETWEEN 32 AND 256
+        AND secret_value !~ '[^A-Za-z0-9_-]'
+    ),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Apply the approved persistent keyboard layout while preserving unrelated settings.
 UPDATE bot_menu_configs
 SET menu_mode = 'reply_keyboard',

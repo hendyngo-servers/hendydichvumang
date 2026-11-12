@@ -35,6 +35,11 @@ $assert = static function (bool $condition, string $message) use (&$checks): voi
 $assert(TelegramAuth::safeEquals('same-secret', 'same-secret'), 'so sánh chuỗi đúng');
 $assert(!TelegramAuth::safeEquals('different', 'same-secret'), 'so sánh chuỗi khác');
 $assert(!TelegramAuth::safeEquals('', ''), 'secret rỗng bị từ chối');
+$telegramAuthSource = file_get_contents(dirname(__DIR__) . '/app/TelegramAuth.php');
+$schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
+$assert(str_contains($telegramAuthSource, 'ON CONFLICT (bot_key) DO UPDATE SET') && str_contains($telegramAuthSource, 'RETURNING secret_value'), 'webhook/session secrets persist using atomic PostgreSQL upserts');
+$assert(!str_contains($telegramAuthSource, 'pg_advisory_xact_lock'), 'webhook/session secret startup does not rely on multi-statement advisory-lock transactions');
+$assert(str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS website_session_secrets'), 'database schema creates the website session secret table used by authentication');
 $assert(TelegramLink::normalize('https://t.me/HendySupportGroup') === 'https://t.me/HendySupportGroup', 'chấp nhận liên kết Telegram HTTPS hợp lệ');
 $assert(TelegramLink::normalize('https://t.me/+Invite_Code-123') === 'https://t.me/+Invite_Code-123', 'chấp nhận liên kết mời Telegram');
 $assert(TelegramLink::normalize('http://t.me/HendySupportGroup') === '', 'từ chối liên kết Telegram không HTTPS');

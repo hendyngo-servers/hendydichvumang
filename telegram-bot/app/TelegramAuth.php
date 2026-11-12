@@ -40,47 +40,30 @@ final class TelegramAuth
 
         $fingerprint = hash('sha256', $token);
         $overrideFingerprint = $overrideIsValid ? hash('sha256', $configured) : '';
+        // Use one atomic upsert instead of a multi-statement transaction. This
+        // avoids carrying an aborted transaction on pooled PostgreSQL connections.
+        // ON CONFLICT also serializes concurrent startups and preserves the first
+        // valid secret whenever the bot token and override have not changed.
+        $candidate = $overrideIsValid ? $configured : bin2hex(random_bytes(32));
+        $secret = Database::value(
+            'INSERT INTO telegram_webhook_secrets (bot_key, token_fingerprint, secret_value, override_fingerprint) ' .
+            'VALUES (?, ?, ?, ?) ' .
+            'ON CONFLICT (bot_key) DO UPDATE SET ' .
+            'token_fingerprint = EXCLUDED.token_fingerprint, ' .
+            'secret_value = CASE ' .
+            'WHEN telegram_webhook_secrets.token_fingerprint = EXCLUDED.token_fingerprint ' .
+            'AND telegram_webhook_secrets.override_fingerprint = EXCLUDED.override_fingerprint ' .
+            'AND telegram_webhook_secrets.secret_value ~ \'^[A-Za-z0-9_-]{32,256}$\' ' .
+            'THEN telegram_webhook_secrets.secret_value ELSE EXCLUDED.secret_value END, ' .
+            'override_fingerprint = EXCLUDED.override_fingerprint, updated_at = NOW() ' .
+            'RETURNING secret_value',
+            [$key, $fingerprint, $candidate, $overrideFingerprint]
+        );
 
-        return Database::transaction(static function () use ($key, $fingerprint, $configured, $overrideIsValid, $overrideFingerprint): string {
-            // Serialize startup requests for this bot so concurrent instances cannot
-            // race with different random values and register mismatched webhooks.
-            Database::run('SELECT pg_advisory_xact_lock(hashtext(?))', ['hendy-webhook-secret:' . $key]);
-            $existing = Database::one(
-                'SELECT token_fingerprint, secret_value, override_fingerprint FROM telegram_webhook_secrets WHERE bot_key = ?',
-                [$key]
-            );
-            $existingFingerprint = trim((string) ($existing['token_fingerprint'] ?? ''));
-            $existingSecret = trim((string) ($existing['secret_value'] ?? ''));
-            $existingOverrideFingerprint = trim((string) ($existing['override_fingerprint'] ?? ''));
-            $existingIsValid = preg_match('~^[A-Za-z0-9_-]{32,256}$~D', $existingSecret) === 1;
-            $sameToken = $existing !== null && hash_equals($fingerprint, $existingFingerprint);
-            $overrideChanged = !hash_equals($existingOverrideFingerprint, $overrideFingerprint);
-
-            if ($sameToken && $existingIsValid && !$overrideChanged) {
-                return $existingSecret;
-            }
-
-            // First setup may accept an explicit override. A changed override is
-            // applied deliberately. Otherwise generate a fresh random secret on
-            // first setup, token rotation, override removal, or corrupted storage.
-            $useOverride = $overrideIsValid && ($existing === null || $overrideChanged);
-            $candidate = $useOverride ? $configured : bin2hex(random_bytes(32));
-            $secret = Database::value(
-                'INSERT INTO telegram_webhook_secrets (bot_key, token_fingerprint, secret_value, override_fingerprint) ' .
-                'VALUES (?, ?, ?, ?) ' .
-                'ON CONFLICT (bot_key) DO UPDATE SET ' .
-                'token_fingerprint = EXCLUDED.token_fingerprint, ' .
-                'secret_value = EXCLUDED.secret_value, ' .
-                'override_fingerprint = EXCLUDED.override_fingerprint, updated_at = NOW() ' .
-                'RETURNING secret_value',
-                [$key, $fingerprint, $candidate, $overrideFingerprint]
-            );
-
-            if (!is_string($secret) || preg_match('~^[A-Za-z0-9_-]{32,256}$~D', $secret) !== 1) {
-                throw new RuntimeException('Không thể tạo webhook secret an toàn cho ' . $key . '.');
-            }
-            return $secret;
-        });
+        if (!is_string($secret) || preg_match('~^[A-Za-z0-9_-]{32,256}$~D', $secret) !== 1) {
+            throw new RuntimeException('Không thể tạo webhook secret an toàn cho ' . $key . '.');
+        }
+        return $secret;
     }
 
     /**
@@ -99,28 +82,22 @@ final class TelegramAuth
             return hash_hmac('sha256', 'hendy-website-session:' . $key, $override);
         }
 
-        return Database::transaction(static function () use ($key): string {
-            Database::run('SELECT pg_advisory_xact_lock(hashtext(?))', ['hendy-website-session:' . $key]);
-            $existing = Database::value(
-                'SELECT secret_value FROM website_session_secrets WHERE bot_key = ?',
-                [$key]
-            );
-            if (is_string($existing) && preg_match('~^[A-Za-z0-9_-]{32,256}$~D', $existing) === 1) {
-                return $existing;
-            }
-
-            $candidate = bin2hex(random_bytes(32));
-            $stored = Database::value(
-                'INSERT INTO website_session_secrets (bot_key, secret_value) VALUES (?, ?) ' .
-                'ON CONFLICT (bot_key) DO UPDATE SET secret_value = EXCLUDED.secret_value, updated_at = NOW() ' .
-                'RETURNING secret_value',
-                [$key, $candidate]
-            );
-            if (!is_string($stored) || preg_match('~^[A-Za-z0-9_-]{32,256}$~D', $stored) !== 1) {
-                throw new RuntimeException('Không thể tạo khóa phiên website riêng cho bot ' . $key . '.');
-            }
-            return $stored;
-        });
+        // Atomic upsert keeps the existing valid session key while avoiding a
+        // multi-statement transaction on the pooled production database.
+        $candidate = bin2hex(random_bytes(32));
+        $stored = Database::value(
+            'INSERT INTO website_session_secrets (bot_key, secret_value) VALUES (?, ?) ' .
+            'ON CONFLICT (bot_key) DO UPDATE SET ' .
+            'secret_value = CASE ' .
+            'WHEN website_session_secrets.secret_value ~ \'^[A-Za-z0-9_-]{32,256}$\' ' .
+            'THEN website_session_secrets.secret_value ELSE EXCLUDED.secret_value END, ' .
+            'updated_at = NOW() RETURNING secret_value',
+            [$key, $candidate]
+        );
+        if (!is_string($stored) || preg_match('~^[A-Za-z0-9_-]{32,256}$~D', $stored) !== 1) {
+            throw new RuntimeException('Không thể tạo khóa phiên website riêng cho bot ' . $key . '.');
+        }
+        return $stored;
     }
 
     public static function adminIds(): array

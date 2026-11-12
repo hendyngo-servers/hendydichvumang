@@ -1,4 +1,11 @@
-# Two independent Render services and two independent Neon databases.
+# HENDY monorepo Blueprint: adopt the existing two Render web services.
+# Service names intentionally match the current Render resources. Do not rename.
+# Neon PostgreSQL remains externally managed and is not replaced by Render Postgres.
+# Secrets and account-specific settings (DATABASE_URL, NEON_STORAGE_FUNCTION_KEY,
+# BOT1_TOKEN, ADMIN_ID(S), HOMEPROXY_ENCRYPTION_KEY, bank/account details) stay in
+# the existing Render Environment. They are intentionally omitted here: Render
+# preserves existing env vars omitted from a Blueprint, avoiding secret re-entry.
+# BOT2_TOKEN is retired; TelegramAuth accepts only BOT1_TOKEN.
 services:
   - type: web
     name: hendydichvumang-website
@@ -11,31 +18,19 @@ services:
     healthCheckPath: /healthz.php
     autoDeployTrigger: checksPass
     envVars:
-      - key: DATABASE_URL
-        sync: false
       - key: DATABASE_SSL
         value: "true"
       - key: NEON_STORAGE_FUNCTION_URL
         value: "https://br-wild-cell-az3siwry-hendystorage.compute.c-3.ap-southeast-1.aws.neon.tech"
-      - key: NEON_STORAGE_FUNCTION_KEY
-        sync: false
-      - key: TELEGRAM_BOT_URL
-        sync: false
-      - key: ADMIN_EMAIL
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
-      - key: TELEGRAM_BOT_URL
-        sync: false
+
   - type: web
     name: hendydichvumang-telegram-bot
     runtime: docker
     plan: free
     region: singapore
     branch: main
-    rootDir: telegram-bot
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    dockerfilePath: ./telegram-bot/Dockerfile
+    dockerContext: ./telegram-bot
     healthCheckPath: /healthz
     autoDeployTrigger: checksPass
     envVars:
@@ -49,39 +44,13 @@ services:
         value: "120"
       - key: WEBHOOK_AUTO_REGISTER
         value: "true"
-      - key: DATABASE_URL
-        sync: false
       - key: DATABASE_SSL
         value: "true"
       - key: NEON_STORAGE_FUNCTION_URL
         value: "https://br-wild-cell-az3siwry-hendystorage.compute.c-3.ap-southeast-1.aws.neon.tech"
-      - key: NEON_STORAGE_FUNCTION_KEY
-        sync: false
-      - key: BOT1_TOKEN
-        sync: false
-      - key: ADMIN_ID
-        sync: false
-      - key: ADMIN_IDS
-        sync: false
-      - key: TELEGRAM_WEBHOOK_SECRET
-        generateValue: true
-      - key: HOMEPROXY_ENCRYPTION_KEY
-        sync: false
       - key: BANK_WEBHOOK_ENABLED
         value: "false"
       - key: WEBSOCKET_ENABLED
         value: "false"
       - key: TELEGRAM_INIT_DATA_MAX_AGE_SECONDS
         value: "3600"
-      - key: VIETQR_BANK_ID
-        sync: false
-      - key: VIETQR_ACCOUNT_NO
-        sync: false
-      - key: VIETQR_ACCOUNT_NAME
-        sync: false
-      - key: GROUP_URL
-        sync: false
-      - key: CHANNEL_URL
-        sync: false
-      - key: SUPPORT_URL
-        sync: false

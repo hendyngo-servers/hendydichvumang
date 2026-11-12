@@ -9,8 +9,12 @@ final class TelegramAuth
 {
     public static function token(string $botKey = 'primary'): string
     {
-        $name = $botKey === 'secondary' ? 'BOT2_TOKEN' : 'BOT1_TOKEN';
-        return trim((string) Env::get($name, ''));
+        // This deployment intentionally supports exactly one production bot.
+        // Legacy BOT2_TOKEN values may remain in Render but are never read or used.
+        if ($botKey !== 'primary') {
+            return '';
+        }
+        return trim((string) Env::get('BOT1_TOKEN', ''));
     }
 
     /**
@@ -207,7 +211,7 @@ final class TelegramAuth
         $userId = (string) ($payload['sub'] ?? '');
         $botKey = (string) ($payload['bot'] ?? '');
         $expires = (int) ($payload['exp'] ?? 0);
-        if (!preg_match('/^[0-9]{5,20}$/', $userId) || !in_array($botKey, ['primary', 'secondary'], true)
+        if (!preg_match('/^[0-9]{5,20}$/', $userId) || $botKey !== 'primary'
             || $expires <= time() || $expires > time() + 43260 || $botKey !== $requestedBotKey) {
             throw new RuntimeException('Phiên website đã hết hạn hoặc không đúng bot.');
         }
@@ -236,7 +240,7 @@ final class TelegramAuth
 
         if ($cookieSession !== '' && !str_starts_with($authorization, 'tma ')) {
             $requestedBotKey = trim((string) ($_SERVER['HTTP_X_TELEGRAM_BOT_KEY'] ?? 'primary'));
-            if (!in_array($requestedBotKey, ['primary', 'secondary'], true)) {
+            if ($requestedBotKey !== 'primary') {
                 throw new RuntimeException('Bot Key không hợp lệ.');
             }
             return self::decodeWebsiteSession($cookieSession, $requestedBotKey);

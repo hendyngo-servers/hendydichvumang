@@ -1,89 +1,40 @@
 <?php
-require_once 'includes/db.php';
-include 'includes/header.php';
-
-$current_cat = isset($_GET['cat']) ? $_GET['cat'] : 'all';
-$search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
-
-$sql = "SELECT * FROM apps WHERE 1=1";
-$params = [];
-
-if ($current_cat !== 'all') {
-    $sql .= " AND category = ?";
-    $params[] = $current_cat;
-}
-
-if (!empty($search_query)) {
-    $sql .= " AND (name LIKE ? OR dev LIKE ?)";
-    $params[] = "%$search_query%";
-    $params[] = "%$search_query%";
-}
-
-$sql .= " ORDER BY id DESC";
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$filtered_apps = $stmt->fetchAll(PDO::FETCH_ASSOC);
+declare(strict_types=1);
+require_once __DIR__ . '/db.php';
+$pageTitle = $pageTitle ?? 'HENDY | Kho ứng dụng & dịch vụ';
+$notice = $_SESSION['_flash'] ?? null;
+unset($_SESSION['_flash']);
+$telegramBotUrl = telegram_bot_url();
 ?>
-
-<main class="content">
-    <?php if ($current_cat === 'all' && empty($search_query)): ?>
-    <section class="hero-banner">
-        <div class="hero-info">
-            <span class="badge">Nổi bật tuần này</span>
-            <h1>Khám phá thế giới ứng dụng đỉnh cao</h1>
-            <p>Hàng ngàn phần mềm làm việc hiệu quả và tựa game bom tấn đang chờ bạn tải về.</p>
-            <a href="index.php?cat=game" class="btn-primary">Khám phá Trò chơi</a>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <div class="section-header">
-        <h2>
-            <?php 
-                if (!empty($search_query)) {
-                    echo 'Kết quả tìm kiếm cho: "' . htmlspecialchars($search_query) . '"';
-                } elseif ($current_cat === 'app') {
-                    echo 'Ứng dụng phổ biến';
-                } elseif ($current_cat === 'game') {
-                    echo 'Trò chơi thịnh hành';
-                } else {
-                    echo 'Đề xuất cho bạn';
-                }
-            ?>
-        </h2>
-    </div>
-
-    <?php if (count($filtered_apps) > 0): ?>
-        <div class="app-grid">
-            <?php foreach ($filtered_apps as $app): ?>
-                <div class="app-card" onclick="window.location.href='detail.php?id=<?php echo $app['id']; ?>'" style="cursor: pointer;">
-                    <div class="app-card-top">
-                        <img src="<?php echo htmlspecialchars($app['icon']); ?>" alt="" class="app-icon">
-                        <div class="app-meta">
-                            <h3 class="app-title"><?php echo htmlspecialchars($app['name']); ?></h3>
-                            <p class="app-dev"><?php echo htmlspecialchars($app['dev']); ?></p>
-                            <div class="app-rating">
-                                <span><?php echo $app['rating']; ?></span>
-                                <i class="fa-solid fa-star"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="app-desc"><?php echo htmlspecialchars($app['desc']); ?></p>
-                    <div class="app-card-footer">
-                        <span class="app-price"><?php echo htmlspecialchars($app['price']); ?></span>
-                        <span class="btn-get">Xem chi tiết</span>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title><?=e($pageTitle)?></title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.php"><span class="brand-mark">H</span><span>HENDY<small>CYBERTECH</small></span></a>
+  <nav>
+    <a href="index.php">Trang chủ</a>
+    <a href="app_store/index.php">App Store</a>
+    <a href="app_store/dichvumang.php">Dịch vụ mạng</a>
+    <?php if ($telegramBotUrl): ?><a class="nav-cta" href="<?=e($telegramBotUrl)?>" target="_blank" rel="noopener noreferrer">Telegram Bot ↗</a><?php endif; ?>
+    <?php if (is_admin()): ?><a href="admin.php">Quản trị</a><?php endif; ?>
+    <?php if (current_user()): ?>
+      <span class="nav-user"><?=e((string)current_user()['name'])?></span>
+      <form method="post" action="logout.php" class="nav-logout">
+        <input type="hidden" name="_csrf" value="<?=e(csrf_token())?>">
+        <button type="submit">Đăng xuất</button>
+      </form>
     <?php else: ?>
-        <div class="empty-state">
-            <p>Không tìm thấy ứng dụng nào phù hợp với yêu cầu của bạn.</p>
-            <a href="index.php" class="btn-get">Quay lại trang chủ</a>
-        </div>
+      <a href="login.php">Đăng nhập</a>
+      <a class="nav-cta" href="register.php">Tạo tài khoản</a>
     <?php endif; ?>
-</main>
-        </div>
-    </div>
-</body>
-</html>
+  </nav>
+</header>
+<main class="container">
+<?php if ($notice): ?><div class="alert <?=e((string)($notice['type'] ?? 'success'))?>"><?=e((string)($notice['message'] ?? ''))?></div><?php endif; ?>

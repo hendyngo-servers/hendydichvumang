@@ -1,4 +1,19 @@
-Options -Indexes
-<FilesMatch "\.(sql|md|log|env)$">
+Options -Indexes -MultiViews
+RewriteEngine On
+RewriteBase /app_store/
+
+<FilesMatch "(^\\.|\\.(?:sql|md|log|ini|ya?ml|env|bak|old|pem|key|dump)$)">
   Require all denied
 </FilesMatch>
+
+# Keep real files/directories untouched.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^category/([a-zA-Z0-9_-]+)$ index.php?category=$1 [L,QSA]
+RewriteRule ^app/([0-9]+)$ detail.php?id=$1 [L,QSA]
+RewriteRule ^dich-vu-mang$ dichvumang.php [L,QSA]
+RewriteRule ^dang-nhap$ login.php [L,QSA]
+RewriteRule ^dang-ky$ register.php [L,QSA]
+RewriteRule ^dang-xuat$ logout.php [L,QSA]

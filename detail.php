@@ -1,69 +1,67 @@
 <?php
-require_once 'includes/db.php';
+declare(strict_types=1);
 
-$app_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-$stmt = $pdo->prepare("SELECT * FROM apps WHERE id = ?");
-$stmt->execute([$app_id]);
-$current_app = $stmt->fetch(PDO::FETCH_ASSOC);
+require_once __DIR__ . '/includes/db.php';
 
-if (!$current_app) {
-    header("Location: index.php");
+$id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+if (!$id || $id < 1) {
+    http_response_code(404);
+    $pageTitle = 'Không tìm thấy sản phẩm | HENDY';
+    require __DIR__ . '/includes/header.php';
+    echo '<section class="empty-state"><h2>Không tìm thấy sản phẩm</h2><a href="index.php">Quay lại trang chủ</a></section>';
+    require __DIR__ . '/includes/footer.php';
     exit;
 }
 
-$stmt_img = $pdo->prepare("SELECT image_url FROM app_screenshots WHERE app_id = ?");
-$stmt_img->execute([$app_id]);
-$screenshots = $stmt_img->fetchAll(PDO::FETCH_COLUMN);
+$stmt = $pdo->prepare("SELECT * FROM products WHERE id = ? AND status = 'published' LIMIT 1");
+$stmt->execute([$id]);
+$product = $stmt->fetch();
 
-include 'includes/header.php';
+if (!$product) {
+    http_response_code(404);
+    $pageTitle = 'Không tìm thấy sản phẩm | HENDY';
+    require __DIR__ . '/includes/header.php';
+    echo '<section class="empty-state"><h2>Không tìm thấy sản phẩm</h2><a href="index.php">Quay lại trang chủ</a></section>';
+    require __DIR__ . '/includes/footer.php';
+    exit;
+}
+
+$stmt = $pdo->prepare('SELECT image_path, caption FROM screenshots WHERE product_id = ? ORDER BY sort_order, id');
+$stmt->execute([$id]);
+$screenshots = $stmt->fetchAll();
+
+$externalUrl = trim((string)($product['external_url'] ?? ''));
+$externalParts = $externalUrl !== '' ? parse_url($externalUrl) : false;
+$externalUrlIsSafe = is_array($externalParts)
+    && strtolower((string)($externalParts['scheme'] ?? '')) === 'https'
+    && !empty($externalParts['host'])
+    && !isset($externalParts['user'])
+    && !isset($externalParts['pass']);
+
+$pageTitle = (string)$product['title'] . ' | HENDY Cybertech';
+require __DIR__ . '/includes/header.php';
 ?>
-
-<main class="content">
-    <div class="back-nav">
-        <a href="index.php"><i class="fa-solid fa-arrow-left"></i> Quay lại Kho ứng dụng</a>
-    </div>
-
-    <div class="app-detail-hero">
-        <img src="<?php echo htmlspecialchars($current_app['icon']); ?>" alt="" class="detail-icon">
-        <div class="detail-meta">
-            <h1><?php echo htmlspecialchars($current_app['name']); ?></h1>
-            <p class="dev-name"><?php echo htmlspecialchars($current_app['dev']); ?></p>
-            
-            <div class="detail-stats">
-                <span><i class="fa-solid fa-star" style="color: #f59e0b;"></i> <?php echo $current_app['rating']; ?></span>
-                <span>•</span>
-                <span>Dung lượng: <?php echo htmlspecialchars($current_app['size']); ?></span>
-                <span>•</span>
-                <span>Phiên bản: v<?php echo htmlspecialchars($current_app['version']); ?></span>
-            </div>
-
-            <div class="detail-actions">
-                <a href="<?php echo htmlspecialchars($current_app['download_link']); ?>" class="btn-install-large">
-                    <i class="fa-solid fa-download"></i> Tải xuống (<?php echo htmlspecialchars($current_app['price']); ?>)
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <?php if (!empty($screenshots)): ?>
-    <div class="section-block">
-        <h2>Ảnh chụp màn hình</h2>
-        <div class="screenshot-slider">
-            <?php foreach ($screenshots as $img): ?>
-                <img src="<?php echo htmlspecialchars($img); ?>" alt="Screenshot" class="screenshot-img">
-            <?php endforeach; ?>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <div class="section-block">
-        <h2>Mô tả</h2>
-        <div class="long-desc-box">
-            <p><?php echo nl2br(htmlspecialchars($current_app['long_desc'])); ?></p>
-        </div>
-    </div>
-</main>
-        </div>
-    </div>
-</body>
-</html>
+<a class="back-link" href="index.php">← Quay lại kho sản phẩm</a>
+<section class="product-detail">
+  <div class="eyebrow"><?=e((string)($product['category'] ?: 'SẢN PHẨM HENDY'))?></div>
+  <h1><?=e((string)$product['title'])?></h1>
+  <div class="product-detail-price"><?=e((string)($product['price'] ?: 'Liên hệ'))?></div>
+  <div class="product-detail-description"><?=nl2br(e((string)$product['description']))?></div>
+  <?php if ($externalUrlIsSafe): ?>
+    <a class="button primary" href="<?=e($externalUrl)?>" target="_blank" rel="noopener noreferrer">Mở dịch vụ ↗</a>
+  <?php endif; ?>
+</section>
+<?php if ($screenshots): ?>
+<section class="product-detail-gallery">
+  <h2>Hình ảnh sản phẩm</h2>
+  <div class="product-grid">
+    <?php foreach ($screenshots as $shot): $imageUrl = screenshot_url((string)$shot['image_path']); if ($imageUrl === '') continue; ?>
+      <figure class="product-card">
+        <img src="<?=e($imageUrl)?>" alt="<?=e((string)($shot['caption'] ?: $product['title']))?>" loading="lazy">
+        <?php if (trim((string)$shot['caption']) !== ''): ?><figcaption><?=e((string)$shot['caption'])?></figcaption><?php endif; ?>
+      </figure>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
+<?php require __DIR__ . '/includes/footer.php'; ?>

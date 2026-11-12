@@ -23,7 +23,7 @@ $telegramBotUrl = telegram_bot_url();
     <a href="app_store/index.php">App Store</a>
     <a href="app_store/dichvumang.php">Dịch vụ mạng</a>
     <?php if ($telegramBotUrl): ?><a class="nav-cta" href="<?=e($telegramBotUrl)?>" target="_blank" rel="noopener noreferrer">Telegram Bot ↗</a><?php endif; ?>
-    <?php if (is_admin()): ?><a href="admin.php">Quản trị</a><?php endif; ?>
+    <?php if (is_admin()): ?><a href="app_store/admin.php">Quản trị</a><?php endif; ?>
     <?php if (current_user()): ?>
       <span class="nav-user"><?=e((string)current_user()['name'])?></span>
       <form method="post" action="logout.php" class="nav-logout">

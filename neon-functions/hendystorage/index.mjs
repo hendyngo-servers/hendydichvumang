@@ -1,15 +1,20 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 const BUCKET = 'uploads';
 const MAX_EXPIRES_SECONDS = 900;
-const TYPES = new Set(['application/json','text/plain','text/css','text/html','image/svg+xml','image/png','image/jpeg','image/webp','image/gif']);
+const TYPES = new Set(['application/json','text/plain','text/css','text/html','image/svg+xml','image/png','image/jpeg','image/webp','image/gif','application/octet-stream','audio/mpeg','audio/wav','audio/x-wav','audio/flac','audio/mp4','audio/aac','audio/ogg','audio/opus']);
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const hmac=(key,value,encoding)=>createHmac('sha256',key).update(value).digest(encoding);
 const sha256Hex=(value)=>createHash('sha256').update(value).digest('hex');
 const enc=value=>encodeURIComponent(String(value)).replace(/[!'()*]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase());
 function query(entries){return entries.map(([k,v])=>[enc(k),enc(v)]).sort(([a,x],[b,y])=>a.localeCompare(b)||x.localeCompare(y)).map(([k,v])=>k+'='+v).join('&');}
 function allowedKey(key){
- return typeof key==='string' && (/^modules\/[a-z][a-z0-9-]{1,62}\/[A-Za-z0-9_-]{16,64}\.(json|md|txt|css|html|svg|png|jpg|jpeg|webp)$/.test(key)
- || /^website\/screenshots\/[a-f0-9]{32}\.(jpg|png|webp|gif)$/.test(key));
+ if(typeof key!=='string')return false;
+ const uuid='[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+ return /^modules\\/[a-z][a-z0-9-]{1,62}\\/[A-Za-z0-9_-]{16,64}\\.(json|md|txt|css|html|svg|png|jpg|jpeg|webp)$/.test(key)
+ || /^website\\/screenshots\\/[a-f0-9]{32}\\.(jpg|png|webp|gif)$/.test(key)
+ || new RegExp('^ai-cover/sources/'+uuid+'/source\\\\.(mp3|wav|flac|m4a|aac|ogg|opus)$','i').test(key)
+ || new RegExp('^ai-cover/results/'+uuid+'/cover\\\\.mp3$','i').test(key)
+ || /^ai-cover\\/models\\/[a-z0-9][a-z0-9_-]{1,47}\\/voice\\.(pth|index)$/.test(key);
 }
 export function buildPresignedUrl({method,key,contentType='',expiresIn=300,env=process.env,now=new Date()}){
  if(!['GET','PUT','DELETE'].includes(method))throw new Error('Unsupported operation');
@@ -44,7 +49,9 @@ export default {async fetch(request){
   try{buildPresignedUrl({method:'GET',key:'modules/health/0123456789abcdef0123456789abcdef.txt',expiresIn:60});return json({status:'ok',service:'hendy-neon-storage',storage:'ready'});}
   catch{return json({status:'degraded',service:'hendy-neon-storage',storage:'unavailable'},503);}
  }
- const website=url.pathname.endsWith('/website/presign'),bot=!website&&url.pathname.endsWith('/presign');
+ const website=url.pathname.endsWith('/website/presign');
+ const aiCover=!website&&url.pathname.endsWith('/ai-cover/presign');
+ const bot=!website&&!aiCover&&url.pathname.endsWith('/presign');
  if(request.method!=='POST'||(!website&&!bot))return json({error:'Not found'},404);
  const secret=website?(process.env.HENDY_WEBSITE_STORAGE_KEY||''):(process.env.HENDY_FUNCTION_API_KEY||'');
  if(!secret||!authorized(request,secret))return json({error:'Unauthorized'},401);
@@ -55,6 +62,8 @@ export default {async fetch(request){
   const key=String(input.key||'');
   if(website&&!key.startsWith('website/screenshots/'))return json({error:'Invalid website object key'},400);
   if(bot&&!key.startsWith('modules/'))return json({error:'Invalid module object key'},400);
+  if(aiCover&&!key.startsWith('ai-cover/'))return json({error:'Invalid AI Cover object key'},400);
+  if(aiCover&&method==='PUT'&&!['application/octet-stream','audio/mpeg','audio/wav','audio/x-wav','audio/flac','audio/mp4','audio/aac','audio/ogg','audio/opus'].includes(String(input.contentType||'')))return json({error:'Unsupported AI Cover content type'},400);
   return json(buildPresignedUrl({method,key,contentType:method==='PUT'?String(input.contentType||''):'',expiresIn:input.expiresIn}));
  }catch(error){const message=error instanceof Error?error.message:'Invalid request';const bad=/invalid|unsupported/i.test(message);return json({error:bad?message:'Storage signing is unavailable'},bad?400:503);}
 }};

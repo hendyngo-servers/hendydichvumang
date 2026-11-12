@@ -151,7 +151,7 @@ final class AiMediaService
             'music_length_ms' => 30_000,
             'force_instrumental' => false,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-        $handle = curl_init('https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128');
+        $handle = curl_init('https://api.elevenlabs.io/v1/music?output_format=mp3_48000_192');
         if ($handle === false) throw new RuntimeException('Không khởi tạo được kết nối tạo nhạc.');
         curl_setopt_array($handle, [
             CURLOPT_POST => true,

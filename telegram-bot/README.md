@@ -131,15 +131,18 @@ Phân hệ này chỉ đọc bài đăng từ Telegram channel đã được Adm
 - Hỗ trợ nhận diện mã khuyến mãi, code game, code phần mềm, Code Tele và code màn.
 - Trùng mã đã có trong trạng thái chờ duyệt/đang phát hành/đã dùng sẽ bị bỏ qua ở nguồn khác.
 - Mã từ video luôn chờ Admin duyệt. Mã từ tin chữ cũng chờ duyệt theo mặc định; Admin có thể bật tự xuất bản riêng cho từng nguồn đã xác minh.
-- Chỉ kết quả trạng thái `active` mới hiển thị cho thành viên trong Bot qua mục **MUA LÌ XÌ - CODE MÀN - CODE TELE** hoặc lệnh `/code từ khóa`.
+- Chỉ kết quả trạng thái `active` mới xuất hiện cho thành viên qua lệnh `/code từ khóa`; mục menu thành viên hiển thị tên chuẩn **📡 CODE TELEGRAM**.
+- Menu Code Telegram đọc danh sách dịch vụ và giá trực tiếp từ PostgreSQL: XX88, LLWIN, 78WIN, XX8, MB66, ON68, NEW88, Code VIP XX88 và Code VIP LLWIN. Giá mặc định được seed theo bảng dịch vụ; Admin quản lý yêu cầu username tại cùng tab Code Telegram.
+- Khi chọn dịch vụ, thành viên gửi username (mỗi dòng một tài khoản, tối đa 20). Chỉ thu thập username; không yêu cầu mật khẩu, PIN hoặc OTP. Mỗi tài khoản giới hạn một yêu cầu/ngày theo giờ Việt Nam.
+- Yêu cầu vào hàng chờ Admin; không trừ ví khi tiếp nhận. Admin chỉ ghi nhận hoàn tất khi có mã đã áp dụng thành công, nhập mã kết quả và phí trong phạm vi giá; hệ thống mới trừ Ví Chính trong transaction và gửi thông báo cho thành viên.
 - Video tải qua Bot API hosted bị giới hạn tối đa 20 MB; worker trích tối đa 24 khung hình trong 120 giây đầu, xóa tệp tạm sau OCR.
-- Admin: tab **Code Telegram** để kết nối nguồn, bật/tắt nguồn, quản lý tự xuất bản, duyệt/từ chối/đánh dấu đã dùng mã và retry OCR.
+- Admin: tab **Code Telegram** để kết nối nguồn, bật/tắt nguồn, duyệt mã OCR, xem yêu cầu username, chuyển trạng thái, xác nhận thành công/thu phí hoặc đánh dấu thất bại (không trừ tiền).
 
-### Mở tính năng
+### Migration và kết nối kênh
 
-1. Chạy migration additive `database/migrations/20261112_code_telegram.sql` trên database Bot `hendydichvumang` (role runtime cần grant DML như trong migration).
+1. Chạy cả hai migration additive `database/migrations/20261112_code_telegram.sql` và `database/migrations/20261112_code_telegram_services.sql` trên database Bot `hendydichvumang`.
 2. Thêm Bot chính làm **quản trị viên** của từng channel nguồn. Chỉ cấp quyền tối thiểu cần thiết; không cần quyền xóa bài hoặc mời thành viên.
-3. Trong Render Environment của Telegram Bot, đặt `CODE_TELEGRAM_ENABLED=true` và `CODE_TELEGRAM_WORKER_ENABLED=true`. Giữ `CODE_TELEGRAM_MAX_VIDEO_BYTES=20971520` nếu dùng Telegram Bot API hosted.
-4. Mở Website Admin → **Code Telegram** → kết nối channel bằng `@username` hoặc channel ID. Mặc định để **Chờ Admin duyệt** trước khi xuất mã cho thành viên.
+3. Render Environment của Telegram Bot cần `CODE_TELEGRAM_ENABLED=true` và `CODE_TELEGRAM_WORKER_ENABLED=true`. Giữ `CODE_TELEGRAM_MAX_VIDEO_BYTES=20971520` khi dùng Telegram Bot API hosted.
+4. Mở Website Admin → **Code Telegram** → kết nối channel bằng `@username` hoặc channel ID. Mặc định mã trích từ cả tin chữ/video đều chờ Admin duyệt; chỉ Admin mới bật tự xuất bản mã chữ cho nguồn đáng tin cậy.
 
-Nếu migration chưa được áp dụng hoặc chưa bật hai biến trên, phân hệ giữ trạng thái an toàn và không đọc kênh. Không dùng user session/MTProto để vượt quyền riêng tư, không tự động tham gia kênh, và không thu thập mật khẩu, OTP đăng nhập hoặc dữ liệu cá nhân.
+Lưu ý: gói dịch vụ và luồng gửi username đã được tích hợp, nhưng thao tác đổi/redeem mã trên từng nhà cái vẫn cần API đối tác được ủy quyền hoặc thao tác vận hành có xác nhận của Admin. HENDY không tự đăng nhập vào tài khoản game, không lưu mật khẩu, và không tuyên bố đã nhập mã vào nhà cái khi chưa có xác nhận thành công. Không dùng user session/MTProto để vượt quyền riêng tư, không tự động tham gia kênh, và không thu thập mật khẩu, OTP đăng nhập hoặc dữ liệu cá nhân.

@@ -49,3 +49,19 @@ jobs:
         run: composer test
       - name: Scan source for committed secrets
         run: php scripts/secret-scan.php
+
+  neon-runtime:
+    name: Neon Function build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Neon config and TypeScript dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build Neon runtime
+        run: npm run build
+      - name: Test Neon storage signing
+        run: npm test

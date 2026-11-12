@@ -534,6 +534,19 @@ final class ApiController
             return self::response(['job' => $job, 'message' => 'Đã đưa video job vào hàng chờ.']);
         }
 
+        if (preg_match('#^/api/admin/modules/(\\d+)/download$#', $path, $moduleDownload) && $method === 'GET') {
+            $this->requireAdmin();
+            $artifact = Database::one('SELECT stored_name FROM module_artifacts WHERE id = ?', [(int) $moduleDownload[1]]);
+            if ($artifact === null) throw new HttpException(404, 'Không tìm thấy tệp module.');
+            if (!str_starts_with((string) $artifact['stored_name'], 'modules/')) {
+                throw new HttpException(409, 'Tệp cũ đang nằm trong vùng lưu trữ cục bộ, không có URL Neon Storage.');
+            }
+            return self::response([
+                'url' => NeonStorage::presignedDownloadUrl((string) $artifact['stored_name'], 300),
+                'expiresInSeconds' => 300,
+            ]);
+        }
+
         if ($method === 'GET' && $path === '/api/admin/modules') {
             return self::response(['artifacts' => Database::all('SELECT id, module_key, original_name, mime_type, sha256, status, created_at FROM module_artifacts ORDER BY created_at DESC LIMIT 100')]);
         }

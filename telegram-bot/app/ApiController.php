@@ -852,11 +852,9 @@ final class ApiController
         }
         if ($method === 'GET' && $path === '/api/admin/runtime') {
             $primary = TelegramAuth::token('primary') !== '';
-            $secondary = TelegramAuth::token('secondary') !== '';
             return self::response([
                 'bots' => [
                     ['key' => 'primary', 'status' => $primary ? 'webhook-configured' : 'missing-token', 'configured' => $primary],
-                    ['key' => 'secondary', 'status' => $secondary ? 'webhook-configured' : 'disabled', 'configured' => $secondary],
                 ],
                 'timestamp' => gmdate(DATE_ATOM),
             ]);

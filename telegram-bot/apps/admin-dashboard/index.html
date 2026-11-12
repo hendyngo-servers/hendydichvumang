@@ -334,6 +334,7 @@
       <button class="menu-item" type="button" data-admin-tab="proxy"><span class="menu-icon">🌐</span>Proxy / HomeProxy</button>
       <button class="menu-item" type="button" data-admin-tab="modules"><span class="menu-icon">🧩</span>Tệp & module</button>
       <button class="menu-item" type="button" data-admin-tab="video-jobs"><span class="menu-icon">🎬</span>Video Jobs</button>
+      <button class="menu-item" type="button" data-admin-tab="code-telegram"><span class="menu-icon">📡</span>Code Telegram</button>
       <button class="menu-item" type="button" data-admin-tab="settings"><span class="menu-icon">⚙️</span>Cấu hình chung</button>
       <button class="menu-item" type="button" data-admin-tab="audit"><span class="menu-icon">🧾</span>Nhật ký quản trị</button>
     </nav>
@@ -969,6 +970,7 @@
       state.adminData.videoJobs = result.jobs || [];
       state.adminData.videoJobStats = result.stats || {};
     }
+    if (tab === 'code-telegram') state.adminData.codeTelegram = await api('/api/admin/code-telegram');
   }
 
   function adminTabs() {
@@ -1194,6 +1196,59 @@
       ).join('') : empty('Chưa có video job','Người dùng gửi link Vietsub từ Telegram hoặc Website HENDY sẽ được lưu ở đây.'));
   }
 
+  function adminCodeTelegram() {
+    const d = state.adminData.codeTelegram || {};
+    const stats = d.stats || {};
+    const sources = d.sources || [];
+    const codes = d.codes || [];
+    const posts = d.posts || [];
+    const statusLabel = value => ({
+      pending_review:'Chờ duyệt',active:'Đã duyệt',used:'Đã dùng',rejected:'Từ chối',expired:'Hết hạn',
+      queued:'Chờ OCR',processing:'Đang OCR',completed:'Hoàn tất',failed:'Lỗi',ignored:'Bỏ qua'
+    }[value] || value);
+    const categoryLabel = value => ({
+      promo:'Khuyến mãi',game:'Game',software:'Phần mềm',telegram:'Code Tele',screen:'Code màn'
+    }[value] || value);
+    return '<div class="app-banner"><div><b>📡 CODE TELEGRAM · HENDY</b><small>Đọc bài chữ và video trong những kênh đã xác minh quyền Bot; mã OCR luôn cần duyệt.</small></div><span class="banner-icon">📡</span></div>' +
+      '<div class="stat-grid">' +
+        '<div class="stat"><small>Kênh theo dõi</small><b>' + Number(stats.activeSources || 0) + '/' + Number(stats.sources || 0) + '</b></div>' +
+        '<div class="stat"><small>Bài chờ xử lý</small><b>' + Number(stats.queuedPosts || 0) + '</b></div>' +
+        '<div class="stat"><small>Mã chờ duyệt</small><b>' + Number(stats.pendingCodes || 0) + '</b></div>' +
+        '<div class="stat"><small>Mã đang phát hành</small><b>' + Number(stats.activeCodes || 0) + '</b></div>' +
+      '</div>' +
+      (!d.enabled ? '<div class="notice warn">CODE_TELEGRAM_ENABLED đang tắt. Có thể chuẩn bị danh sách nguồn tại đây; cần áp migration PostgreSQL và bật worker trong Render Environment trước khi nhận bài đăng.</div>' : '<div class="notice">Code Telegram đã bật. Bot chỉ xử lý nguồn đang hoạt động và đã xác minh quyền quản trị.</div>') +
+      '<form class="card form" id="admin-code-telegram-source-form"><b>➕ Kết nối kênh Telegram</b>' +
+        '<div class="field"><label>@username hoặc Channel ID</label><input name="chat" maxlength="100" placeholder="@kenh_code hoặc -1001234567890" required></div>' +
+        '<div class="field"><label>Tên hiển thị (không bắt buộc)</label><input name="title" maxlength="160" placeholder="Tên kênh"></div>' +
+        '<div class="field"><label>Chế độ xuất bản mã chữ</label><select name="autoPublish"><option value="false" selected>Chờ Admin duyệt từng mã (khuyến nghị)</option><option value="true">Tự xuất bản mã trích từ tin chữ</option></select></div>' +
+        '<button class="primary">Xác minh và kết nối kênh</button>' +
+        '<p class="small muted">Trước khi kết nối, hãy thêm @hendy_dichvu_BOT làm quản trị viên trong kênh. Không cần cấp quyền xóa bài hoặc mời thành viên. Video luôn chờ duyệt, kể cả khi bật tự xuất bản.</p>' +
+      '</form>' +
+      '<div class="section-head"><h3>📣 Kênh nguồn đã kết nối</h3></div>' +
+      (sources.length ? sources.map(item =>
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(item.title || item.chat_id) + '</b><small>' + escapeHtml(item.username ? '@' + item.username : item.chat_id) + ' · ' + Number(item.post_count || 0) + ' bài · ' + Number(item.active_codes || 0) + ' mã đã duyệt · ' + Number(item.pending_codes || 0) + ' chờ duyệt</small></div><span class="status ' + (item.is_active ? 'completed' : 'pending') + '">' + (item.is_active ? 'Đang theo dõi' : 'Đã tạm dừng') + '</span></div>' +
+        '<div class="list-row"><span>Tự xuất bản mã từ bài chữ</span><span class="status ' + (item.auto_publish ? 'completed' : 'pending') + '">' + (item.auto_publish ? 'Đang bật' : 'Chờ duyệt') + '</span></div>' +
+        '<div class="two-col"><button type="button" class="tiny-btn" data-code-source-setting="active" data-id="' + Number(item.id) + '" data-next="' + (!item.is_active) + '">' + (item.is_active ? 'Tạm dừng nguồn' : 'Bật theo dõi') + '</button>' +
+        '<button type="button" class="tiny-btn" data-code-source-setting="auto" data-id="' + Number(item.id) + '" data-next="' + (!item.auto_publish) + '">' + (item.auto_publish ? 'Tắt tự xuất bản' : 'Cho phép tự xuất bản') + '</button></div></article>'
+      ).join('') : empty('Chưa có kênh nguồn','Kết nối kênh công khai hoặc channel ID sau khi Bot đã là quản trị viên.')) +
+      '<div class="section-head"><h3>🎟️ Kho mã cần duyệt / đang phát hành</h3></div>' +
+      (codes.length ? codes.map(item =>
+        '<article class="record"><div class="record-top"><div><b><code>' + escapeHtml(item.code_value) + '</code></b><small>' + escapeHtml(categoryLabel(item.category)) + ' · ' + escapeHtml(item.source_title || '') + ' · OCR confidence ' + Math.round(Number(item.confidence || 0) * 100) + '%</small></div><span class="status ' + (item.status === 'active' ? 'completed' : (item.status === 'pending_review' ? 'pending' : 'rejected')) + '">' + escapeHtml(statusLabel(item.status)) + '</span></div>' +
+        '<p class="small muted">' + escapeHtml(item.context_text || '') + '</p>' +
+        (item.source_link ? '<a href="' + escapeHtml(item.source_link) + '" target="_blank" rel="noopener">Mở bài đăng nguồn ↗</a>' : '') +
+        '<div class="two-col"><button type="button" class="tiny-btn" data-code-status="active" data-id="' + Number(item.id) + '">✅ Duyệt mã</button><button type="button" class="tiny-btn" data-code-status="used" data-id="' + Number(item.id) + '">Đánh dấu đã dùng</button></div>' +
+        '<button type="button" class="tiny-btn" data-code-status="rejected" data-id="' + Number(item.id) + '">Từ chối mã</button></article>'
+      ).join('') : empty('Chưa có mã được trích xuất','Mã từ các nguồn đã kết nối sẽ xuất hiện tại đây.')) +
+      '<div class="section-head"><h3>🎞️ Lịch sử bài đăng và OCR</h3></div>' +
+      (posts.length ? posts.map(item =>
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(item.source_title || '') + ' · #' + Number(item.telegram_message_id) + '</b><small>' + escapeHtml(item.media_kind) + ' · ' + new Date(item.created_at).toLocaleString('vi-VN') + ' · ' + Number(item.extracted_count || 0) + ' mã</small></div><span class="status ' + (item.status === 'completed' ? 'completed' : (item.status === 'failed' ? 'rejected' : 'pending')) + '">' + escapeHtml(statusLabel(item.status)) + '</span></div>' +
+        (item.error_message ? '<p class="notice warn">' + escapeHtml(item.error_message) + '</p>' : '') +
+        (item.source_link ? '<a href="' + escapeHtml(item.source_link) + '" target="_blank" rel="noopener">Mở bài đăng ↗</a>' : '') +
+        (item.status === 'failed' ? '<button type="button" class="tiny-btn" data-code-post-retry="' + Number(item.id) + '">Đưa lại vào hàng chờ OCR</button>' : '') +
+        '</article>'
+      ).join('') : empty('Chưa có bài đăng','Bài chữ/video mới từ các kênh được phép sẽ được lưu trong PostgreSQL.'));
+  }
+
   function adminUsers() {
     const users = state.adminData.users || [];
     return '<form class="form" id="admin-user-search"><div class="field"><label>Tìm theo Telegram ID, tên hoặc username</label><input name="search" placeholder="Nhập từ khóa"></div><button class="secondary">Tìm thành viên</button></form>' +
@@ -1219,6 +1274,7 @@
     if (state.adminTab === 'payments') body = adminPayments();
     if (state.adminTab === 'vouchers') body = adminVouchers();
     if (state.adminTab === 'video-jobs') body = adminVideoJobs();
+    if (state.adminTab === 'code-telegram') body = adminCodeTelegram();
     if (state.adminTab === 'runtime') body = adminRuntime();
     if (state.adminTab === 'operations') body = adminOperations();
     if (state.adminTab === 'proxy') body = adminProxy();

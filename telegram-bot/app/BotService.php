@@ -99,26 +99,16 @@ final class BotService
         $operation=OperationsService::forBot($this->botKey);
         if ($operation['active'] && !TelegramAuth::isAdmin($userId)) { $this->sendOperationalNotice($chatId); return; }
 
-        // Accept a photo only while the member is in the AI image-edit flow.
+        // AI image editing is not released yet. Clear any stale request without accepting or queuing media.
         if ($photos !== []) {
             $pendingPhoto = $this->getPending($userId);
-            if ($pendingPhoto !== null && (string)$pendingPhoto['input_type'] === 'ai_image_photo') {
-                $largest = $photos[count($photos) - 1] ?? [];
-                $fileId = trim((string)($largest['file_id'] ?? ''));
-                if ($fileId === '') {
-                    $this->telegram->sendMessage($chatId, 'Không đọc được ảnh. Vui lòng gửi lại ảnh JPG, PNG hoặc WEBP.');
-                    return;
-                }
-                if ($text !== '' && !str_starts_with($text, '/')) {
-                    $this->createAiMediaJob($chatId, $userId, 'image', $text, $fileId);
-                } else {
-                    $this->setPending($userId, 'ai_image_prompt', ['file_id' => $fileId]);
-                    $this->telegram->sendMessage($chatId, '✅ Đã nhận ảnh. Hãy mô tả cách bạn muốn chỉnh sửa ảnh (ví dụ: xóa nền, đổi phong cách, cải thiện ánh sáng, thay phông nền).');
-                }
+            if ($pendingPhoto !== null && in_array((string)$pendingPhoto['input_type'], ['ai_image_photo', 'ai_image_prompt'], true)) {
+                $this->clearPending($userId);
+                $this->sendUnavailableNotice($chatId);
                 return;
             }
             if ($text === '') {
-                $this->telegram->sendMessage($chatId, 'Để chỉnh sửa ảnh bằng AI, hãy chọn nút 🖼️ CHỈNH SỬA ẢNH AI trước.');
+                $this->sendUnavailableNotice($chatId);
                 return;
             }
         }
@@ -407,21 +397,15 @@ final class BotService
             default => 'buổi đêm',
         };
         $name = $firstName !== '' ? $firstName : ($username !== '' ? '@' . $username : 'bạn');
-        $vipLevel = (int) ($user['vip_level'] ?? 0);
-
         $lines = [
             '💠 <b>⩤ HENDY DIGITAL ECOSYSTEM ⩥</b>',
             '✨ <i>Công nghệ kết nối giá trị thật</i>',
             '━━━━━━━━━━━━━━━━━━━━',
-            '👋 Chúc ' . $greeting . ' vui vẻ, <b>' . self::escape($name) . '</b>!',
-            '🤖 <b>HENDY BOT</b>',
+            '✌️ Chúc ' . $greeting . ' vui vẻ, <b>' . self::escape($name) . '</b>!',
             '🆔 Telegram ID: <code>' . self::escape($userId) . '</code>',
             '━━━━━━━━━━━━━━━━━━━━',
             '💰 Ví Chính: <b>' . self::money($user['balance'] ?? 0) . '</b>',
             '🪙 Ví NYC: <b>' . self::money($user['nyc_wallet'] ?? 0) . '</b>',
-            '🎟️ Ví Voucher: <b>' . self::money($user['voucher_wallet'] ?? 0) . '</b>',
-            '📈 Tổng nạp: <b>' . self::money($user['total_deposited'] ?? 0) . '</b>',
-            '👑 Thành viên: <b>' . ($vipLevel > 0 ? 'VIP ' . $vipLevel : 'HENDY MEMBER') . '</b>',
             '━━━━━━━━━━━━━━━━━━━━',
             '<a href="' . self::escape($websiteUrl) . '">🌐 Website HENDY</a> · <a href="' . self::escape($groupUrl) . '">💬 Nhóm hỗ trợ</a>',
         ];
@@ -792,24 +776,9 @@ final class BotService
                 $this->showCustomer($chatId, $userId);
                 return;
             case 'music-ai':
-                if (!Env::bool('AI_MEDIA_QUEUE_ENABLED', false) || trim((string)Env::get('ELEVENLABS_API_KEY', '')) === '') {
-                    $this->telegram->sendMessage($chatId, '🎵 <b>TẠO ÂM NHẠC AI</b>' . "\n" .
-                        'Phân hệ đang chờ cấu hình nhà cung cấp. Admin cần bật AI_MEDIA_QUEUE_ENABLED và thêm ELEVENLABS_API_KEY trong Render Environment của Bot. API key không được nhập qua Telegram.');
-                    return;
-                }
-                $this->setPending($userId, 'ai_music_prompt');
-                $this->telegram->sendMessage($chatId, '🎵 <b>MÔ TẢ BẢN NHẠC BẠN MUỐN TẠO</b>' . "\n" .
-                    'Hãy mô tả thể loại, cảm xúc, nhạc cụ, nhịp độ và thời lượng mong muốn (tối đa 500 ký tự). Không yêu cầu sao chép nguyên bản bài hát có bản quyền.');
-                return;
             case 'image-ai':
-                if (!Env::bool('AI_MEDIA_QUEUE_ENABLED', false) || trim((string)Env::get('OPENAI_API_KEY', '')) === '') {
-                    $this->telegram->sendMessage($chatId, '🖼️ <b>CHỈNH SỬA ẢNH AI</b>' . "\n" .
-                        'Phân hệ đang chờ cấu hình nhà cung cấp. Admin cần bật AI_MEDIA_QUEUE_ENABLED và thêm OPENAI_API_KEY trong Render Environment của Bot. API key không được nhập qua Telegram.');
-                    return;
-                }
-                $this->setPending($userId, 'ai_image_photo');
-                $this->telegram->sendMessage($chatId, '🖼️ <b>GỬI ẢNH BẠN MUỐN CHỈNH SỬA</b>' . "\n" .
-                    'Gửi một ảnh JPG, PNG hoặc WEBP. Bạn có thể ghi yêu cầu ngay trong caption hoặc gửi mô tả sau khi ảnh được nhận.');
+                $this->clearPending($userId);
+                $this->sendUnavailableNotice($chatId);
                 return;
             case 'linked-accounts':
                 $this->showLiveAccounts($chatId, $userId);
@@ -842,15 +811,7 @@ final class BotService
                 $this->showVipInfo($chatId, $userId);
                 return;
             case 'vip-coming-soon':
-                $this->telegram->sendMessage(
-                    $chatId,
-                    '🚧 <b>VIP DỊCH VỤ ĐANG ĐƯỢC TRIỂN KHAI</b>' . "\n" .
-                    'Các gói dịch vụ VIP mới đang được hoàn thiện. HENDY sẽ thông báo khi mở bán chính thức.',
-                    ['reply_markup' => $this->inlineMenu([
-                        [['text' => '👑 TRUNG TÂM VIP', 'callback_data' => 'member:vip']],
-                        [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home']],
-                    ])]
-                );
+                $this->sendUnavailableNotice($chatId);
                 return;
             case 'group':
             case 'news':
@@ -889,16 +850,16 @@ final class BotService
                 $this->showAdminStats($chatId, $userId);
                 return;
             default:
-                $this->telegram->sendMessage(
-                    $chatId,
-                    '🚧 <b>TÍNH NĂNG ĐANG PHÁT TRIỂN</b>' . "\n" .
-                    'Mục này chưa được phát hành. HENDY sẽ thông báo khi hoàn thiện và mở sử dụng chính thức.',
-                    ['reply_markup' => $this->inlineMenu([
-                        [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home']],
-                        [['text' => '🎧 LIÊN HỆ CSKH', 'callback_data' => 'member:support']],
-                    ])]
-                );
+                $this->sendUnavailableNotice($chatId);
         }
+    }
+
+    private function sendUnavailableNotice(string $chatId): void
+    {
+        $this->telegram->sendMessage(
+            $chatId,
+            '🚧 TÍNH NĂNG ĐANG PHÁT TRIỂN / CHƯA MỞ BÁN'
+        );
     }
 
     private function minigameGroupForBrand(string $brand): ?string
@@ -1184,10 +1145,18 @@ final class BotService
             'ORDER BY created_at DESC LIMIT 30',
             $categories
         );
-        $lines = [$title, '━━━━━━━━━━━━━━━━━━━━', 'Danh mục và giá được lấy từ kho sản phẩm PostgreSQL:'];
+        $products = array_values(array_filter(
+            $products,
+            static fn(array $product): bool => (int) ($product['vip_level'] ?? 0) <= $memberVip
+        ));
+        if ($products === []) {
+            $this->sendUnavailableNotice($chatId);
+            return;
+        }
+
+        $lines = [$title, '━━━━━━━━━━━━━━━━━━━━'];
         $rows = [];
         foreach ($products as $product) {
-            if ((int) ($product['vip_level'] ?? 0) > $memberVip) continue;
             $stock = $product['stock'] === null ? 'Còn hàng' : 'Còn ' . number_format((int) $product['stock'], 0, ',', '.') . ' sản phẩm';
             $rows[] = [['text' => self::truncate($product['name'] . ' · ' . self::money($product['price']) . ' · ' . $stock, 55), 'callback_data' => 'member:order:' . $product['id']]];
             $lines[] = '• <b>' . self::escape($product['name']) . '</b> — ' . self::money($product['price']);
@@ -1195,11 +1164,6 @@ final class BotService
                 ((int) ($product['duration_days'] ?? 0) > 0 ? ' · Thời hạn: ' . (int) $product['duration_days'] . ' ngày' : '') .
                 ((int) ($product['vip_level'] ?? 0) > 0 ? ' · Yêu cầu VIP ' . (int) $product['vip_level'] : '');
             if (trim((string) $product['description']) !== '') $lines[] = '  ' . self::escape(self::truncate((string) $product['description'], 140));
-        }
-        if ($rows === []) {
-            $lines[] = '';
-            $lines[] = '🚧 <b>TÍNH NĂNG ĐANG PHÁT TRIỂN / CHƯA MỞ BÁN</b>';
-            $lines[] = 'Danh mục hiện chưa có sản phẩm khả dụng cho tài khoản này. HENDY sẽ thông báo khi dịch vụ được mở.';
         }
         $rows[] = [['text' => '🧾 ĐƠN HÀNG CỦA TÔI', 'callback_data' => 'member:orders']];
         $rows[] = [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home']];
@@ -2122,19 +2086,9 @@ final class BotService
                 return true;
 
             case 'ai_music_prompt':
-                if (mb_strlen($text) < 10 || mb_strlen($text) > 500) {
-                    $this->telegram->sendMessage($chatId, 'Mô tả nhạc cần từ 10 đến 500 ký tự. Hãy mô tả rõ thể loại và cảm xúc.');
-                    return true;
-                }
-                $this->createAiMediaJob($chatId, $userId, 'music', $text);
-                return true;
-
             case 'ai_image_prompt':
-                if (mb_strlen($text) < 5 || mb_strlen($text) > 1000) {
-                    $this->telegram->sendMessage($chatId, 'Mô tả chỉnh sửa ảnh cần từ 5 đến 1.000 ký tự.');
-                    return true;
-                }
-                $this->createAiMediaJob($chatId, $userId, 'image', $text, (string)($payload['file_id'] ?? ''));
+                $this->clearPending($userId);
+                $this->sendUnavailableNotice($chatId);
                 return true;
 
             case 'giftcode':

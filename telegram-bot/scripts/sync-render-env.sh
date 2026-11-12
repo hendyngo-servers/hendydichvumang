@@ -65,7 +65,7 @@ if [[ -n "${BOT2_TOKEN:-}" ]]; then
 fi
 
 if [[ -z "${APP_URL:-}" ]]; then
-  APP_URL="https://hendy-bot-cybertech-1.onrender.com"
+  APP_URL="${RENDER_EXTERNAL_URL:-}"
   export APP_URL
 fi
 

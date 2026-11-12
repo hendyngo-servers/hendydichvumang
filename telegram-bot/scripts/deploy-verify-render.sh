@@ -4,7 +4,7 @@ set +x
 
 : "${RENDER_API_KEY:?Thiếu RENDER_API_KEY}"
 : "${RENDER_SERVICE_ID:?Thiếu RENDER_SERVICE_ID}"
-: "${APP_URL:=https://hendy-bot-cybertech-1.onrender.com}"
+: "${APP_URL:?Thiếu APP_URL (URL HTTPS của Render Bot service)}"
 : "${BOT1_TOKEN:?Thiếu BOT1_TOKEN}"
 : "${GITHUB_SHA:?Thiếu GITHUB_SHA}"
 

@@ -17,7 +17,7 @@
 
 Menu cố định dùng Reply Keyboard hai cột theo ảnh mẫu: MiniGame/OTP & Proxy; Nạp tiền/Trung tâm VIP; Mua Lì Xì - Code Màn - Code Tele; Trung tâm khách hàng; Nhóm chat/Kênh thông báo; VIP dịch vụ sắp triển khai. Các nút đều có action định danh; nhóm và kênh sẽ mở liên kết đã cấu hình, còn nút VIP sắp triển khai chỉ hiển thị thông báo và nút quay lại.
 
-Liên kết Telegram công khai được khai báo tường minh bằng `BOT1_PUBLIC_URL` và tùy chọn `BOT2_PUBLIC_URL`, ví dụ `https://t.me/your_bot_username`. Backend chỉ chấp nhận URL HTTPS thuộc `t.me`/`telegram.me`; không suy đoán username, không gọi Telegram `getMe()` để tạo URL và không gửi Bot Token ra trình duyệt. Nếu chưa khai báo URL, website hiển thị hướng dẫn liên hệ CSKH thay vì thông báo đồng bộ giả.
+Liên kết Telegram công khai được khai báo tường minh bằng `BOT1_PUBLIC_URL`, ví dụ `https://t.me/your_bot_username`. Backend chỉ chấp nhận URL HTTPS thuộc `t.me`/`telegram.me`; không suy đoán username, không gọi Telegram `getMe()` để tạo URL và không gửi Bot Token ra trình duyệt. Nếu chưa khai báo URL, website hiển thị hướng dẫn liên hệ CSKH thay vì thông báo đồng bộ giả.
 
 ## URL công khai tự động trên Render
 

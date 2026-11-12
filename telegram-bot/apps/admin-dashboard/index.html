@@ -1202,6 +1202,7 @@
     const sources = d.sources || [];
     const codes = d.codes || [];
     const posts = d.posts || [];
+    const requests = d.requests || [];
     const statusLabel = value => ({
       pending_review:'Chờ duyệt',active:'Đã duyệt',used:'Đã dùng',rejected:'Từ chối',expired:'Hết hạn',
       queued:'Chờ OCR',processing:'Đang OCR',completed:'Hoàn tất',failed:'Lỗi',ignored:'Bỏ qua'
@@ -1246,7 +1247,17 @@
         (item.source_link ? '<a href="' + escapeHtml(item.source_link) + '" target="_blank" rel="noopener">Mở bài đăng ↗</a>' : '') +
         (item.status === 'failed' ? '<button type="button" class="tiny-btn" data-code-post-retry="' + Number(item.id) + '">Đưa lại vào hàng chờ OCR</button>' : '') +
         '</article>'
-      ).join('') : empty('Chưa có bài đăng','Bài chữ/video mới từ các kênh được phép sẽ được lưu trong PostgreSQL.'));
+      ).join('') : empty('Chưa có bài đăng','Bài chữ/video mới từ các kênh được phép sẽ được lưu trong PostgreSQL.')) +
+      '<div class="section-head"><h3>👤 Yêu cầu tài khoản Code Telegram</h3><p class="small muted">Chỉ thu phí sau khi Admin xác nhận mã đã xử lý thành công.</p></div>' +
+      (requests.length ? requests.map(item =>
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(item.service_name_snapshot || item.brand_snapshot) + ' · ' + escapeHtml(item.username) + '</b><small>User ' + escapeHtml(item.user_id) + ' · ' + (item.code_type_snapshot === 'text' ? 'VIP/tin chữ' : 'Thường/video') + ' · ' + new Date(item.created_at).toLocaleString('vi-VN') + '</small></div><span class="status ' + (item.account_status === 'completed' ? 'completed' : (item.account_status === 'failed' ? 'rejected' : 'pending')) + '">' + escapeHtml(statusLabel(item.account_status)) + '</span></div>' +
+        '<div class="list-row"><span>Phí khi thành công</span><b>' + money(item.price_min_snapshot) + (Number(item.price_max_snapshot) !== Number(item.price_min_snapshot) ? ' – ' + money(item.price_max_snapshot) : '') + '</b></div>' +
+        (item.code_value ? '<p class="small">Mã: <code>' + escapeHtml(item.code_value) + '</code> · Đã thu ' + money(item.charged_amount) + '</p>' : '') +
+        (item.result_note ? '<p class="small muted">' + escapeHtml(item.result_note) + '</p>' : '') +
+        (item.account_status !== 'completed' ? '<div class="two-col"><button type="button" class="tiny-btn" data-code-account-status="processing" data-id="' + Number(item.account_id) + '">Đang xử lý</button><button type="button" class="tiny-btn" data-code-account-status="failed" data-id="' + Number(item.account_id) + '">Thất bại / không trừ tiền</button></div>' +
+          '<button type="button" class="primary" data-code-account-success data-id="' + Number(item.account_id) + '" data-min="' + Number(item.price_min_snapshot) + '" data-max="' + Number(item.price_max_snapshot) + '">✅ Xác nhận thành công & thu phí</button>' : '') +
+        '</article>'
+      ).join('') : empty('Chưa có yêu cầu tài khoản','Khi thành viên gửi username qua menu Code Telegram, yêu cầu sẽ xuất hiện tại đây.'));
   }
 
   function adminUsers() {
@@ -1502,6 +1513,36 @@
         toast('Đã đưa bài đăng vào hàng chờ OCR.');
         await renderPage();
       } catch (error) { toast(error.message,'error'); codeRetry.disabled = false; }
+      return;
+    }
+    const codeAccountStatus = event.target.closest('[data-code-account-status]');
+    if (codeAccountStatus) {
+      const id = Number(codeAccountStatus.dataset.id);
+      const status = codeAccountStatus.dataset.codeAccountStatus;
+      try {
+        await api('/api/admin/code-telegram/accounts/' + id,'PATCH',{status});
+        toast(status === 'processing' ? 'Đã chuyển tài khoản sang đang xử lý.' : 'Đã đánh dấu thất bại; không trừ tiền.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
+      return;
+    }
+    const codeAccountSuccess = event.target.closest('[data-code-account-success]');
+    if (codeAccountSuccess) {
+      const id = Number(codeAccountSuccess.dataset.id);
+      const codeValue = String(window.prompt('Nhập mã đã áp dụng thành công cho tài khoản này:') || '').trim();
+      if (!codeValue) return;
+      const min = Number(codeAccountSuccess.dataset.min || 0);
+      const max = Number(codeAccountSuccess.dataset.max || min);
+      const chargeText = String(window.prompt('Phí chỉ được thu sau khi thành công. Nhập số tiền trong khoảng ' + min + '–' + max + ' VNĐ:', String(min)) || '').trim();
+      if (!/^\d+$/.test(chargeText)) { toast('Số tiền thu không hợp lệ.','error'); return; }
+      const chargeAmount = Number(chargeText);
+      if (chargeAmount < min || chargeAmount > max) { toast('Số tiền nằm ngoài khoảng giá của dịch vụ.','error'); return; }
+      if (!window.confirm('Xác nhận mã đã hoạt động và trừ ' + money(chargeAmount) + ' từ Ví Chính thành viên?')) return;
+      try {
+        await api('/api/admin/code-telegram/accounts/' + id,'PATCH',{status:'completed',codeValue,chargeAmount});
+        toast('Đã xác nhận thành công và thu phí.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
       return;
     }
     const videoRetry = event.target.closest('[data-video-retry]');

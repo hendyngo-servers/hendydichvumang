@@ -2,56 +2,54 @@
 
 Production monorepo for one Telegram Bot backend and one public Static Website.
 
-## Architecture
+## Production architecture
 
-- **Static Site:** Render service `hendydichvumang`, deployed from `website/public/` and served through Render's CDN.
+- **Static Site:** Render service name `hendydichvumang`, source `website/public/`.
+- **Current working Static Site URL:** `https://hendydichvumang-szad.onrender.com`.
 - **Telegram Bot:** Render service `hendydichvumang-telegram-bot`, built from `telegram-bot/Dockerfile`.
-- **Database:** Neon PostgreSQL. The Bot uses `hendydichvumang`; the legacy Website catalog database is `hendydichvumang_website`.
-- **Admin:** Browser-based Admin Dashboard is served by the authenticated Bot backend at `https://hendydichvumang-telegram-bot.onrender.com/admin`. It is not published in the public Static Site.
+- **Admin:** Browser-based Admin Dashboard is served from the authenticated Bot backend at `https://hendydichvumang-telegram-bot.onrender.com/admin`. Admin and customer UI files are stored in `website/telegram/`, outside the Static Site publish directory.
+- **PostgreSQL:** Neon database `hendydichvumang` is used by the Bot. The legacy `hendydichvumang_website` database is not required by the public Static Site.
+
+The clean hostname `https://hendydichvumang.onrender.com` currently resolves to the Bot API, not the Static Site. The Static Site therefore uses its verified Render subdomain with the `-szad` suffix until Render releases the old hostname. Do not point Website links or canonical metadata at the Bot API hostname.
 
 ## Website
 
-All files published to the Internet are under `website/public/`: HTML, static CSS/JS, SVG icons, and SEO assets. The Website does not connect to PostgreSQL, expose secrets, process payments, or host Admin/Customer sessions.
+Everything under `website/public/` is public static content: HTML, CSS, JavaScript, SVG, robots, sitemap and legal pages. It does not connect to PostgreSQL, process payments, or contain Bot credentials.
 
-Public tabs: Trang chủ, App Store, Dịch vụ mạng, AI Studio, Code Telegram, Giới thiệu. The public navigation intentionally does not expose a "Trung tâm khách hàng" tab.
-
-Canonical production URL: `https://hendydichvumang.onrender.com`.
+Public tabs: Trang chủ, App Store, Dịch vụ mạng, AI Studio, Code Telegram, Giới thiệu. The public navigation intentionally does not expose "Trung tâm khách hàng".
 
 ## Telegram Bot
 
-- Exactly one production Bot is supported. `BOT1_TOKEN` is the only Bot token consumed by the backend.
-- Webhook registration calls Telegram `getMe()`, verifies `getWebhookInfo()`, and stores the detected public Bot URL in `app_settings.primary_bot_url`.
-- `BOT1_PUBLIC_URL` is optional; when omitted, referral URLs use the automatically detected Bot URL.
-- Webhook and website-session signing secrets are generated and stored server-side in PostgreSQL. They are never included in public Website files.
-- Admin access requires a Telegram numeric ID in `ADMIN_ID` or `ADMIN_IDS`.
+- Exactly one production Bot is supported; only `BOT1_TOKEN` is read.
+- The webhook bootstrap calls Telegram `getMe()`, registers and verifies the webhook at the Bot service's own Render URL, then stores the public Bot username in `app_settings.primary_bot_url`.
+- `BOT1_PUBLIC_URL` is an optional override; referral links otherwise use the auto-detected Bot URL.
+- One-time login tickets are short-lived, stored hashed, consumed atomically, and exchanged for a signed HttpOnly website-session cookie.
+- Admin access requires the user's Telegram numeric ID to be in `ADMIN_ID` or `ADMIN_IDS`.
 
-## Database reset
+## Database reset and recovery
 
-On 2026-11-13, all records were cleared from the `public` schema of both `hendydichvumang` and `hendydichvumang_website`. All tables, indexes, constraints, and schema objects were retained; identity sequences were reset. Neon Auth database `neondb` was not changed.
+On 2026-11-13, records were cleared from the `public` schema of both `hendydichvumang` and `hendydichvumang_website`; tables and constraints were retained. Neon Auth database `neondb` was not changed.
 
-A pre-reset recovery branch is retained in Neon:
+Recovery branch retained in Neon:
 `backup-before-full-reset-2026-11-13`.
 
-The Bot schema is not dropped. The Render Bot service keeps `RUN_MIGRATIONS_ON_START=false` because its runtime database role is intentionally DML-only; schema changes must be applied separately using a reviewed migration. After the reset, default public Website and support links are re-seeded in `app_settings`.
+The Bot schema remains in `telegram-bot/database/schema.sql`. Runtime uses `RUN_MIGRATIONS_ON_START=false`; reviewed schema changes and seed configuration are applied with the database owner role, while the Bot runtime role performs DML only.
 
 ## Render environment
 
-Set sensitive values only in the Render Environment page. Never commit live credentials.
+Set secrets only in Render Environment. Never commit live credentials.
 
 Required Bot values:
 - `BOT1_TOKEN`
 - `ADMIN_ID` or `ADMIN_IDS`
-- `DATABASE_URL` (Neon Bot database URL: `hendydichvumang`)
+- `DATABASE_URL` pointing to Neon database `hendydichvumang`
 - `DATABASE_SSL=true`
 
-The Bot service URL is used for the Telegram webhook; Render provides `RENDER_EXTERNAL_URL` automatically. `WEBSITE_PUBLIC_URL` must be `https://hendydichvumang.onrender.com`.
-
-Optional integrations (bank callback, AI providers, Code Telegram OCR worker, WebSocket) must remain disabled until their provider credentials, migrations, and health checks have been verified.
+Set `WEBSITE_PUBLIC_URL=https://hendydichvumang-szad.onrender.com`. Render injects `RENDER_EXTERNAL_URL` for the Bot; webhook registration uses that service-owned URL. Optional bank, AI, OCR and WebSocket integrations stay disabled until provider credentials and migrations are verified.
 
 ## Local development
 
 1. Copy `telegram-bot/.env.example` to `telegram-bot/.env`.
-2. Populate credentials locally; do not commit the resulting `.env`.
+2. Populate credentials locally; never commit `.env`.
 3. Run `composer install` in `telegram-bot/`.
-4. Validate configuration with `composer validate-config`.
-5. Run the PHP tests with `composer test`.
+4. Run `composer validate-config`, `composer lint` and `composer test`.

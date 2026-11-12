@@ -18,6 +18,7 @@ final class HttpException extends RuntimeException
 final class ApiController
 {
     private const CATEGORIES = ['minigame', 'tools', 'codes', 'otp', 'proxy', 'vip'];
+    private const MINIGAME_BRANDS = ['QQ88', 'HI88', '78WIN', 'RR88', 'MM88', 'GG88', 'ABCVIP', 'XX8', 'U888', 'J88', 'ABC8', '88CLB', 'AD88', 'SC88', 'C168', 'CM88', 'F8BET'];
     private const ORDER_STATUSES = ['pending', 'processing', 'completed', 'rejected', 'cancelled', 'refunded'];
     private const SETTINGS = [
         'homepage_title', 'announcement', 'website_url', 'VIETQR_BANK_ID', 'VIETQR_ACCOUNT_NO',
@@ -885,6 +886,7 @@ final class ApiController
             $name = $this->text($this->body['name'] ?? '', 120);
             $category = $this->text($this->body['category'] ?? '', 32);
             $description = $this->text($this->body['description'] ?? '', 1500);
+            $brand = strtoupper($this->text($this->body['brand'] ?? '', 24));
             $price = $this->parseMoney($this->body['price'] ?? null, true);
             $days = (int) ($this->body['durationDays'] ?? 0);
             $stock = ($this->body['stock'] ?? null) === '' || ($this->body['stock'] ?? null) === null ? null : (int) $this->body['stock'];
@@ -892,16 +894,20 @@ final class ApiController
             if (mb_strlen($name) < 2 || !in_array($category, self::CATEGORIES, true)) {
                 throw new HttpException(400, 'Tên sản phẩm hoặc danh mục không hợp lệ.');
             }
+            if ($category === 'minigame' && !in_array($brand, self::MINIGAME_BRANDS, true)) {
+                throw new HttpException(400, 'Sản phẩm MiniGame phải chọn nhà cái hợp lệ.');
+            }
             if ($days < 0 || $days > 3650 || $stock !== null && ($stock < 0 || $stock > 10000000) || $vip < 0 || $vip > 3) {
                 throw new HttpException(400, 'Thời hạn, tồn kho hoặc cấp VIP không hợp lệ.');
             }
             $slug = self::slug($this->body['slug'] ?? $name);
             $image = $this->text($this->body['imageUrl'] ?? '', 500);
             self::validateHttps($image, 'Ảnh sản phẩm phải dùng HTTPS.');
+            $metadata = $brand !== '' ? ['brand' => $brand] : [];
             $product = Database::one(
-                'INSERT INTO products (slug, name, category, description, price, duration_days, stock, vip_level, image_url, is_active) ' .
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE) RETURNING *',
-                [$slug, $name, $category, $description, $price, $days, $stock, $vip, $image ?: null]
+                'INSERT INTO products (slug, name, category, description, price, duration_days, stock, vip_level, image_url, metadata, is_active) ' .
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, TRUE) RETURNING *',
+                [$slug, $name, $category, $description, $price, $days, $stock, $vip, $image ?: null, json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]
             );
             $this->audit('product.create', $slug, ['category' => $category, 'price' => $price]);
             return self::response(['product' => self::publicProduct($product)], 201);
@@ -925,13 +931,25 @@ final class ApiController
                 $vip = array_key_exists('vipLevel', $this->body) ? (int) $this->body['vipLevel'] : (int) $current['vip_level'];
                 $active = array_key_exists('isActive', $this->body) ? $this->toBool($this->body['isActive']) : $this->toBool($current['is_active']);
                 $image = array_key_exists('imageUrl', $this->body) ? $this->text($this->body['imageUrl'], 500) : (string) ($current['image_url'] ?? '');
+                $metadata = self::jsonArray($current['metadata'] ?? []);
+                $brand = array_key_exists('brand', $this->body)
+                    ? strtoupper($this->text($this->body['brand'], 24))
+                    : strtoupper((string) ($metadata['brand'] ?? ''));
+                if ($category === 'minigame' && !in_array($brand, self::MINIGAME_BRANDS, true)) {
+                    throw new HttpException(400, 'Sản phẩm MiniGame phải chọn nhà cái hợp lệ.');
+                }
+                if ($category === 'minigame') {
+                    $metadata['brand'] = $brand;
+                } elseif (array_key_exists('brand', $this->body)) {
+                    unset($metadata['brand']);
+                }
                 if (mb_strlen($name) < 2 || !in_array($category, self::CATEGORIES, true) || $days < 0 || $days > 3650 || $stock !== null && $stock < 0 || $vip < 0 || $vip > 3) {
                     throw new HttpException(400, 'Thông tin sản phẩm không hợp lệ.');
                 }
                 self::validateHttps($image, 'Ảnh sản phẩm phải dùng HTTPS.');
                 $product = Database::one(
-                    'UPDATE products SET name = ?, category = ?, description = ?, price = ?, duration_days = ?, stock = ?, vip_level = ?, image_url = ?, is_active = ?, updated_at = NOW() WHERE id = ? RETURNING *',
-                    [$name, $category, $description, $price, $days, $stock, $vip, $image ?: null, $active, $id]
+                    'UPDATE products SET name = ?, category = ?, description = ?, price = ?, duration_days = ?, stock = ?, vip_level = ?, image_url = ?, metadata = ?::jsonb, is_active = ?, updated_at = NOW() WHERE id = ? RETURNING *',
+                    [$name, $category, $description, $price, $days, $stock, $vip, $image ?: null, json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $active, $id]
                 );
                 $this->audit('product.update', $id, ['isActive' => $active, 'category' => $category, 'price' => $price]);
                 return self::response(['product' => self::publicProduct($product)]);

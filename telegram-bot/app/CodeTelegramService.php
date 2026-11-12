@@ -238,7 +238,7 @@ final class CodeTelegramService
         if (trim($text) === '') return [];
         $candidates = [];
         $patterns = [
-            '/(?:gift[\s_-]?code|promo(?:tional)?[\s_-]?code|code|mã\s*(?:khuyến\s*mãi|game|phần\s*mềm|tele|màn|code)?|mã\s*quà)\s*[:：=#-]?\s*[\'"“”]*([A-Z0-9][A-Z0-9_-]{4,31})/iu',
+            '/(?:gift[\s_-]?code|promo(?:tional)?[\s_-]?code|code\s*(?:game|tele|màn(?:\s*hình)?|phần\s*mềm)|code|mã\s*(?:khuyến\s*mãi|game|phần\s*mềm|tele|màn|code)?|mã\s*quà)\s*[:：=#-]?\s*[\'"“”]*([A-Z0-9][A-Z0-9_-]{4,31})/iu',
             '/(?:^|\n)\s*[*#>\- ]*([A-Z0-9][A-Z0-9_-]{5,23})\s*[* ]*(?=$|\n)/m',
         ];
         foreach ($patterns as $pattern) {

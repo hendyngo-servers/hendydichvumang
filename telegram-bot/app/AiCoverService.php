@@ -1,0 +1,510 @@
+<?php
+declare(strict_types=1);
+
+namespace Hendy;
+
+use RuntimeException;
+use Throwable;
+
+/**
+ * AI Cover queue using the existing primary Telegram bot, PostgreSQL and
+ * private Neon Object Storage. No extra bot token or public voice catalog.
+ */
+final class AiCoverService
+{
+    public const TERMS_VERSION = '2026-11-13-v1';
+
+    public static function enabled(): bool
+    {
+        if (!Env::bool('AI_COVER_ENABLED', false)) return false;
+        try {
+            return NeonStorage::configured()
+                && strlen(trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''))) >= 32;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    public static function session(string $userId): ?array
+    {
+        return Database::one(
+            'SELECT telegram_user_id, chat_id, selected_voice_id, terms_version, terms_accepted_at ' .
+            'FROM ai_cover_sessions WHERE telegram_user_id = ?',
+            [$userId]
+        );
+    }
+
+    public static function acceptTerms(string $userId, string $chatId): void
+    {
+        self::assertEnabled();
+        if (!preg_match('/\A[0-9]{5,20}\z/', $userId) || $chatId === '') {
+            throw new RuntimeException('Tài khoản Telegram không hợp lệ.');
+        }
+        Database::run(
+            "INSERT INTO ai_cover_sessions(telegram_user_id,chat_id,terms_version,terms_accepted_at,last_seen_at)
+             VALUES(?,?,?,NOW(),NOW())
+             ON CONFLICT(telegram_user_id) DO UPDATE SET
+               chat_id=EXCLUDED.chat_id, terms_version=EXCLUDED.terms_version,
+               terms_accepted_at=COALESCE(ai_cover_sessions.terms_accepted_at, NOW()),
+               last_seen_at=NOW(), updated_at=NOW()",
+            [$userId, $chatId, self::TERMS_VERSION]
+        );
+    }
+
+    public static function availableVoices(): array
+    {
+        self::assertEnabled();
+        return Database::all(
+            "SELECT id, name, description
+             FROM ai_cover_voices
+             WHERE enabled=TRUE AND voice_owner_consent=TRUE
+               AND length(trim(rights_holder))>0
+               AND length(trim(license_name))>0
+               AND length(trim(authorization_reference))>0
+               AND available=TRUE AND checked_at > NOW() - INTERVAL '30 minutes'
+             ORDER BY name ASC LIMIT 20"
+        );
+    }
+
+    public static function chooseVoice(string $userId, string $chatId, string $voiceId): array
+    {
+        self::assertEnabled();
+        if (!preg_match('/\A[a-z0-9][a-z0-9_-]{1,47}\z/', $voiceId)) {
+            throw new RuntimeException('Preset giọng không hợp lệ.');
+        }
+        $session = self::session($userId);
+        if ($session === null || empty($session['terms_accepted_at']) || ($session['terms_version'] ?? '') !== self::TERMS_VERSION) {
+            throw new RuntimeException('Bạn cần xác nhận điều khoản AI Cover trước.');
+        }
+        $voice = Database::one(
+            "SELECT id,name FROM ai_cover_voices
+             WHERE id=? AND enabled=TRUE AND voice_owner_consent=TRUE AND available=TRUE
+               AND checked_at > NOW() - INTERVAL '30 minutes'
+             LIMIT 1",
+            [$voiceId]
+        );
+        if ($voice === null) {
+            throw new RuntimeException('Preset hiện chưa sẵn sàng. Vui lòng chọn giọng khác hoặc thử lại sau.');
+        }
+        Database::run(
+            'UPDATE ai_cover_sessions SET chat_id=?, selected_voice_id=?, last_seen_at=NOW(), updated_at=NOW() WHERE telegram_user_id=?',
+            [$chatId, $voiceId, $userId]
+        );
+        return $voice;
+    }
+
+    /**
+     * Download one Telegram audio file, store it privately, then enqueue it.
+     * Files are never processed synchronously in the webhook request.
+     */
+    public static function queueAudio(
+        string $userId,
+        string $chatId,
+        int $updateId,
+        array $message,
+        TelegramApi $telegram
+    ): array {
+        self::assertEnabled();
+        if (!preg_match('/\A[0-9]{5,20}\z/', $userId) || $chatId === '' || $updateId < 1) {
+            throw new RuntimeException('Thông tin yêu cầu AI Cover không hợp lệ.');
+        }
+        $session = self::session($userId);
+        if ($session === null || empty($session['terms_accepted_at'])
+            || ($session['terms_version'] ?? '') !== self::TERMS_VERSION
+            || empty($session['selected_voice_id'])) {
+            throw new RuntimeException('Bạn cần xác nhận điều khoản và chọn preset giọng trước khi gửi audio.');
+        }
+
+        $voice = Database::one(
+            "SELECT id,name FROM ai_cover_voices
+             WHERE id=? AND enabled=TRUE AND voice_owner_consent=TRUE AND available=TRUE
+               AND checked_at > NOW() - INTERVAL '30 minutes'
+             LIMIT 1",
+            [(string) $session['selected_voice_id']]
+        );
+        if ($voice === null) {
+            throw new RuntimeException('Preset đã chọn không còn khả dụng. Hãy mở lại AI Cover và chọn giọng khác.');
+        }
+
+        $media = self::audioMedia($message);
+        if ($media === null) {
+            throw new RuntimeException('Hãy gửi tệp MP3, WAV, FLAC, M4A, AAC, OGG hoặc OPUS.');
+        }
+        $maxBytes = max(1, min(20, Env::int('AI_COVER_MAX_AUDIO_SIZE_MB', 20))) * 1024 * 1024;
+        $maxDuration = max(15, min(300, Env::int('AI_COVER_MAX_AUDIO_DURATION_SECONDS', 180)));
+        if ($media['size'] > $maxBytes) {
+            throw new RuntimeException('Audio vượt giới hạn ' . (int) floor($maxBytes / 1024 / 1024) . ' MB.');
+        }
+        if ($media['duration'] > $maxDuration) {
+            throw new RuntimeException('Audio vượt giới hạn ' . $maxDuration . ' giây.');
+        }
+
+        $temporary = $telegram->downloadAudioToTemp($media['fileId'], $maxBytes);
+        $sourceKey = '';
+        $jobId = self::uuid();
+        try {
+            $mime = (string) $temporary['mime'];
+            $extension = self::extensionForMime($mime, (string) $media['filename']);
+            $sourceKey = 'ai-cover/sources/' . $jobId . '/source.' . $extension;
+            NeonStorage::uploadFile((string) $temporary['path'], $sourceKey, $mime);
+
+            try {
+                $row = Database::transaction(function () use ($userId, $chatId, $updateId, $media, $voice, $sourceKey, $mime, $maxBytes): array {
+                    Database::run('SELECT pg_advisory_xact_lock(hashtext(?))', ['ai-cover-user:' . $userId]);
+                    $user = Database::one('SELECT user_id FROM users WHERE user_id=? FOR UPDATE', [$userId]);
+                    if ($user === null) throw new RuntimeException('Không tìm thấy tài khoản. Hãy gửi /start trước.');
+                    $existing = Database::one('SELECT id,status FROM ai_cover_jobs WHERE telegram_update_id=?', [$updateId]);
+                    if ($existing !== null) return $existing;
+
+                    $voiceStillAvailable = Database::one(
+                        "SELECT id FROM ai_cover_voices
+                         WHERE id=? AND enabled=TRUE AND voice_owner_consent=TRUE AND available=TRUE
+                           AND checked_at > NOW() - INTERVAL '30 minutes' FOR SHARE",
+                        [(string) $voice['id']]
+                    );
+                    if ($voiceStillAvailable === null) throw new RuntimeException('Preset vừa tạm ngừng. Hãy chọn lại giọng.');
+
+                    $activeLimit = max(1, min(3, Env::int('AI_COVER_MAX_ACTIVE_JOBS', 1)));
+                    $active = (int) Database::value(
+                        "SELECT COUNT(*) FROM ai_cover_jobs WHERE telegram_user_id=? AND status IN ('queued','processing')",
+                        [$userId]
+                    );
+                    if ($active >= $activeLimit) {
+                        throw new RuntimeException('Bạn đang có ' . $activeLimit . ' tác vụ AI Cover chưa hoàn tất. Hãy đợi kết quả trước.');
+                    }
+
+                    $dailyLimit = max(1, min(10, Env::int('AI_COVER_MAX_PER_DAY', 3)));
+                    $today = (int) Database::value(
+                        "SELECT COUNT(*) FROM ai_cover_jobs
+                         WHERE telegram_user_id=?
+                           AND created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh')
+                           AND status <> 'cancelled'",
+                        [$userId]
+                    );
+                    if ($today >= $dailyLimit) {
+                        throw new RuntimeException('Bạn đã đạt giới hạn ' . $dailyLimit . ' tác vụ AI Cover/ngày.');
+                    }
+
+                    $id = self::uuid();
+                    $job = Database::one(
+                        "INSERT INTO ai_cover_jobs
+                           (id,telegram_user_id,chat_id,telegram_update_id,telegram_file_unique_id,
+                            source_key,source_filename,source_mime_type,voice_id,voice_name,max_attempts,status)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,'queued')
+                         RETURNING id,status,created_at",
+                        [
+                            $id, $userId, $chatId, $updateId, $media['uniqueId'] ?: null,
+                            $sourceKey, $media['filename'], $mime, (string) $voice['id'],
+                            (string) $voice['name'], max(1, min(5, Env::int('AI_COVER_MAX_ATTEMPTS', 3))),
+                        ]
+                    );
+                    if ($job === null) throw new RuntimeException('Không thể tạo tác vụ AI Cover.');
+                    Database::run(
+                        "INSERT INTO ai_cover_events(job_id,event_type,details)
+                         VALUES(?, 'queued', jsonb_build_object('file_bytes',?,'voice_id',?))",
+                        [$id, (int) $media['size'], (string) $voice['id']]
+                    );
+                    Database::run(
+                        'UPDATE ai_cover_sessions SET selected_voice_id=NULL, last_seen_at=NOW(), updated_at=NOW() WHERE telegram_user_id=?',
+                        [$userId]
+                    );
+                    return $job;
+                });
+                return $row;
+            } catch (Throwable $error) {
+                if ($sourceKey !== '') {
+                    try { NeonStorage::deleteObject($sourceKey); } catch (Throwable $deleteError) {
+                        error_log('AI Cover orphan cleanup failed: ' . $deleteError::class);
+                    }
+                }
+                throw $error;
+            }
+        } finally {
+            if (isset($temporary['path']) && is_file((string) $temporary['path'])) @unlink((string) $temporary['path']);
+        }
+    }
+
+    public static function history(string $userId, int $limit = 10): array
+    {
+        return Database::all(
+            "SELECT id,voice_name,status,duration_seconds,created_at,completed_at,last_error
+             FROM ai_cover_jobs WHERE telegram_user_id=?
+             ORDER BY created_at DESC LIMIT " . max(1, min(20, $limit)),
+            [$userId]
+        );
+    }
+
+    public static function deliverJob(string $jobId, string $receivedSecret, TelegramApi $telegram): array
+    {
+        $expected = trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''));
+        if (strlen($expected) < 32 || !hash_equals($expected, $receivedSecret)) {
+            throw new RuntimeException('Callback secret không hợp lệ.');
+        }
+        if (!preg_match('/\A[0-9a-f-]{36}\z/i', $jobId)) {
+            throw new RuntimeException('Mã tác vụ AI Cover không hợp lệ.');
+        }
+        $job = Database::one(
+            "UPDATE ai_cover_jobs SET delivery_claimed_at=NOW(), delivery_attempts=delivery_attempts+1, updated_at=NOW()
+             WHERE id=? AND delivery_sent_at IS NULL
+               AND (delivery_claimed_at IS NULL OR delivery_claimed_at < NOW() - INTERVAL '10 minutes')
+             RETURNING id,chat_id,telegram_user_id,voice_name,status,result_key,delivery_attempts",
+            [$jobId]
+        );
+        if ($job === null) {
+            $current = Database::one('SELECT status,delivery_sent_at FROM ai_cover_jobs WHERE id=?', [$jobId]);
+            if ($current === null) throw new RuntimeException('Không tìm thấy tác vụ AI Cover.');
+            return ['status' => !empty($current['delivery_sent_at']) ? 'already_delivered' : 'delivery_in_progress'];
+        }
+        if (!in_array((string) $job['status'], ['completed','failed'], true)) {
+            Database::run('UPDATE ai_cover_jobs SET delivery_claimed_at=NULL WHERE id=?', [$jobId]);
+            throw new RuntimeException('Tác vụ AI Cover chưa hoàn tất.');
+        }
+
+        $temporary = null;
+        try {
+            if ($job['status'] === 'completed' && is_string($job['result_key']) && $job['result_key'] !== '') {
+                $temporary = NeonStorage::downloadToTemp((string) $job['result_key'], 50_000_000);
+                $telegram->sendAudioFile(
+                    (string) $job['chat_id'],
+                    (string) $temporary['path'],
+                    '🎤 <b>HENDY AI COVER ĐÃ HOÀN TẤT</b>' . "\n" .
+                    'Preset: <b>' . self::escape((string) $job['voice_name']) . '</b>' . "\n" .
+                    'Mã tác vụ: <code>' . self::escape(substr((string) $job['id'], 0, 8)) . '</code>'
+                );
+            } else {
+                $telegram->sendMessage(
+                    (string) $job['chat_id'],
+                    '❌ <b>HENDY AI COVER CHƯA THỂ HOÀN TẤT</b>' . "\n" .
+                    'Mã tác vụ: <code>' . self::escape(substr((string) $job['id'], 0, 8)) . '</code>' . "\n" .
+                    'Hệ thống đã ghi nhận lỗi. Vui lòng thử bản audio ngắn hơn hoặc liên hệ CSKH.'
+                );
+            }
+            Database::run(
+                'UPDATE ai_cover_jobs SET delivery_sent_at=NOW(),delivery_claimed_at=NULL,updated_at=NOW() WHERE id=?',
+                [$jobId]
+            );
+            return ['status' => 'delivered'];
+        } catch (Throwable $error) {
+            Database::run(
+                "UPDATE ai_cover_jobs SET delivery_claimed_at=NULL,
+                  delivery_retry_at=NOW() + LEAST(900,15*GREATEST(1,delivery_attempts))*INTERVAL '1 second',
+                  last_error=COALESCE(last_error,'') || ' [delivery retry]', updated_at=NOW() WHERE id=?",
+                [$jobId]
+            );
+            throw $error;
+        } finally {
+            if (is_array($temporary) && isset($temporary['path']) && is_file((string) $temporary['path'])) {
+                @unlink((string) $temporary['path']);
+            }
+        }
+    }
+
+    public static function adminSnapshot(): array
+    {
+        return [
+            'enabled' => self::enabled(),
+            'voices' => Database::all(
+                "SELECT id,name,description,enabled,model_key,index_key,speaker_id,pitch,index_rate,f0_method,
+                        rights_holder,license_name,authorization_reference,voice_owner_consent,commercial_use_allowed,
+                        available,checked_at,last_error,created_at,updated_at
+                 FROM ai_cover_voices ORDER BY created_at DESC LIMIT 100"
+            ),
+            'jobs' => Database::all(
+                "SELECT id,telegram_user_id,voice_name,status,attempts,max_attempts,duration_seconds,output_size_bytes,
+                        last_error,delivery_sent_at,created_at,completed_at
+                 FROM ai_cover_jobs ORDER BY created_at DESC LIMIT 100"
+            ),
+            'stats' => [
+                'voices' => (int) Database::value('SELECT COUNT(*) FROM ai_cover_voices'),
+                'availableVoices' => (int) Database::value('SELECT COUNT(*) FROM ai_cover_voices WHERE enabled=TRUE AND available=TRUE'),
+                'queued' => (int) Database::value("SELECT COUNT(*) FROM ai_cover_jobs WHERE status='queued'"),
+                'processing' => (int) Database::value("SELECT COUNT(*) FROM ai_cover_jobs WHERE status='processing'"),
+                'completed' => (int) Database::value("SELECT COUNT(*) FROM ai_cover_jobs WHERE status='completed'"),
+                'failed' => (int) Database::value("SELECT COUNT(*) FROM ai_cover_jobs WHERE status='failed'"),
+            ],
+        ];
+    }
+
+    /** Save one licensed preset and optionally upload a replacement model/index. */
+    public static function saveVoice(array $input, array $files, string $adminId): array
+    {
+        self::assertEnabled();
+        $id = strtolower(trim((string) ($input['id'] ?? '')));
+        $name = trim((string) ($input['name'] ?? ''));
+        $description = trim((string) ($input['description'] ?? ''));
+        $rightsHolder = trim((string) ($input['rightsHolder'] ?? ''));
+        $license = trim((string) ($input['license'] ?? ''));
+        $authorization = trim((string) ($input['authorizationReference'] ?? ''));
+        $consent = filter_var($input['voiceOwnerConsent'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $commercial = filter_var($input['commercialUseAllowed'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $enabled = filter_var($input['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $speakerId = filter_var($input['speakerId'] ?? 0, FILTER_VALIDATE_INT);
+        $pitch = filter_var($input['pitch'] ?? 0, FILTER_VALIDATE_INT);
+        $indexRate = filter_var($input['indexRate'] ?? 0.65, FILTER_VALIDATE_FLOAT);
+        $f0 = trim((string) ($input['f0Method'] ?? 'rmvpe'));
+
+        if (!preg_match('/\A[a-z0-9][a-z0-9_-]{1,47}\z/', $id)
+            || mb_strlen($name) < 1 || mb_strlen($name) > 50
+            || mb_strlen($description) > 300
+            || $rightsHolder === '' || mb_strlen($rightsHolder) > 160
+            || $license === '' || mb_strlen($license) > 160
+            || $authorization === '' || mb_strlen($authorization) > 200
+            || !$consent
+            || !is_int($speakerId) || $speakerId < 0 || $speakerId > 109
+            || !is_int($pitch) || $pitch < -12 || $pitch > 12
+            || !is_float($indexRate) || $indexRate < 0 || $indexRate > 1
+            || !in_array($f0, ['rmvpe','pm'], true)) {
+            throw new RuntimeException('Thông tin preset hoặc hồ sơ đồng ý/cấp phép không hợp lệ.');
+        }
+
+        $existing = Database::one('SELECT model_key,index_key FROM ai_cover_voices WHERE id=?', [$id]);
+        $modelKey = (string) ($existing['model_key'] ?? '');
+        $indexKey = (string) ($existing['index_key'] ?? '');
+        $uploadedKeys = [];
+
+        foreach (['model' => 'voice.pth', 'index' => 'voice.index'] as $field => $filename) {
+            $file = $files[$field] ?? null;
+            if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
+            if ((int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+                || !is_uploaded_file((string) ($file['tmp_name'] ?? ''))
+                || (int) ($file['size'] ?? 0) < 16
+                || (int) ($file['size'] ?? 0) > 300_000_000) {
+                throw new RuntimeException('Tệp model/index không hợp lệ hoặc vượt 300 MB.');
+            }
+            $original = (string) ($file['name'] ?? '');
+            $expectedExtension = $field === 'model' ? 'pth' : 'index';
+            if (strtolower(pathinfo($original, PATHINFO_EXTENSION)) !== $expectedExtension) {
+                throw new RuntimeException('Tệp ' . $field . ' phải có phần mở rộng .' . $expectedExtension . '.');
+            }
+            $objectKey = 'ai-cover/models/' . $id . '/' . $filename;
+            NeonStorage::uploadFile((string) $file['tmp_name'], $objectKey, 'application/octet-stream');
+            $uploadedKeys[] = $objectKey;
+            if ($field === 'model') $modelKey = $objectKey;
+            else $indexKey = $objectKey;
+        }
+        if ($modelKey === '') {
+            throw new RuntimeException('Cần tải lên model .pth trước khi lưu preset.');
+        }
+
+        $row = Database::one(
+            "INSERT INTO ai_cover_voices
+              (id,name,description,enabled,model_key,index_key,speaker_id,pitch,index_rate,f0_method,
+               rights_holder,license_name,authorization_reference,voice_owner_consent,commercial_use_allowed,
+               consent_reviewed_by,consent_reviewed_at,available,checked_at,last_error,created_by)
+             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,NOW(),FALSE,NULL,'',?)
+             ON CONFLICT(id) DO UPDATE SET
+               name=EXCLUDED.name,description=EXCLUDED.description,enabled=EXCLUDED.enabled,
+               model_key=EXCLUDED.model_key,index_key=EXCLUDED.index_key,
+               speaker_id=EXCLUDED.speaker_id,pitch=EXCLUDED.pitch,index_rate=EXCLUDED.index_rate,
+               f0_method=EXCLUDED.f0_method,rights_holder=EXCLUDED.rights_holder,
+               license_name=EXCLUDED.license_name,authorization_reference=EXCLUDED.authorization_reference,
+               voice_owner_consent=EXCLUDED.voice_owner_consent,commercial_use_allowed=EXCLUDED.commercial_use_allowed,
+               consent_reviewed_by=EXCLUDED.consent_reviewed_by,consent_reviewed_at=NOW(),
+               available=FALSE,checked_at=NULL,last_error='',updated_at=NOW()
+             RETURNING id,name,enabled,available",
+            [
+                $id,$name,$description,$enabled,$modelKey,$indexKey !== '' ? $indexKey : null,
+                $speakerId,$pitch,$indexRate,$f0,$rightsHolder,$license,$authorization,$consent,$commercial,
+                $adminId,$adminId,
+            ]
+        );
+        if ($row === null) {
+            foreach ($uploadedKeys as $key) { try { NeonStorage::deleteObject($key); } catch (Throwable) {} }
+            throw new RuntimeException('Không thể lưu preset AI Cover.');
+        }
+        return $row;
+    }
+
+    public static function setVoiceEnabled(string $voiceId, bool $enabled, string $adminId): void
+    {
+        if (!preg_match('/\A[a-z0-9][a-z0-9_-]{1,47}\z/', $voiceId)) {
+            throw new RuntimeException('Preset ID không hợp lệ.');
+        }
+        $row = Database::one(
+            "UPDATE ai_cover_voices SET enabled=?, available=FALSE, checked_at=NULL,
+               consent_reviewed_by=CASE WHEN ? THEN ? ELSE consent_reviewed_by END,
+               consent_reviewed_at=CASE WHEN ? THEN NOW() ELSE consent_reviewed_at END,
+               updated_at=NOW()
+             WHERE id=? RETURNING id",
+            [$enabled,$enabled,$adminId,$enabled,$voiceId]
+        );
+        if ($row === null) throw new RuntimeException('Không tìm thấy preset AI Cover.');
+    }
+
+    private static function audioMedia(array $message): ?array
+    {
+        $media = null;
+        $filename = 'audio-upload.mp3';
+        $mime = 'audio/mpeg';
+        if (is_array($message['audio'] ?? null)) {
+            $media = $message['audio'];
+            $filename = (string) ($media['file_name'] ?? 'telegram-audio.mp3');
+            $mime = (string) ($media['mime_type'] ?? 'audio/mpeg');
+        } elseif (is_array($message['voice'] ?? null)) {
+            $media = $message['voice'];
+            $filename = 'telegram-voice.ogg';
+            $mime = (string) ($media['mime_type'] ?? 'audio/ogg');
+        } elseif (is_array($message['document'] ?? null)) {
+            $document = $message['document'];
+            $filename = (string) ($document['file_name'] ?? 'audio-upload');
+            $mime = (string) ($document['mime_type'] ?? '');
+            $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+            if (!str_starts_with(strtolower($mime), 'audio/')
+                && !in_array($extension, ['mp3','wav','flac','m4a','aac','ogg','opus'], true)) {
+                return null;
+            }
+            $media = $document;
+        }
+        if (!is_array($media) || (string) ($media['file_id'] ?? '') === '') return null;
+        return [
+            'fileId' => (string) $media['file_id'],
+            'uniqueId' => (string) ($media['file_unique_id'] ?? ''),
+            'size' => max(0, (int) ($media['file_size'] ?? 0)),
+            'duration' => max(0, (int) ($media['duration'] ?? 0)),
+            'filename' => self::safeFilename($filename),
+            'mime' => strtolower(trim(explode(';', $mime)[0])),
+        ];
+    }
+
+    private static function extensionForMime(string $mime, string $filename): string
+    {
+        $known = [
+            'audio/mpeg'=>'mp3','audio/mp3'=>'mp3','audio/wav'=>'wav','audio/x-wav'=>'wav',
+            'audio/flac'=>'flac','audio/mp4'=>'m4a','audio/aac'=>'aac','audio/ogg'=>'ogg',
+            'audio/opus'=>'opus','application/octet-stream'=>strtolower(pathinfo($filename, PATHINFO_EXTENSION)),
+        ];
+        $ext = $known[$mime] ?? '';
+        if (!in_array($ext, ['mp3','wav','flac','m4a','aac','ogg','opus'], true)) {
+            throw new RuntimeException('Định dạng audio chưa được hỗ trợ.');
+        }
+        return $ext;
+    }
+
+    private static function assertEnabled(): void
+    {
+        if (!self::enabled()) {
+            throw new RuntimeException('AI Cover đang tạm đóng. Quản trị viên cần bật tính năng và cấu hình worker/storage trước.');
+        }
+    }
+
+    private static function uuid(): string
+    {
+        $bytes = random_bytes(16);
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+        $hex = bin2hex($bytes);
+        return substr($hex,0,8).'-'.substr($hex,8,4).'-'.substr($hex,12,4).'-'.substr($hex,16,4).'-'.substr($hex,20);
+    }
+
+    private static function safeFilename(string $filename): string
+    {
+        $base = basename(str_replace('\\','/',$filename));
+        $safe = preg_replace('/[^A-Za-z0-9._-]/','_',$base) ?: 'audio-upload';
+        return mb_substr($safe,0,120);
+    }
+
+    private static function escape(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+}

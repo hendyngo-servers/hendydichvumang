@@ -22,7 +22,8 @@
     "migrate": "php bin/migrate.php",
     "validate-config": "php bin/validate-config.php",
     "websocket": "php bin/websocket.php",
-    "video-worker": "php bin/video-worker.php"
+    "video-worker": "php bin/video-worker.php",
+    "code-telegram-worker": "php bin/code-telegram-worker.php"
   },
   "config": {
     "sort-packages": true

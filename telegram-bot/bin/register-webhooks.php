@@ -34,22 +34,12 @@ $bots = [
         'path' => '/webhook/telegram',
         'label' => 'bot chính',
     ],
-    'secondary' => [
-        'token' => Hendy\TelegramAuth::token('secondary'),
-        'secret' => Hendy\TelegramAuth::webhookSecret('secondary'),
-        'path' => '/webhook/telegram/secondary',
-        'label' => 'bot thử nghiệm',
-    ],
 ];
 
 $failed = [];
 foreach ($bots as $key => $config) {
     if ($config['token'] === '') {
-        if ($key === 'secondary') {
-            fwrite(STDOUT, "BOT2_TOKEN đang trống; bỏ qua bot thử nghiệm.\n");
-        } else {
-            $failed[] = 'BOT1_TOKEN đang trống; chưa thể đăng ký webhook bot chính.';
-        }
+        $failed[] = 'BOT1_TOKEN đang trống; chưa thể đăng ký webhook bot chính.';
         continue;
     }
 
@@ -81,7 +71,7 @@ foreach ($bots as $key => $config) {
         $message = $error->getMessage();
         if (preg_match('/(?:Telegram API lỗi )?401\b|Unauthorized/i', $message)) {
             $failed[] = $config['label'] . ': Telegram từ chối token (401 Unauthorized). Hãy kiểm tra biến ' .
-                ($key === 'primary' ? 'BOT1_TOKEN' : 'BOT2_TOKEN') . ' trong Render Environment.';
+                'BOT1_TOKEN' . ' trong Render Environment.';
         } else {
             $failed[] = $config['label'] . ': không đăng ký được webhook: ' . $message;
         }

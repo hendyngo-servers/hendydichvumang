@@ -172,7 +172,7 @@ try {
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
-        readfile(dirname(__DIR__) . '/apps/website/index.html');
+        readfile(dirname(__DIR__, 2) . '/website/telegram/customer-center/index.html');
         exit;
     }
 
@@ -180,7 +180,7 @@ try {
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
-        readfile(dirname(__DIR__) . '/apps/admin-dashboard/legacy-login.html');
+        readfile(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/legacy-login.html');
         exit;
     }
 
@@ -190,7 +190,9 @@ try {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'");
-        readfile(dirname(__DIR__) . '/apps/website/landing.html');
+        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-website.onrender.com'), '/');
+        header('Location: ' . $websiteUrl . '/', true, 302);
+        exit;
         exit;
     }
 
@@ -199,14 +201,18 @@ try {
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: public, max-age=1800');
         header("Content-Security-Policy: default-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'; object-src 'none'; frame-ancestors 'self'");
-        readfile(dirname(__DIR__) . '/apps/website/privacy.html');
+        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-website.onrender.com'), '/');
+        header('Location: ' . $websiteUrl . '/privacy', true, 302);
+        exit;
         exit;
     }
     if ($method === 'GET' && in_array($path, ['/terms', '/terms/'], true)) {
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: public, max-age=1800');
         header("Content-Security-Policy: default-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'self'; object-src 'none'; frame-ancestors 'self'");
-        readfile(dirname(__DIR__) . '/apps/website/terms.html');
+        $websiteUrl = rtrim((string) Env::get('WEBSITE_PUBLIC_URL', 'https://hendydichvumang-website.onrender.com'), '/');
+        header('Location: ' . $websiteUrl . '/terms', true, 302);
+        exit;
         exit;
     }
 
@@ -220,7 +226,7 @@ try {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('X-Robots-Tag: noindex, nofollow');
-        readfile(dirname(__DIR__) . '/apps/website/index.html');
+        readfile(dirname(__DIR__, 2) . '/website/telegram/customer-center/index.html');
         exit;
     }
 
@@ -230,7 +236,7 @@ try {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('X-Robots-Tag: noindex, nofollow');
-        readfile(dirname(__DIR__) . '/apps/admin-dashboard/index.html');
+        readfile(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/index.html');
         exit;
     }
 
@@ -306,7 +312,7 @@ try {
     if ($method === 'GET' && $path === '/styles/buttons.css') {
         header('Content-Type: text/css; charset=utf-8');
         header('Cache-Control: public, max-age=3600');
-        readfile(dirname(__DIR__) . '/apps/admin-dashboard/styles/buttons.css');
+        readfile(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/styles/buttons.css');
         exit;
     }
     if ($method === 'GET' && in_array($path, ['/health', '/healthz', '/api/health'], true)) {

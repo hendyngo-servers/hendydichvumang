@@ -38,7 +38,7 @@ function app_store_image_url(?string $path): string
 {
     if(!$path)return '';
     if(str_starts_with($path,'app_store/uploads/screenshots/'))return '/'.$path;
-    if(str_starts_with($path,'uploads/screenshots/'))return '../'.$path;
+    if(str_starts_with($path,'uploads/screenshots/'))return '/'.$path;
     if(str_starts_with($path,'website/screenshots/'))return screenshot_url($path);
     return $path;
 }
@@ -46,9 +46,8 @@ function app_store_image_url(?string $path): string
 function app_store_delete_image(string $path): void
 {
     if(str_starts_with($path,'app_store/uploads/screenshots/')){
-        $root=dirname(__DIR__,2);
-        $base=realpath($root.'/app_store/uploads/screenshots');
-        $file=realpath($root.'/'.$path);
+        $base=realpath(__DIR__.'/../uploads/screenshots');
+        $file=$base ? realpath($base.'/'.basename($path)) : false;
         if($base&&$file&&str_starts_with($file,$base.DIRECTORY_SEPARATOR)&&is_file($file))@unlink($file);
         return;
     }

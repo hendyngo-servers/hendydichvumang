@@ -30,12 +30,14 @@ services:
     region: singapore
     branch: main
     dockerfilePath: ./telegram-bot/Dockerfile
-    dockerContext: ./telegram-bot
+    dockerContext: .
     healthCheckPath: /healthz
     autoDeployTrigger: checksPass
     envVars:
       - key: APP_ENV
         value: production
+      - key: WEBSITE_PUBLIC_URL
+        value: "https://hendydichvumang-website.onrender.com"
       - key: PORT
         value: "10000"
       - key: RUN_MIGRATIONS_ON_START

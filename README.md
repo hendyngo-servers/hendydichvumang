@@ -1,45 +1,39 @@
 # HENDY Digital Ecosystem
 
-Two Render Web Services: Website/App Store and one Telegram Bot production service.
+HENDY uses one canonical Website application source directory: **`website/`**.
+
+## Website architecture
+
+- `website/app-store/`: Website home, App Store, application/game details, network services, Website Admin, login/register, shared PHP includes, CSS and uploads.
+- `website/telegram/admin-dashboard/`: Telegram Bot Admin interface source. It is served only by authenticated Bot route `/admin`.
+- `website/telegram/customer-center/`: Telegram Customer/Mini App interface source. It is served by Bot routes `/customer` and `/miniapp`; it is deliberately not listed in public Website navigation.
+- `website/healthz.php`: Website Render health endpoint.
+- `website/.htaccess`: canonical Website routing and private source protection.
+
+Legacy public routes remain available: `/app_store/`, `/admin.php`, `/detail.php`, `/dichvumang.php`, `/login.php`, `/register.php`, `/admin-products.php`, `/admin-users.php`, and `/admin-system.php`. They are rewritten into `website/app-store/`.
+
+The Website DocumentRoot is `/var/www/html/website`. The top-level `Dockerfile` is deployment infrastructure; Website application code is under `website/`.
+
+## Services
 
 | Component | Render service | Runtime | Database |
 |---|---|---|---|
-| Website + App Store + network services | hendydichvumang-website | PHP 8.3 / Apache | Neon hendydichvumang_website |
-| Telegram Bot | hendydichvumang-telegram-bot | PHP 8.3 / Apache | Neon hendydichvumang |
+| Website, App Store, Network Services, Website Admin | hendydichvumang-website | PHP 8.3 / Apache | Neon `hendydichvumang_website` |
+| One Telegram Bot, webhook, API, Telegram Admin/Customer UI | hendydichvumang-telegram-bot | PHP 8.3 / Apache | Neon `hendydichvumang` |
 
-## Website source of truth
+The Bot Docker context is the repository root so it can copy `website/telegram/*` to `/var/www/website/`, outside the Bot's public DocumentRoot. The Bot root/marketing/legal routes redirect to the canonical Website; authenticated Bot Admin and Customer routes remain served by the Bot backend.
 
-Website PHP/CSS/includes are consolidated under app_store/. Main routes:
-- / — Website home (app_store/home.php).
-- /app_store/ — App Store.
-- /app_store/detail.php?id=... — App/game detail.
-- /app_store/dichvumang.php — Network services.
-- /admin.php — Central Website admin hub.
-- /admin-products.php — Website catalogue CRUD and image gallery.
-- /admin-users.php — Website member search and role management.
-- /admin-system.php — Website health and configuration status.
-- /app_store/admin.php — App Store admin.
-- /app_store/admin_services.php — Network service admin.
-- /login.php, /register.php, /logout.php — Single Website account/session.
+Website and Bot PostgreSQL databases remain separate. Website passwords, Telegram IDs, balances, wallets and histories are not inferred or silently merged. Cross-account linking requires a verified identity flow.
 
-Root .htaccess routes legacy URLs into app_store/. Duplicate root PHP/CSS/includes files are removed. healthz.php, Dockerfile, render.yaml, database schemas and uploads remain at root because they are infrastructure/data assets, not duplicated Website application sources.
+## AI Cover integration
 
-## Admin hub
-
-/admin.php is the single entry point for Website, App Store and network-service administration, with a shortcut to the Telegram Bot Dashboard. Bot Dashboard still uses its Telegram Admin allowlist (ADMIN_ID / ADMIN_IDS) and its separate Neon database. Accounts and balances are not implicitly merged.
+The primary Telegram Bot has a native PHP service and additive PostgreSQL schema for AI Cover. The AI inference worker is isolated from the webhook process and uses the private Neon Object Storage signer. The service stays disabled until the additive migration, worker service, callback secret and at least one authorized voice model are configured. Voice models must have documented license and owner consent; no pretrained or third-party model is bundled.
 
 ## Data preservation
 
-Website schema: database/website-postgresql.sql.
-App Store migration: app_store/database.postgresql.sql.
-Bot schema: telegram-bot/database/schema.sql.
+- Website schema: `database/website-postgresql.sql`
+- App Store and Network Services migration: `website/app-store/database.postgresql.sql`
+- Bot schema: `telegram-bot/database/schema.sql`
+- Additive feature migrations: `telegram-bot/database/migrations/`
 
-Legacy products/screenshots and App Store apps/app_screenshots/network_services tables are preserved. No destructive migration or cross-database balance transfer is performed. The Website Admin seed still requires ADMIN_EMAIL and ADMIN_PASSWORD in Render Environment when no Admin already exists.
-
-## Telegram Bot
-
-The primary production bot uses BOT1_TOKEN and one webhook /webhook/telegram. The main Inline Keyboard follows the supplied reference image and includes AI music/image actions. The welcome caption uses live Telegram/profile/wallet data. Home artwork is fetched by the Bot backend, validated against BOT_HOME_PHOTO_ALLOWED_HOSTS, then uploaded to Telegram as multipart bytes. Default URL: https://i.postimg.cc/HY1LRby9/hendy-home-banner.jpg?dl=1.
-
-AI Media is optional and disabled by default. It uses a PostgreSQL ai_media_jobs queue, an optional worker, OpenAI Images Edit and ElevenLabs Music v2.5. Enable only after the additive migration is approved/applied and provider API keys are set in Render Environment. The beta queue is rate-limited and does not deduct member wallets.
-
-Keep BOT1_TOKEN, DATABASE_URL, passwords and signing keys in Render Environment/GitHub Secrets. CI runs Website PHP lint, Bot Composer validate/lint/tests, secret scan and Neon Function build/tests.
+No application tables or member balances are merged or dropped as part of the source-folder consolidation.

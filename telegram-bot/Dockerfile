@@ -9,15 +9,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/app
-COPY . /var/www/app
+# Build context is the repository root: shared Website UI is copied outside
+# the Bot public DocumentRoot and only read by authenticated PHP routes.
+COPY telegram-bot/ /var/www/app/
+COPY website/ /var/www/website/
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --prefer-dist --no-interaction --classmap-authoritative --no-progress
 RUN composer lint
-COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
-RUN chown -R www-data:www-data /var/www/app \
+COPY telegram-bot/docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+RUN chown -R www-data:www-data /var/www/app /var/www/website \
     && chmod -R 755 /var/www/app/public \
     && chmod +x /var/www/app/docker/start.sh
 
-# Render's default web-service port is 10000.
 EXPOSE 10000
 CMD ["/var/www/app/docker/start.sh"]

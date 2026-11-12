@@ -1,0 +1,46 @@
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+RewriteEngine On
+
+<FilesMatch "(^\\.|\\.(?:sql|log|ini|ya?ml|bak|old|pem|key|dump|md)$)">
+    Require all denied
+</FilesMatch>
+
+# Telegram Admin and Customer HTML is source for the Bot container only.
+# The Bot runtime reads it outside its public DocumentRoot.
+RewriteRule ^telegram(?:/|$) - [F,END,NC]
+RewriteRule ^app-store(?:/|$) - [F,END,NC]
+RewriteRule ^app-store/includes(?:/|$) - [F,END,NC]
+
+# Canonical Website routes with compatibility for existing public URLs.
+RewriteRule ^$ app-store/home.php [END]
+RewriteRule ^index\\.php$ app-store/home.php [END]
+RewriteRule ^(login|register|logout)\\.php$ app-store/$1.php [END]
+RewriteRule ^detail\\.php$ app-store/legacy-detail.php [END,QSA]
+RewriteRule ^dichvumang\\.php$ app-store/dichvumang.php [END,QSA]
+RewriteRule ^admin\\.php$ app-store/admin-center.php [END]
+RewriteRule ^admin-products\\.php$ app-store/admin-products.php [END,QSA]
+RewriteRule ^admin-users\\.php$ app-store/admin-users.php [END,QSA]
+RewriteRule ^admin-system\\.php$ app-store/admin-system.php [END,QSA]
+RewriteRule ^admin_add\\.php$ app-store/admin_add.php [END]
+RewriteRule ^admin_edit\\.php$ app-store/admin_edit.php [END,QSA]
+RewriteRule ^app_store/category/([A-Za-z0-9_-]+)$ app-store/index.php?category=$1 [END,QSA]
+RewriteRule ^app_store/app/([0-9]+)$ app-store/detail.php?id=$1 [END,QSA]
+RewriteRule ^app_store/dich-vu-mang$ app-store/dichvumang.php [END,QSA]
+RewriteRule ^app_store/dang-nhap$ app-store/login.php [END]
+RewriteRule ^app_store/dang-ky$ app-store/register.php [END]
+RewriteRule ^app_store/dang-xuat$ app-store/logout.php [END]
+RewriteRule ^app_store/?$ app-store/index.php [END]
+RewriteRule ^app_store/(.*)$ app-store/$1 [END]
+RewriteRule ^bot\\.php$ app-store/bot.php [END]
+RewriteRule ^privacy/?$ app-store/legal.php?doc=privacy [END,QSA]
+RewriteRule ^privacy\\.php$ app-store/legal.php?doc=privacy [END,QSA]
+RewriteRule ^terms/?$ app-store/legal.php?doc=terms [END,QSA]
+RewriteRule ^terms\\.php$ app-store/legal.php?doc=terms [END,QSA]
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+</IfModule>

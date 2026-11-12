@@ -657,7 +657,7 @@ final class BotService
             $this->telegram->sendMessage($chatId, '🔎 Gửi từ khóa, tên game hoặc một phần mã để tìm trong kho Code Telegram. Bạn cũng có thể dùng lệnh /code từ khóa.');
             return;
         }
-        if (preg_match('/^live-group:(group[1-3])$/', $action, $matches)) {
+        if (preg_match('/^live-group:(group[1-4])$/', $action, $matches)) {
             $this->showMinigameGroupGames($chatId, $userId, $matches[1]);
             return;
         }
@@ -682,7 +682,23 @@ final class BotService
             if ($this->minigameGroupForBrand($brand) === null) {
                 throw new RuntimeException('Gói Mini Game không hợp lệ.');
             }
-            $this->showMinigamePackageManager($chatId, $userId, $brand, (int) $matches[2]);
+            $this->showMinigameProduct($chatId, $userId, $brand, (int) $matches[2]);
+            return;
+        }
+        if (preg_match('/^live-buy:([A-Z0-9]+):(\d{1,18})$/', $action, $matches)) {
+            $brand = strtoupper($matches[1]);
+            if ($this->minigameGroupForBrand($brand) === null) {
+                throw new RuntimeException('Nhà cái Mini Game không hợp lệ.');
+            }
+            try {
+                $this->createOrder($chatId, $userId, $matches[2], $brand);
+            } catch (RuntimeException $error) {
+                if (mb_stripos($error->getMessage(), 'không đủ') !== false) {
+                    $this->showMinigameProduct($chatId, $userId, $brand, (int) $matches[2]);
+                    return;
+                }
+                throw $error;
+            }
             return;
         }
         if (preg_match('/^live-add-acc:([A-Z0-9]+):(\d{1,18})$/', $action, $matches)) {

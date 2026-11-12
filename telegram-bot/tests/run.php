@@ -76,6 +76,9 @@ $parsedCodeTelegram = CodeTelegramService::extractCandidates("Mã khuyến mãi:
 $assert(in_array('HENDY2026', $parsedCodeTelegram, true) && in_array('TELE2026', $parsedCodeTelegram, true) && in_array('FREE999', $parsedCodeTelegram, true), 'Code Telegram extracts Vietnamese promo, Telegram and English promo codes');
 $assert(count($parsedCodeTelegram) === count(array_unique($parsedCodeTelegram)), 'Code Telegram parser removes duplicate candidates from the same message');
 $assert(str_contains($botServiceSource, 'code-telegram:recent') && str_contains($botServiceSource, 'case \'code_telegram_search\':' ) && str_contains($botServiceSource, 'CodeTelegramService::ingestChannelPost'), 'Bot menu supports Code Telegram browse, search and channel ingestion');
+$assert(str_contains($botServiceSource, 'private function showMinigameProduct') && str_contains($botServiceSource, 'live-buy:') && str_contains($botServiceSource, 'MINIGAME LIVE'), 'MiniGame service list opens a payment confirmation flow');
+$assert(str_contains($botServiceSource, 'FOR UPDATE') && str_contains($botServiceSource, "category = 'minigame'") && str_contains($botServiceSource, 'Ví Chính'), 'MiniGame checkout validates and locks a catalog product before paying from the Main wallet');
+
 $codeTelegramServicesSchema = file_get_contents(dirname(__DIR__) . '/database/migrations/20261112_code_telegram_services.sql');
 $apiControllerSource = file_get_contents(dirname(__DIR__) . '/app/ApiController.php');
 $adminDashboardSource = file_get_contents(dirname(__DIR__) . '/apps/admin-dashboard/index.html');

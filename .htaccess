@@ -1,11 +1,17 @@
 Options -Indexes -MultiViews
 DirectoryIndex index.php
-
-# Deny hidden files, SQL dumps, logs, certificates and local configuration.
 <FilesMatch "(^\.|\.(?:sql|log|ini|ya?ml|bak|old|pem|key|dump)$)">
     Require all denied
 </FilesMatch>
-
+RewriteEngine On
+RewriteRule ^$ app_store/home.php [END]
+RewriteRule ^index\.php$ app_store/home.php [END]
+RewriteRule ^(login|register|logout)\.php$ app_store/$1.php [END]
+RewriteRule ^detail\.php$ app_store/legacy-detail.php [END,QSA]
+RewriteRule ^dichvumang\.php$ app_store/dichvumang.php [END,QSA]
+RewriteRule ^admin\.php$ app_store/admin-center.php [END]
+RewriteRule ^admin_add\.php$ app_store/admin_add.php [END]
+RewriteRule ^admin_edit\.php$ app_store/admin_edit.php [END,QSA]
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"

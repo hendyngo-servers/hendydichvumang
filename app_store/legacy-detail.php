@@ -7,7 +7,7 @@ $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 if (!$id || $id < 1) {
     http_response_code(404);
     $pageTitle = 'Không tìm thấy sản phẩm | HENDY';
-    require __DIR__ . '/includes/header.php';
+    $layout='website'; require __DIR__ . '/includes/header.php';
     echo '<section class="empty-state"><h2>Không tìm thấy sản phẩm</h2><a href="index.php">Quay lại trang chủ</a></section>';
     require __DIR__ . '/includes/footer.php';
     exit;

@@ -1,54 +1,40 @@
-# HENDY Cybertech — Website, App Store và Telegram Bot
+# HENDY Digital Ecosystem
 
-Monorepo dùng một repository GitHub với hai Render Web Service được quản lý bằng Blueprint `render.yaml`.
+Two Render Web Services: Website/App Store and one Telegram Bot production service.
 
-| Thành phần | Render service | Runtime | Database |
+| Component | Render service | Runtime | Database |
 |---|---|---|---|
-| Website chính + App Store | `hendydichvumang-website` | PHP 8.3 / Apache | Neon `hendydichvumang_website` |
-| Telegram Bot duy nhất | `hendydichvumang-telegram-bot` | PHP 8.3 / Apache | Neon `hendydichvumang` |
+| Website + App Store + network services | hendydichvumang-website | PHP 8.3 / Apache | Neon hendydichvumang_website |
+| Telegram Bot | hendydichvumang-telegram-bot | PHP 8.3 / Apache | Neon hendydichvumang |
 
-## Website và App Store
+## Website source of truth
 
-Website gốc dùng `index.php` để hiển thị danh mục sản phẩm/dịch vụ hiện có. Module `app_store/` là kho ứng dụng/trò chơi và danh sách gói dịch vụ mạng theo sơ đồ App Store.
+Website PHP/CSS/includes are consolidated under app_store/. Main routes:
+- / — Website home (app_store/home.php).
+- /app_store/ — App Store.
+- /app_store/detail.php?id=... — App/game detail.
+- /app_store/dichvumang.php — Network services.
+- /admin.php — Central Website admin hub.
+- /app_store/admin.php — App Store admin.
+- /app_store/admin_services.php — Network service admin.
+- /login.php, /register.php, /logout.php — Single Website account/session.
 
-- Kho ứng dụng: `/app_store/` hoặc `/app_store/index.php`
-- Chi tiết ứng dụng: `/app_store/detail.php?id=...`
-- Dịch vụ mạng: `/app_store/dichvumang.php`
-- Quản trị ứng dụng: `/app_store/admin.php`
-- Quản trị dịch vụ: `/app_store/admin_services.php`
-- Website catalogue: `/`; chi tiết mục catalogue: `/detail.php?id=...`
+Root .htaccess routes legacy URLs into app_store/. Duplicate root PHP/CSS/includes files are removed. healthz.php, Dockerfile, render.yaml, database schemas and uploads remain at root because they are infrastructure/data assets, not duplicated Website application sources.
 
-App Store dùng chung `includes/db.php`, PDO, session, bảng `users`, vai trò Admin và CSRF helpers của Website. Không tạo thêm bảng users hoặc tài khoản Admin mặc định. Các file `app_store/login.php`, `register.php`, `logout.php` chỉ chuyển sang hệ thống đăng nhập Website đang dùng.
+## Admin hub
 
-Production website chạy Neon PostgreSQL với role `hendy_website_app`. Migration cộng thêm App Store là `app_store/database.postgresql.sql`; bản MySQL tương thích là `app_store/database.sql`. Không chạy MySQL schema trên Neon.
+/admin.php is the single entry point for Website, App Store and network-service administration, with a shortcut to the Telegram Bot Dashboard. Bot Dashboard still uses its Telegram Admin allowlist (ADMIN_ID / ADMIN_IDS) and its separate Neon database. Accounts and balances are not implicitly merged.
 
-Ảnh chụp màn hình dùng Neon Object Storage khi `NEON_STORAGE_FUNCTION_URL` và `NEON_STORAGE_FUNCTION_KEY` được cấu hình; thư mục `app_store/uploads/screenshots/` là phương án fallback. Thư mục upload chặn thực thi PHP.
+## Data preservation
 
-## Database và tài khoản
+Website schema: database/website-postgresql.sql.
+App Store migration: app_store/database.postgresql.sql.
+Bot schema: telegram-bot/database/schema.sql.
 
-- Website PostgreSQL schema: `database/website-postgresql.sql`.
-- App Store PostgreSQL migration: `app_store/database.postgresql.sql`.
-- Bot PostgreSQL schema: `telegram-bot/database/schema.sql`.
-- Website và Bot dùng database/role riêng. Không tự chuyển dữ liệu ví, đơn hàng hay user từ Bot sang Website.
-- Admin Website chỉ được khởi tạo khi `ADMIN_EMAIL` và `ADMIN_PASSWORD` được cài đặt trong Render và chưa có Admin; không có thông tin đăng nhập mặc định trong source.
+Legacy products/screenshots and App Store apps/app_screenshots/network_services tables are preserved. No destructive migration or cross-database balance transfer is performed. The Website Admin seed still requires ADMIN_EMAIL and ADMIN_PASSWORD in Render Environment when no Admin already exists.
 
 ## Telegram Bot
 
-Bot production chỉ sử dụng `BOT1_TOKEN`. Runtime chỉ chấp nhận bot key `primary`, chỉ đăng ký webhook `/webhook/telegram`. `BOT2_TOKEN`, bot phụ và webhook thứ hai đã bị loại khỏi cấu hình runtime. Xem `telegram-bot/README.md` và `docs/TELEGRAM-BOT-INTEGRATION.md` để biết chi tiết.
+The primary production bot uses BOT1_TOKEN and one webhook /webhook/telegram. The main Inline Keyboard follows the supplied reference image. The welcome caption uses live Telegram/profile/wallet data. Home artwork is read from BOT_HOME_PHOTO; default URL: https://i.postimg.cc/rcD583NW/anh-quan-cao.png?dl=1.
 
-## Render Blueprint
-
-Blueprint root là `render.yaml`, khai báo hai Docker Web Service hiện có. Website dùng Docker context `.`; Bot dùng `./telegram-bot`. Blueprint đã được tạo và adopt service hiện có; bật Auto Sync khi có commit xanh. Giữ secrets trong Render Environment, không commit chúng vào repository.
-
-## CI
-
-GitHub Actions chạy Website PHP lint, Bot Composer validate/lint/tests, quét secret và chạy build/test Neon Function.
-
-## Bảo mật
-
-- PDO prepared statements; password hashing và session regeneration.
-- CSRF cho các form ghi dữ liệu.
-- Kiểm tra quyền Admin phía server.
-- Link ngoài yêu cầu HTTPS ở các form App Store.
-- File upload giới hạn MIME, kích thước và tên file ngẫu nhiên.
-- Không chứa Bot Token, DATABASE_URL hoặc private signing key trong source.
+Keep BOT1_TOKEN, DATABASE_URL, passwords and signing keys in Render Environment/GitHub Secrets. CI runs Website PHP lint, Bot Composer validate/lint/tests, secret scan and Neon Function build/tests.

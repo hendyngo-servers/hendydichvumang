@@ -9,7 +9,7 @@ if($id){
 if($id && $service){
  $pageTitle=$service['name'].' | Dịch vụ mạng HENDY';$activeMenu='services';require __DIR__.'/includes/header.php';
  ?>
- <a class="store-back-link" href="dichvumang.php">← Tất cả dịch vụ mạng</a>
+ <a class="store-back-link" href="/app_store/dichvumang.php">← Tất cả dịch vụ mạng</a>
  <section class="store-service-detail">
   <div class="store-eyebrow">HENDY NETWORK SERVICES</div><h1><?=e($service['name'])?></h1>
   <div class="store-service-price"><?=e($service['price'])?></div>
@@ -31,7 +31,7 @@ $activeMenu='services';$pageTitle='Dịch vụ mạng | HENDY';require __DIR__.'
  <?php if($item['image_url']!==''):?><img src="<?=e($item['image_url'])?>" alt="<?=e($item['name'])?>" loading="lazy"><?php else:?><div class="store-service-symbol">⌁</div><?php endif;?>
  <div class="store-service-card-body"><span class="store-category-tag static"><?=e($item['category'])?></span><h3><?=e($item['name'])?></h3><p><?=e(mb_strimwidth(strip_tags($item['description']),0,145,'…','UTF-8'))?></p>
  <div class="store-service-facts"><?php if($item['duration']!==''):?><span><?=e($item['duration'])?></span><?php endif;?><?php if($item['bandwidth']!==''):?><span><?=e($item['bandwidth'])?></span><?php endif;?></div>
- <div class="store-service-card-footer"><strong><?=e($item['price'])?></strong><a href="dichvumang.php?id=<?=(int)$item['id']?>">Chi tiết →</a></div></div>
+ <div class="store-service-card-footer"><strong><?=e($item['price'])?></strong><a href="/app_store/dichvumang.php?id=<?=(int)$item['id']?>">Chi tiết →</a></div></div>
 </article>
 <?php endforeach;?>
 </div>

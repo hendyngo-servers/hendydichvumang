@@ -1,1 +1,0 @@
-</main><footer class="footer"><div class="container footer-inner"><div class="brand"><span class="brand-mark">H</span><span>HENDY<small>CYBERTECH</small></span></div><p>© <?=date('Y')?> HENDY Cybertech. All rights reserved.</p></div></footer></body></html>

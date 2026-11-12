@@ -475,7 +475,7 @@
   const $ = id => document.getElementById(id);
   const money = value => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' VNĐ';
   const escapeHtml = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-  const labels = {minigame:'Mini Game Live',tools:'App / Tool',codes:'Mua Code',otp:'OTP & Proxy',proxy:'Proxy',vip:'Thành viên VIP'};
+  const labels = {minigame:'MINIGAME LIVE',tools:'App / Tool',codes:'Mua Code',otp:'OTP & Proxy',proxy:'Proxy',vip:'Thành viên VIP'};
   const icons = {minigame:'🎮',tools:'🗂️',codes:'🛍️',otp:'🛡️',proxy:'🌐',vip:'👑'};
   const pageTitles = {
     home:['Trang chủ','Chọn dịch vụ và quản lý tài khoản Hendy Bot.'],
@@ -1052,12 +1052,16 @@
       : null;
     const value = (key, fallback) => editing && editing[key] != null ? escapeHtml(editing[key]) : fallback;
     const selected = key => editing && editing.category === key ? ' selected' : '';
+    const minigameBrands = ['QQ88','HI88','78WIN','RR88','MM88','GG88','ABCVIP','XX8','U888','J88','ABC8','88CLB','AD88','SC88','C168','CM88','F8BET'];
+    const selectedBrand = String(editing && editing.metadata ? editing.metadata.brand || '' : '').toUpperCase();
+    const brandOptions = '<option value="">— Chọn nhà cái —</option>' + minigameBrands.map(brand => '<option value="' + brand + '"' + (selectedBrand === brand ? ' selected' : '') + '>' + brand + '</option>').join('');
     return '<form class="card form" id="admin-product-form" data-product-id="' + (editing ? escapeHtml(editing.id) : '') + '"><b>' +
       (editing ? 'Chỉnh sửa sản phẩm #' + escapeHtml(editing.id) : 'Thêm sản phẩm mới') + '</b>' +
       '<div class="field"><label>Tên sản phẩm</label><input name="name" maxlength="120" value="' + value('name','') + '" required></div>' +
       '<div class="two-col"><div class="field"><label>Danh mục</label><select name="category">' +
       Object.keys(labels).map(key => '<option value="' + key + '"' + selected(key) + '>' + escapeHtml(labels[key]) + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>Giá (VNĐ)</label><input name="price" type="number" min="0" step="1" value="' + value('price','') + '" required></div></div>' +
+      '<div class="field"><label>Nhà cái (bắt buộc với MINIGAME LIVE)</label><select name="brand">' + brandOptions + '</select><small class="muted">Chọn chính xác nhà cái để Bot hiển thị đúng gói dịch vụ.</small></div>' +
       '<div class="field"><label>Mô tả</label><textarea name="description" maxlength="1500">' + value('description','') + '</textarea></div>' +
       '<div class="two-col"><div class="field"><label>Thời hạn (ngày)</label><input name="durationDays" type="number" min="0" value="' + value('durationDays',0) + '"></div>' +
       '<div class="field"><label>Tồn kho (để trống = không giới hạn)</label><input name="stock" type="number" min="0" value="' + (editing && editing.stock != null ? escapeHtml(editing.stock) : '') + '"></div></div>' +
@@ -1067,7 +1071,7 @@
       (editing ? '<button type="button" class="secondary" data-cancel-product-edit>Hủy chỉnh sửa</button>' : '') + '</div></form>' +
       '<div class="section-head"><h3>Danh sách sản phẩm</h3><span>' + products.length + ' sản phẩm</span></div>' +
       (products.length ? products.map(product =>
-        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(product.name) + '</b><small class="muted">#' + product.id + ' · ' + escapeHtml(labels[product.category] || product.category) + '</small></div>' +
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(product.name) + '</b><small class="muted">#' + product.id + ' · ' + escapeHtml(labels[product.category] || product.category) + (product.metadata && product.metadata.brand ? ' · ' + escapeHtml(product.metadata.brand) : '') + '</small></div>' +
         '<span class="status ' + (product.isActive ? 'completed' : 'cancelled') + '">' + (product.isActive ? 'Đang bán' : 'Đã ẩn') + '</span></div>' +
         '<p>' + money(product.price) + ' · Kho: ' + (product.stock == null ? 'Không giới hạn' : product.stock) + (product.durationDays ? ' · ' + product.durationDays + ' ngày' : '') + '</p>' +
         '<div class="two-col"><button class="tiny-btn" data-edit-product="' + escapeHtml(product.id) + '">Chỉnh sửa</button>' +

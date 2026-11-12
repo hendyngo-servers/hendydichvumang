@@ -116,6 +116,10 @@ $deployScript = file_get_contents(dirname(__DIR__) . '/scripts/deploy-verify-ren
 $syncScript = file_get_contents(dirname(__DIR__) . '/scripts/sync-render-env.sh');
 $websiteDbBootstrap = file_get_contents($repoRoot . '/app_store/includes/db.php');
 $websiteHeader = file_get_contents($repoRoot . '/app_store/includes/header.php');
+$websiteRootHtaccess = file_get_contents($repoRoot . '/.htaccess');
+$websiteStoreHtaccess = file_get_contents($repoRoot . '/app_store/.htaccess');
+$assert(str_contains($websiteRootHtaccess, 'telegram-bot|database|docs|neon-functions|tests|types') && str_contains($websiteRootHtaccess, 'composer\\.(?:json|lock)'), 'Website blocks direct access to monorepo source and build files');
+$assert(str_contains($websiteStoreHtaccess, 'RewriteRule ^includes(?:/|$) - [F,END,NC]'), 'Website blocks direct HTTP access to shared PHP include files');
 $assert(str_contains($landingSource, $productionHost) && str_contains($privacySource, $productionHost) && str_contains($termsSource, $productionHost), 'SEO metadata uses the new isolated Telegram Bot service hostname');
 $assert(str_contains($renderSource, 'name: hendydichvumang-telegram-bot') && str_contains($renderSource, 'dockerfilePath: ./telegram-bot/Dockerfile') && str_contains($renderSource, 'dockerContext: ./telegram-bot') && !str_contains($renderSource, 'rootDir: telegram-bot'), 'Render Blueprint adopts the existing Bot service using the verified Docker context and file paths');
 $assert(!str_contains($renderSource, 'BOT2_TOKEN') && str_contains($renderSource, 'BOT1_TOKEN') && str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY'), 'production Blueprint documents the single bot and existing private secrets without copying secret values');

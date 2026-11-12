@@ -1,19 +1,8 @@
-# HENDY: one primary Telegram Bot, one static public Website and a temporary static fallback.
-# Secrets (DATABASE_URL, BOT1_TOKEN, ADMIN_ID(S), HOMEPROXY_ENCRYPTION_KEY, bank credentials) stay in Render Environment and are never committed here.
+# HENDY production: one public Static Site and one primary Telegram Bot.
+# Secrets (BOT1_TOKEN, ADMIN_ID, DATABASE_URL and provider credentials) stay in Render Environment.
 services:
   - type: web
-    name: hendydichvumang-website
-    runtime: docker
-    plan: free
-    region: singapore
-    branch: main
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    healthCheckPath: /healthz.html
-    autoDeployTrigger: checksPass
-
-  - type: web
-    name: hendydichvumang-static-site
+    name: hendydichvumang
     runtime: static
     branch: main
     buildCommand: echo "HENDY Static Site - no build step"
@@ -29,6 +18,9 @@ services:
       - path: /*
         name: X-Frame-Options
         value: DENY
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=()"
       - path: /index.html
         name: Cache-Control
         value: no-cache, no-store, must-revalidate
@@ -47,7 +39,9 @@ services:
       - key: APP_ENV
         value: production
       - key: WEBSITE_PUBLIC_URL
-        value: https://hendydichvumang-static-site.onrender.com
+        value: https://hendydichvumang.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://hendydichvumang.onrender.com
       - key: PORT
         value: "10000"
       - key: RUN_MIGRATIONS_ON_START

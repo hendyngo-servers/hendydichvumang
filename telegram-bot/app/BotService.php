@@ -2262,7 +2262,7 @@ final class BotService
             case 'code_telegram_accounts':
                 $serviceId = (int) (($payload['service_id'] ?? 0));
                 $service = Database::one(
-                    'SELECT id, brand, display_name, code_type, price_min, price_max, max_accounts FROM code_telegram_services WHERE id = ? AND is_active = TRUE LIMIT 1',
+                    'SELECT id, service_key, brand, display_name, code_type, price_min, price_max, max_accounts FROM code_telegram_services WHERE id = ? AND is_active = TRUE LIMIT 1',
                     [$serviceId]
                 );
                 if ($service === null) {
@@ -2287,20 +2287,24 @@ final class BotService
                     $this->telegram->sendMessage($chatId, 'Vui lòng gửi từ 1 đến ' . $maximum . ' tên đăng nhập, mỗi dòng một tài khoản.');
                     return true;
                 }
-                $duplicates = Database::all(
-                    "SELECT DISTINCT a.username_normalized
-                     FROM code_telegram_request_accounts a
-                     JOIN code_telegram_requests r ON r.id = a.request_id
-                     WHERE r.service_id = ? AND a.username_normalized = ANY(?::text[])
-                       AND a.created_at >= date_trunc('day', NOW())
-                       AND a.status IN ('queued','processing','completed')",
-                    [$serviceId, '{' . implode(',', array_map(static fn(string $name): string => '"' . str_replace('"', '\"', $name) . '"', $usernames)) . '}']
-                );
-                if ($duplicates !== []) {
-                    $duplicateNames = array_column($duplicates, 'username_normalized');
+                $duplicateNames = [];
+                foreach ($usernames as $candidateUsername) {
+                    $existing = Database::one(
+                        "SELECT a.id
+                         FROM code_telegram_request_accounts a
+                         JOIN code_telegram_requests r ON r.id = a.request_id
+                         WHERE r.service_id = ? AND a.username_normalized = ?
+                           AND a.created_at >= date_trunc('day', NOW())
+                           AND a.status IN ('queued','processing','completed')
+                         LIMIT 1",
+                        [$serviceId, $candidateUsername]
+                    );
+                    if ($existing !== null) $duplicateNames[] = $candidateUsername;
+                }
+                if ($duplicateNames !== []) {
                     $this->telegram->sendMessage($chatId, 'Các tài khoản đã có yêu cầu trong hôm nay: ' .
                         implode(', ', array_map(static fn(string $name): string => '<code>' . self::escape($name) . '</code>', $duplicateNames)) .
-                        '. Mỗi tài khoản chỉ nhận tối đa 1 mã/ngày. Bạn có thể gửi lại danh sách đã loại bỏ các tài khoản này.');
+                        '. Mỗi tài khoản chỉ nhận tối đa 1 mã/ngày. Bạn hãy gửi lại danh sách đã loại bỏ các tài khoản này.');
                     return true;
                 }
 

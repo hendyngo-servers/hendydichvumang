@@ -2,6 +2,10 @@ Options -Indexes -MultiViews
 DirectoryIndex index.php
 RewriteEngine On
 RewriteBase /app_store/
+
+# Shared PHP includes and schema/config artifacts are internal-only.
+RewriteRule ^includes(?:/|$) - [F,END,NC]
+RewriteRule ^(?:database\.|.*\.(?:sql|md|json|ya?ml|env|log|ini|bak|old|pem|key|dump)$) - [F,END,NC]
 <FilesMatch "(^\.|\.(?:sql|md|log|ini|ya?ml|env|bak|old|pem|key|dump)$)">
     Require all denied
 </FilesMatch>

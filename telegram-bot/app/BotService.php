@@ -56,7 +56,7 @@ final class BotService
             } elseif (isset($update['edited_channel_post']) && is_array($update['edited_channel_post'])) {
                 CodeTelegramService::ingestChannelPost($update['edited_channel_post'], true);
             } elseif (isset($update['message']) && is_array($update['message'])) {
-                $this->handleMessage($update['message']);
+                $this->handleMessage($update['message'], (int) ($updateId ?? 0));
             } elseif (isset($update['callback_query']) && is_array($update['callback_query'])) {
                 $this->handleCallback($update['callback_query']);
             }
@@ -88,7 +88,7 @@ final class BotService
         }
     }
 
-    private function handleMessage(array $message): void
+    private function handleMessage(array $message, int $updateId = 0): void
     {
         $from = $message['from'] ?? [];
         $chat = $message['chat'] ?? [];
@@ -96,8 +96,9 @@ final class BotService
         $chatId = (string) ($chat['id'] ?? '');
         $text = trim((string) ($message['text'] ?? ''));
         $photos = is_array($message['photo'] ?? null) ? $message['photo'] : [];
+        $audioMessage = AiCoverService::isAudioMessage($message);
 
-        if (!preg_match('/^\d{5,20}$/', $userId) || $chatId === '' || ($text === '' && $photos === [])) {
+        if (!preg_match('/^\d{5,20}$/', $userId) || $chatId === '' || ($text === '' && $photos === [] && !$audioMessage)) {
             return;
         }
         if (preg_match('/^\/code(?:@\w+)?(?:\s+(.+))?$/u', $text, $codeMatch)) {
@@ -107,6 +108,11 @@ final class BotService
         if (preg_match('/^\/status(?:@\w+)?$/u', $text)) { $this->sendOperationalNotice($chatId); return; }
         $operation=OperationsService::forBot($this->botKey);
         if ($operation['active'] && !TelegramAuth::isAdmin($userId)) { $this->sendOperationalNotice($chatId); return; }
+
+        if ($audioMessage) {
+            $this->handleAiCoverAudioMessage($chatId, $userId, $updateId, $message);
+            return;
+        }
 
         // AI image editing is not released yet. Clear any stale request without accepting or queuing media.
         if ($photos !== []) {
@@ -172,6 +178,20 @@ final class BotService
                 '',
                 'Chọn một nút bên dưới tin nhắn để mở chức năng.',
             ]));
+            return;
+        }
+
+        if (preg_match('/^\\/(?:cover|aicover)(?:@\\w+)?$/u', $text)) {
+            $this->showAiCoverMenu($chatId, $userId);
+            return;
+        }
+        if (preg_match('/^\\/aicover_history(?:@\\w+)?$/u', $text)) {
+            $this->showAiCoverHistory($chatId, $userId);
+            return;
+        }
+        if (preg_match('/^\\/aicover_cancel(?:@\\w+)?$/u', $text)) {
+            AiCoverService::clearSelection($userId);
+            $this->telegram->sendMessage($chatId, 'Đã xóa lựa chọn preset AI Cover. Dùng /aicover để chọn lại.');
             return;
         }
 
@@ -657,6 +677,36 @@ final class BotService
             $this->telegram->sendMessage($chatId, '🔎 Gửi từ khóa, tên game hoặc một phần mã để tìm trong kho Code Telegram. Bạn cũng có thể dùng lệnh /code từ khóa.');
             return;
         }
+
+        if (in_array($action, ['ai-cover','ai-cover:start'], true)) {
+            $this->showAiCoverMenu($chatId, $userId);
+            return;
+        }
+        if ($action === 'ai-cover:accept') {
+            AiCoverService::acceptTerms($userId, $chatId);
+            $this->showAiCoverVoices($chatId, $userId);
+            return;
+        }
+        if ($action === 'ai-cover:history') {
+            $this->showAiCoverHistory($chatId, $userId);
+            return;
+        }
+        if ($action === 'ai-cover:cancel') {
+            AiCoverService::clearSelection($userId);
+            $this->telegram->sendMessage($chatId, 'Đã xóa lựa chọn giọng AI Cover. Dùng /aicover để chọn lại.');
+            return;
+        }
+        if (preg_match('/^ai-cover:voice:([a-z0-9][a-z0-9_-]{1,47})$/', $action, $voiceMatch)) {
+            $voice = AiCoverService::chooseVoice($userId, $chatId, $voiceMatch[1]);
+            $this->telegram->sendMessage(
+                $chatId,
+                '✅ Đã chọn preset <b>' . self::escape((string) $voice['name']) . '</b>.' . "\n\n" .
+                'Bây giờ gửi MP3, WAV, FLAC, M4A, AAC, OGG hoặc OPUS để tạo AI Cover.' . "\n" .
+                'Giới hạn: ' . max(1, min(20, Env::int('AI_COVER_MAX_AUDIO_SIZE_MB', 20))) . ' MB · ' .
+                max(15, min(300, Env::int('AI_COVER_MAX_AUDIO_DURATION_SECONDS', 180))) . ' giây.'
+            );
+            return;
+        }
         if (preg_match('/^live-group:(group[1-4])$/', $action, $matches)) {
             $this->showMinigameGroupGames($chatId, $userId, $matches[1]);
             return;
@@ -940,6 +990,122 @@ final class BotService
                 return;
             default:
                 $this->sendUnavailableNotice($chatId);
+        }
+    }
+
+    private function showAiCoverMenu(string $chatId, string $userId): void
+    {
+        if ($this->botKey !== 'primary' || !AiCoverService::enabled()) {
+            $this->telegram->sendMessage($chatId, '🎤 AI COVER hiện đang tạm khóa. Admin cần bật worker, lưu trữ riêng tư và preset có hồ sơ cấp phép hợp lệ trước khi mở dịch vụ.');
+            return;
+        }
+        $session = AiCoverService::session($userId);
+        if ($session !== null && !empty($session['terms_accepted_at']) && ($session['terms_version'] ?? '') === AiCoverService::TERMS_VERSION) {
+            $this->showAiCoverVoices($chatId, $userId);
+            return;
+        }
+        $lines = [
+            '🎤 <b>HENDY AI COVER</b>',
+            '━━━━━━━━━━━━━━━━━━━━',
+            'Tạo bản cover từ file audio bạn sở hữu hoặc có quyền xử lý, sử dụng preset giọng đã được chủ sở hữu cho phép.',
+            '',
+            '🔐 Không dùng preset để giả mạo, lừa đảo hoặc khiến người nghe hiểu nhầm danh tính người thật.',
+            '📜 Mỗi preset chỉ được mở khi Admin lưu hồ sơ quyền sử dụng, giấy phép và xác nhận đồng ý của chủ giọng.',
+            '🎵 Chỉ tải lên audio bạn có quyền sử dụng. Không gửi nội dung vi phạm bản quyền.',
+            '📦 Giới hạn mặc định: 20 MB · 180 giây · tối đa 3 tác vụ/ngày.',
+            '',
+            'Bằng cách tiếp tục, bạn xác nhận đã đọc và đồng ý các điều khoản trên.',
+        ];
+        $this->telegram->sendMessage($chatId, implode("\n", $lines), [
+            'reply_markup' => $this->inlineMenu([
+                [['text' => '✅ TÔI ĐỒNG Ý — TIẾP TỤC', 'callback_data' => 'member:ai-cover:accept', 'style' => 'success']],
+                [['text' => '📂 LỊCH SỬ AI COVER', 'callback_data' => 'member:ai-cover:history', 'style' => 'primary']],
+                [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home', 'style' => 'danger']],
+            ]),
+        ]);
+    }
+
+    private function showAiCoverVoices(string $chatId, string $userId): void
+    {
+        $session = AiCoverService::session($userId);
+        if ($session === null || empty($session['terms_accepted_at']) || ($session['terms_version'] ?? '') !== AiCoverService::TERMS_VERSION) {
+            $this->showAiCoverMenu($chatId, $userId);
+            return;
+        }
+        $voices = AiCoverService::availableVoices();
+        if ($voices === []) {
+            $this->telegram->sendMessage(
+                $chatId,
+                '🎙️ Hiện chưa có preset giọng AI Cover nào sẵn sàng. Admin cần thêm model được cấp phép, xác nhận đồng ý của chủ giọng và chờ worker xác minh tệp trong Neon Storage.'
+            );
+            return;
+        }
+        $rows = [];
+        $lines = ['🎙️ <b>CHỌN GIỌNG AI COVER</b>', '━━━━━━━━━━━━━━━━━━━━', 'Chỉ các preset đã xác minh quyền sử dụng và trạng thái model mới xuất hiện:'];
+        foreach ($voices as $index => $voice) {
+            $name = (string) $voice['name'];
+            $lines[] = ($index + 1) . '. <b>' . self::escape($name) . '</b>' .
+                (trim((string) ($voice['description'] ?? '')) !== '' ? ' — ' . self::escape((string) $voice['description']) : '');
+            $rows[] = [[
+                'text' => self::truncate(($index + 1) . '. 🎤 ' . $name, 55),
+                'callback_data' => 'member:ai-cover:voice:' . (string) $voice['id'],
+                'style' => 'success',
+            ]];
+        }
+        $rows[] = [['text' => '📂 LỊCH SỬ AI COVER', 'callback_data' => 'member:ai-cover:history', 'style' => 'primary']];
+        $rows[] = [['text' => '« MENU CHÍNH', 'callback_data' => 'member:home', 'style' => 'danger']];
+        $this->telegram->sendMessage($chatId, implode("\n", $lines), [
+            'reply_markup' => $this->inlineMenu($rows),
+        ]);
+    }
+
+    private function showAiCoverHistory(string $chatId, string $userId): void
+    {
+        if ($this->botKey !== 'primary' || !AiCoverService::enabled()) {
+            $this->telegram->sendMessage($chatId, 'AI Cover hiện đang tạm khóa.');
+            return;
+        }
+        $jobs = AiCoverService::history($userId, 10);
+        if ($jobs === []) {
+            $this->telegram->sendMessage($chatId, 'Bạn chưa có tác vụ AI Cover. Dùng /aicover để bắt đầu.');
+            return;
+        }
+        $labels = ['queued' => 'Đang chờ', 'processing' => 'Đang xử lý', 'completed' => 'Hoàn tất', 'failed' => 'Thất bại', 'cancelled' => 'Đã hủy'];
+        $lines = ['📂 <b>LỊCH SỬ AI COVER</b>', '━━━━━━━━━━━━━━━━━━━━'];
+        foreach ($jobs as $job) {
+            $lines[] = '• <code>' . self::escape(substr((string) $job['id'], 0, 8)) . '</code> · ' .
+                self::escape((string) $job['voice_name']) . ' · ' .
+                self::escape($labels[(string) $job['status']] ?? (string) $job['status']);
+        }
+        $this->telegram->sendMessage($chatId, implode("\n", $lines), [
+            'reply_markup' => $this->inlineMenu([[
+                ['text' => '🎤 CHỌN GIỌNG', 'callback_data' => 'member:ai-cover:start', 'style' => 'success'],
+                ['text' => '🏠 MENU', 'callback_data' => 'member:home', 'style' => 'danger'],
+            ]]),
+        ]);
+    }
+
+    private function handleAiCoverAudioMessage(string $chatId, string $userId, int $updateId, array $message): void
+    {
+        if ($this->botKey !== 'primary' || !AiCoverService::enabled()) {
+            $this->telegram->sendMessage($chatId, '🎤 AI COVER hiện chưa mở. Dùng /aicover để xem trạng thái dịch vụ.');
+            return;
+        }
+        if ((string) ($message['chat']['type'] ?? 'private') !== 'private') {
+            $this->telegram->sendMessage($chatId, 'Vui lòng gửi audio trong cuộc trò chuyện riêng với HENDY BOT.');
+            return;
+        }
+        try {
+            $job = AiCoverService::queueAudio($userId, $chatId, $updateId, $message, $this->telegram);
+            $this->telegram->sendMessage(
+                $chatId,
+                '✅ <b>ĐÃ NHẬN AUDIO AI COVER</b>' . "\n" .
+                'Mã tác vụ: <code>' . self::escape(substr((string) $job['id'], 0, 8)) . '</code>' . "\n" .
+                'Trạng thái: <b>Đang chờ AI Worker</b>.' . "\n" .
+                'Bot sẽ gửi MP3 khi xử lý xong. Dùng /aicover_history để xem tiến độ.'
+            );
+        } catch (Throwable $error) {
+            $this->telegram->sendMessage($chatId, '⚠️ Không thể nhận audio AI Cover: ' . self::escape($error->getMessage()));
         }
     }
 

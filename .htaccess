@@ -4,6 +4,11 @@ DirectoryIndex index.php
     Require all denied
 </FilesMatch>
 RewriteEngine On
+
+# Never expose the monorepo's application source, build scripts or database files
+# through the Website virtual host. PHP application routes below remain available.
+RewriteRule ^(?:telegram-bot|database|docs|neon-functions|tests|types|\.github)(?:/|$) - [F,END,NC]
+RewriteRule ^(?:composer\.(?:json|lock)|render\.yaml|Dockerfile|README\.md)$ - [F,END,NC]
 RewriteRule ^$ app_store/home.php [END]
 RewriteRule ^index\.php$ app_store/home.php [END]
 RewriteRule ^(login|register|logout)\.php$ app_store/$1.php [END]

@@ -28,7 +28,23 @@ fi
 # Register only the production bot. The script persists/reuses the webhook secret,
 # sets the HTTPS endpoint and verifies Telegram's getWebhookInfo response.
 if [[ "${WEBHOOK_AUTO_REGISTER:-true}" == "true" ]]; then
-    php bin/register-webhook.php
+    webhook_registered=false
+    for attempt in 1 2 3 4 5; do
+        if php bin/register-webhook.php; then
+            webhook_registered=true
+            break
+        fi
+        if (( attempt < 5 )); then
+            delay=$((attempt * 3))
+            echo "Telegram chưa phản hồi ở lần thử $attempt/5; thử lại sau ${delay}s."
+            sleep "$delay"
+        fi
+    done
+    if [[ "$webhook_registered" != "true" ]]; then
+        # The service's existing webhook points to this stable Render origin.
+        # A transient Telegram API/network outage must not crash the web service.
+        echo "CẢNH BÁO: Chưa xác minh lại được webhook sau 5 lần thử; giữ dịch vụ hoạt động và để lần khởi động tiếp theo thử lại." >&2
+    fi
 else
     echo "WEBHOOK_AUTO_REGISTER=false; bỏ qua đăng ký webhook tự động."
 fi

@@ -8,7 +8,7 @@ use Throwable;
 
 final class OperationsService
 {
-    private const BOT_KEYS = ['primary', 'secondary'];
+    private const BOT_KEYS = ['primary'];
 
     public static function forBot(string $botKey): array
     {
@@ -32,7 +32,7 @@ final class OperationsService
 
     public static function all(): array
     {
-        return ['bots'=>['primary'=>self::forBot('primary'),'secondary'=>self::forBot('secondary')],'timestamp'=>gmdate(DATE_ATOM)];
+        return ['bots'=>['primary'=>self::forBot('primary')],'timestamp'=>gmdate(DATE_ATOM)];
     }
 
     public static function update(array $payload): array

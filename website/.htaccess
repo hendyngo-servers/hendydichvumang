@@ -9,6 +9,9 @@ RewriteEngine On
 # Telegram Admin and Customer HTML is source for the Bot container only.
 # The Bot runtime reads it outside its public DocumentRoot.
 RewriteRule ^telegram(?:/|$) - [F,END,NC]
+RewriteRule ^app_store/includes(?:/|$) - [F,END,NC]
+RewriteRule ^app_store/.*\\.(?:sql|md|json|ya?ml|ini|log|env|pem|key)$ - [F,END,NC]
+RewriteRule ^app_store/uploads/.*\\.(?:php[0-9]?|phtml|phar)$ - [F,END,NC]
 RewriteRule ^app-store(?:/|$) - [F,END,NC]
 RewriteRule ^app-store/includes(?:/|$) - [F,END,NC]
 

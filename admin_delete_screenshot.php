@@ -1,0 +1,2 @@
+<?php
+require_once __DIR__.'/includes/admin_check.php';if($_SERVER['REQUEST_METHOD']!=='POST'){http_response_code(405);exit('Method not allowed');}verify_csrf();$id=filter_input(INPUT_POST,'id',FILTER_VALIDATE_INT);$s=$pdo->prepare("SELECT image_path,product_id FROM screenshots WHERE id=?");$s->execute([$id]);$r=$s->fetch();if($r){$s=$pdo->prepare("DELETE FROM screenshots WHERE id=?");$s->execute([$id]);delete_local_image($r['image_path']);flash('Đã xóa ảnh.');redirect('admin_edit.php?id='.(int)$r['product_id']);}redirect('admin.php');

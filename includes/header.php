@@ -1,66 +1,89 @@
 <?php
 require_once 'includes/db.php';
+include 'includes/header.php';
+
 $current_cat = isset($_GET['cat']) ? $_GET['cat'] : 'all';
 $search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
-$current_page = basename($_SERVER['PHP_SELF']);
+
+$sql = "SELECT * FROM apps WHERE 1=1";
+$params = [];
+
+if ($current_cat !== 'all') {
+    $sql .= " AND category = ?";
+    $params[] = $current_cat;
+}
+
+if (!empty($search_query)) {
+    $sql .= " AND (name LIKE ? OR dev LIKE ?)";
+    $params[] = "%$search_query%";
+    $params[] = "%$search_query%";
+}
+
+$sql .= " ORDER BY id DESC";
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$filtered_apps = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AppStore - Kho Ứng Dụng & Dịch Vụ Mạng</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <div class="app-layout">
-        <aside class="sidebar">
-            <div class="brand">
-                <i class="fa-brands fa-microsoft"></i>
-                <span>AppStore</span>
-            </div>
-            <nav class="side-nav">
-                <a href="index.php?cat=all" class="<?php echo ($current_page == 'index.php' && $current_cat == 'all') ? 'active' : ''; ?>">
-                    <i class="fa-solid fa-house"></i> Trang chủ
-                </a>
-                <a href="index.php?cat=app" class="<?php echo ($current_page == 'index.php' && $current_cat == 'app') ? 'active' : ''; ?>">
-                    <i class="fa-solid fa-layer-group"></i> Ứng dụng
-                </a>
-                <a href="index.php?cat=game" class="<?php echo ($current_page == 'index.php' && $current_cat == 'game') ? 'active' : ''; ?>">
-                    <i class="fa-solid fa-gamepad"></i> Trò chơi
-                </a>
-                <a href="dichvumang.php" class="<?php echo $current_page == 'dichvumang.php' ? 'active' : ''; ?>">
-                    <i class="fa-solid fa-network-wired"></i> Dịch vụ mạng
-                </a>
-                <?php if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] == 1): ?>
-                    <a href="admin.php" style="color: #2563eb; margin-top: 20px;">
-                        <i class="fa-solid fa-gauge-high"></i> Quản trị (Admin)
-                    </a>
-                <?php endif; ?>
-            </nav>
-        </aside>
 
-        <div class="main-wrapper">
-            <header class="top-bar">
-                <form action="index.php" method="GET" class="search-box">
-                    <input type="hidden" name="cat" value="<?php echo htmlspecialchars($current_cat); ?>">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" name="q" placeholder="Tìm kiếm ứng dụng, trò chơi..." value="<?php echo htmlspecialchars($search_query); ?>">
-                </form>
+<main class="content">
+    <?php if ($current_cat === 'all' && empty($search_query)): ?>
+    <section class="hero-banner">
+        <div class="hero-info">
+            <span class="badge">Nổi bật tuần này</span>
+            <h1>Khám phá thế giới ứng dụng đỉnh cao</h1>
+            <p>Hàng ngàn phần mềm làm việc hiệu quả và tựa game bom tấn đang chờ bạn tải về.</p>
+            <a href="index.php?cat=game" class="btn-primary">Khám phá Trò chơi</a>
+        </div>
+    </section>
+    <?php endif; ?>
 
-                <div class="user-auth-area">
-                    <?php if (isset($_SESSION['username'])): ?>
-                        <div class="user-logged">
-                            <span class="avatar"><?php echo strtoupper(substr($_SESSION['username'], 0, 1)); ?></span>
-                            <span class="username"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
-                            <a href="logout.php" class="btn-logout" title="Đăng xuất"><i class="fa-solid fa-right-from-bracket"></i></a>
+    <div class="section-header">
+        <h2>
+            <?php 
+                if (!empty($search_query)) {
+                    echo 'Kết quả tìm kiếm cho: "' . htmlspecialchars($search_query) . '"';
+                } elseif ($current_cat === 'app') {
+                    echo 'Ứng dụng phổ biến';
+                } elseif ($current_cat === 'game') {
+                    echo 'Trò chơi thịnh hành';
+                } else {
+                    echo 'Đề xuất cho bạn';
+                }
+            ?>
+        </h2>
+    </div>
+
+    <?php if (count($filtered_apps) > 0): ?>
+        <div class="app-grid">
+            <?php foreach ($filtered_apps as $app): ?>
+                <div class="app-card" onclick="window.location.href='detail.php?id=<?php echo $app['id']; ?>'" style="cursor: pointer;">
+                    <div class="app-card-top">
+                        <img src="<?php echo htmlspecialchars($app['icon']); ?>" alt="" class="app-icon">
+                        <div class="app-meta">
+                            <h3 class="app-title"><?php echo htmlspecialchars($app['name']); ?></h3>
+                            <p class="app-dev"><?php echo htmlspecialchars($app['dev']); ?></p>
+                            <div class="app-rating">
+                                <span><?php echo $app['rating']; ?></span>
+                                <i class="fa-solid fa-star"></i>
+                            </div>
                         </div>
-                    <?php else: ?>
-                        <div class="auth-links">
-                            <a href="login.php" class="btn-login">Đăng nhập</a>
-                            <a href="register.php" class="btn-register">Đăng ký</a>
-                        </div>
-                    <?php endif; ?>
+                    </div>
+                    <p class="app-desc"><?php echo htmlspecialchars($app['desc']); ?></p>
+                    <div class="app-card-footer">
+                        <span class="app-price"><?php echo htmlspecialchars($app['price']); ?></span>
+                        <span class="btn-get">Xem chi tiết</span>
+                    </div>
                 </div>
-            </header>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <div class="empty-state">
+            <p>Không tìm thấy ứng dụng nào phù hợp với yêu cầu của bạn.</p>
+            <a href="index.php" class="btn-get">Quay lại trang chủ</a>
+        </div>
+    <?php endif; ?>
+</main>
+        </div>
+    </div>
+</body>
+</html>

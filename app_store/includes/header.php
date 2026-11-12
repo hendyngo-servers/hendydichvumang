@@ -3,7 +3,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 $pageTitle = $pageTitle ?? 'HENDY Digital Ecosystem';
 $activeMenu = $activeMenu ?? '';
-$layout = $layout ?? 'store';
 $notice = $_SESSION['_flash'] ?? null;
 unset($_SESSION['_flash']);
 $searchValue = trim((string)($_GET['q'] ?? ''));
@@ -12,70 +11,84 @@ $botAdminParts = parse_url($botAdminUrl);
 if (!is_array($botAdminParts) || strtolower((string)($botAdminParts['scheme'] ?? '')) !== 'https'
     || empty($botAdminParts['host']) || isset($botAdminParts['user']) || isset($botAdminParts['pass'])) {
     $botAdminUrl = 'https://hendydichvumang-telegram-bot.onrender.com/admin';
+    $botAdminParts = parse_url($botAdminUrl);
 }
-if ($layout === 'website'):
+$botPublicUrl = 'https://' . (string)($botAdminParts['host'] ?? 'hendydichvumang-telegram-bot.onrender.com');
+$botCustomerUrl = $botPublicUrl . '/customer';
 ?>
 <!doctype html>
-<html lang="vi"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#101827"><title><?=e($pageTitle)?></title>
-<link rel="stylesheet" href="/app_store/home.css"></head><body>
-<header class="topbar">
-<a class="brand" href="/"><span class="brand-mark">H</span><span>HENDY<small>CYBERTECH</small></span></a>
-<nav>
-<a href="/">Trang chủ</a><a href="/app_store/index.php">App Store</a><a href="/app_store/dichvumang.php">Dịch vụ mạng</a>
-<a class="nav-cta" href="https://hendydichvumang-telegram-bot.onrender.com/" target="_blank" rel="noopener noreferrer">Telegram Bot ↗</a>
-<?php if (is_admin()): ?><a href="/admin.php">Quản trị</a><?php endif; ?>
-<?php if (current_user()): ?>
-<span class="nav-user"><?=e((string)(current_user()['name'] ?? 'Thành viên'))?></span>
-<form method="post" action="/logout.php" class="nav-logout"><input type="hidden" name="_csrf" value="<?=e(csrf_token())?>"><button type="submit">Đăng xuất</button></form>
-<?php else: ?><a href="/login.php">Đăng nhập</a><a class="nav-cta" href="/register.php">Tạo tài khoản</a><?php endif; ?>
-</nav></header><main class="container">
-<?php if ($notice): ?><div class="alert <?=e((string)($notice['type'] ?? 'success'))?>"><?=e((string)($notice['message'] ?? ''))?></div><?php endif; ?>
-<?php else: ?>
-<!doctype html>
-<html lang="vi"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0b1220"><title><?=e($pageTitle)?></title>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1220">
+<meta name="description" content="HENDY DIGITAL ECOSYSTEM — Website, App Store và dịch vụ mạng trong một nền tảng.">
+<title><?=e($pageTitle)?></title>
 <link rel="stylesheet" href="/app_store/style.css">
-<?php if (in_array($activeMenu, ['admin-center','admin-products','admin-users','admin-system'], true)): ?><link rel="stylesheet" href="/app_store/admin-center.css"><?php endif; ?>
-</head><body class="store-body"><div class="store-shell">
+<link rel="stylesheet" href="/app_store/home.css">
+<link rel="stylesheet" href="/app_store/unified.css">
+<?php if (str_starts_with($activeMenu, 'admin')): ?>
+<link rel="stylesheet" href="/app_store/admin-center.css">
+<?php endif; ?>
+</head>
+<body class="store-body">
+<div class="store-shell">
 <aside class="store-sidebar">
-<a class="store-brand" href="/"><span class="store-brand-mark">H</span><span>HENDY<small>DIGITAL ECOSYSTEM</small></span></a>
-<div class="store-nav-caption">HỆ SINH THÁI</div>
-<nav class="store-nav">
-<a href="/">⌂ <span>Website HENDY</span></a>
-<a class="<?=$activeMenu==='home'?'active':''?>" href="/app_store/index.php">▦ <span>App Store</span></a>
+<a class="store-brand" href="/">
+<span class="store-brand-mark">H</span>
+<span>HENDY<small>DIGITAL ECOSYSTEM</small></span>
+</a>
+<div class="store-nav-caption">HỆ SINH THÁI HENDY</div>
+<nav class="store-nav" aria-label="Điều hướng chính">
+<a class="<?=$activeMenu==='website-home'?'active':''?>" href="/">⌂ <span>Trang chủ</span></a>
+<a class="<?=in_array($activeMenu,['home','apps','games','detail'],true)?'active':''?>" href="/app_store/">▦ <span>App Store</span></a>
 <a class="<?=$activeMenu==='apps'?'active':''?>" href="/app_store/index.php?category=app">◈ <span>Ứng dụng</span></a>
 <a class="<?=$activeMenu==='games'?'active':''?>" href="/app_store/index.php?category=game">🎮 <span>Trò chơi</span></a>
 <a class="<?=$activeMenu==='services'?'active':''?>" href="/app_store/dichvumang.php">⌁ <span>Dịch vụ mạng</span></a>
-<a href="https://hendydichvumang-telegram-bot.onrender.com/" target="_blank" rel="noopener noreferrer">🤖 <span>Telegram Bot ↗</span></a>
+<a href="<?=e($botCustomerUrl)?>" target="_blank" rel="noopener noreferrer">♙ <span>Trung tâm khách hàng ↗</span></a>
+<a href="<?=$botPublicUrl?>/" target="_blank" rel="noopener noreferrer">🤖 <span>Telegram Bot ↗</span></a>
 </nav>
 <?php if (is_admin()): ?>
 <div class="store-nav-caption">TRUNG TÂM QUẢN TRỊ</div>
-<nav class="store-nav">
-<a class="<?=$activeMenu==='admin-center'?'active':''?>" href="/admin.php">▣ <span>Tổng quan quản trị</span></a>
-<a class="<?=$activeMenu==='admin'?'active':''?>" href="/app_store/admin.php">▦ <span>Quản trị App Store</span></a>
-<a class="<?=$activeMenu==='admin-services'?'active':''?>" href="/app_store/admin_services.php">⌁ <span>Quản trị dịch vụ mạng</span></a>
-<a class="<?=$activeMenu==='admin-products'?'active':''?>" href="/admin-products.php">▤ <span>Danh mục Website</span></a>
-<a class="<?=$activeMenu==='admin-users'?'active':''?>" href="/admin-users.php">♙ <span>Thành viên & Admin</span></a>
-<a class="<?=$activeMenu==='admin-system'?'active':''?>" href="/admin-system.php">⚙ <span>Trạng thái hệ thống</span></a>
-<a href="<?=e($botAdminUrl)?>" target="_blank" rel="noopener noreferrer">🛡️ <span>Quản trị Telegram Bot ↗</span></a>
+<nav class="store-nav" aria-label="Điều hướng quản trị">
+<a class="<?=$activeMenu==='admin-center'?'active':''?>" href="/admin.php">▣ <span>Tổng quan</span></a>
+<a class="<?=$activeMenu==='admin-products'?'active':''?>" href="/admin-products.php">▤ <span>Website</span></a>
+<a class="<?=$activeMenu==='admin'?'active':''?>" href="/app_store/admin.php">▦ <span>App Store</span></a>
+<a class="<?=$activeMenu==='admin-services'?'active':''?>" href="/app_store/admin_services.php">⌁ <span>Dịch vụ mạng</span></a>
+<a class="<?=$activeMenu==='admin-users'?'active':''?>" href="/admin-users.php">♙ <span>Thành viên</span></a>
+<a class="<?=$activeMenu==='admin-system'?'active':''?>" href="/admin-system.php">⚙ <span>Hệ thống</span></a>
+<a href="<?=e($botAdminUrl)?>" target="_blank" rel="noopener noreferrer">🛡️ <span>Bot Dashboard ↗</span></a>
 </nav>
 <?php endif; ?>
 <div class="store-sidebar-bottom">
 <?php if (current_user()): ?>
-<span><?=e((string)(current_user()['name'] ?? 'Admin'))?></span>
-<form method="post" action="/logout.php"><input type="hidden" name="_csrf" value="<?=e(csrf_token())?>"><button class="store-button ghost" type="submit">Đăng xuất</button></form>
-<?php else: ?><a href="/login.php">Đăng nhập</a><?php endif; ?>
-</div></aside>
-<div class="store-main"><header class="store-topbar">
-<form class="store-search" action="/app_store/index.php" method="get"><span>⌕</span><input name="q" value="<?=e($searchValue)?>" placeholder="Tìm ứng dụng, trò chơi...">
-<?php if (!empty($_GET['category']) && in_array($_GET['category'], ['app','game'], true)): ?><input type="hidden" name="category" value="<?=e((string)$_GET['category'])?>"><?php endif; ?>
+<span><?=e((string)(current_user()['name'] ?? 'Thành viên'))?></span>
+<form method="post" action="/logout.php">
+<input type="hidden" name="_csrf" value="<?=e(csrf_token())?>">
+<button class="store-button ghost" type="submit">Đăng xuất</button>
 </form>
+<?php else: ?>
+<a href="/login.php">Đăng nhập</a>
+<?php endif; ?>
+</div>
+</aside>
+<div class="store-main">
+<header class="store-topbar">
+<div class="store-topbar-context">
+<span>HENDY DIGITAL ECOSYSTEM</span>
+<strong><?=e($pageTitle)?></strong>
+</div>
 <div class="store-account">
-<?php if (current_user()): ?><span><?=e((string)(current_user()['name'] ?? 'Thành viên'))?></span><a href="/">Tài khoản</a>
-<?php else: ?><a href="/login.php">Đăng nhập</a><a class="store-account-cta" href="/register.php">Đăng ký</a><?php endif; ?>
-</div></header><main class="store-content">
-<?php if ($notice): ?><div class="store-alert <?=e((string)($notice['type'] ?? 'success'))?>"><?=e((string)($notice['message'] ?? ''))?></div><?php endif; ?>
+<?php if (current_user()): ?>
+<span><?=e((string)(current_user()['name'] ?? 'Thành viên'))?></span>
+<a href="<?=$botCustomerUrl?>" target="_blank" rel="noopener noreferrer">Khách hàng ↗</a>
+<?php else: ?>
+<a href="/login.php">Đăng nhập</a>
+<a class="store-account-cta" href="/register.php">Đăng ký</a>
+<?php endif; ?>
+</div>
+</header>
+<main class="store-content<?=$activeMenu==='website-home'?' website-home-content':''?>">
+<?php if ($notice): ?>
+<div class="store-alert <?=e((string)($notice['type'] ?? 'success'))?>"><?=e((string)($notice['message'] ?? ''))?></div>
 <?php endif; ?>

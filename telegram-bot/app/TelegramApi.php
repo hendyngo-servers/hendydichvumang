@@ -95,6 +95,150 @@ final class TelegramApi
         ]);
     }
 
+    /**
+     * Download a trusted banner URL on the server, validate it as a real image,
+     * then upload the bytes to Telegram. Telegram's own URL fetcher often
+     * rejects image hosts that require redirects or anti-bot handling.
+     */
+    public function sendPhotoFromUrl(string $chatId, string $url, string $caption, array $options = []): array
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || strtolower((string)($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host']) || isset($parts['user']) || isset($parts['pass'])) {
+            throw new RuntimeException('BOT_HOME_PHOTO must be a valid HTTPS URL.');
+        }
+
+        $allowed = array_values(array_filter(array_map(
+            static fn(string $host): string => strtolower(trim($host)),
+            explode(',', (string)Env::get('BOT_HOME_PHOTO_ALLOWED_HOSTS', 'i.postimg.cc'))
+        )));
+        $host = strtolower(rtrim((string)$parts['host'], '.'));
+        if (!in_array($host, $allowed, true)) {
+            throw new RuntimeException('Banner host is not in BOT_HOME_PHOTO_ALLOWED_HOSTS.');
+        }
+
+        $curl = curl_init($url);
+        if ($curl === false) throw new RuntimeException('Could not initialize the banner download.');
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_MAXREDIRS => 0,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_MAXFILESIZE => 10_485_760,
+            CURLOPT_HTTPHEADER => ['Accept: image/jpeg,image/png,image/webp,image/gif'],
+            CURLOPT_USERAGENT => 'HendyBot-Cybertech/2.1',
+        ]);
+        $bytes = curl_exec($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $mime = strtolower(trim(explode(';', (string)curl_getinfo($curl, CURLINFO_CONTENT_TYPE))[0]));
+        $curlError = curl_error($curl);
+        curl_close($curl);
+
+        if ($bytes === false || $status < 200 || $status >= 300) {
+            throw new RuntimeException('Banner download failed (HTTP ' . $status . ')' . ($curlError !== '' ? ': ' . $curlError : '.'));
+        }
+        if (!is_string($bytes) || strlen($bytes) < 16 || strlen($bytes) > 10_485_760) {
+            throw new RuntimeException('Banner image is empty or exceeds the 10 MB limit.');
+        }
+        $imageInfo = @getimagesizefromstring($bytes);
+        $extensions = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','image/gif'=>'gif'];
+        if (!isset($extensions[$mime]) || $imageInfo === false || ($imageInfo['mime'] ?? '') !== $mime) {
+            throw new RuntimeException('Banner URL did not return a supported image (JPEG, PNG, WEBP or GIF).');
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'hendy-banner-');
+        if ($temporary === false) throw new RuntimeException('Could not allocate a temporary image file.');
+        try {
+            if (file_put_contents($temporary, $bytes, LOCK_EX) !== strlen($bytes)) {
+                throw new RuntimeException('Could not write the temporary banner image.');
+            }
+            return $this->sendPhotoFile($chatId, $temporary, $caption, $options, $mime);
+        } finally {
+            if (is_file($temporary)) @unlink($temporary);
+        }
+    }
+
+    public function sendPhotoFile(
+        string $chatId,
+        string $filePath,
+        string $caption,
+        array $options = [],
+        ?string $mimeType = null
+    ): array {
+        if (!is_file($filePath) || !is_readable($filePath)) throw new RuntimeException('Photo upload file is not readable.');
+        $mimeType ??= (new \finfo(FILEINFO_MIME_TYPE))->file($filePath) ?: 'application/octet-stream';
+        if (!in_array($mimeType, ['image/jpeg','image/png','image/webp','image/gif'], true)) {
+            throw new RuntimeException('Photo upload MIME type is not supported.');
+        }
+        $parameters = [
+            'chat_id' => $chatId,
+            'photo' => new \CURLFile($filePath, $mimeType, basename($filePath)),
+            'caption' => $caption,
+            'parse_mode' => 'HTML',
+            ...$options,
+        ];
+        return $this->callMultipart('sendPhoto', $parameters, 45, 10);
+    }
+
+    public function sendAudioFile(string $chatId, string $filePath, string $caption = '', array $options = []): array
+    {
+        if (!is_file($filePath) || !is_readable($filePath)) throw new RuntimeException('Audio upload file is not readable.');
+        $mimeType = (new \finfo(FILEINFO_MIME_TYPE))->file($filePath) ?: 'audio/mpeg';
+        $parameters = [
+            'chat_id' => $chatId,
+            'audio' => new \CURLFile($filePath, $mimeType, basename($filePath)),
+            'caption' => $caption,
+            'parse_mode' => 'HTML',
+            ...$options,
+        ];
+        return $this->callMultipart('sendAudio', $parameters, 90, 10);
+    }
+
+    private function callMultipart(string $method, array $parameters, int $timeoutSeconds, int $connectTimeoutSeconds): array
+    {
+        if (!preg_match('/\A[A-Za-z][A-Za-z0-9]{1,63}\z/D', $method)) {
+            throw new RuntimeException('Tên phương thức Telegram API không hợp lệ.');
+        }
+        $fields = [];
+        foreach ($parameters as $key => $value) {
+            $fields[$key] = is_array($value)
+                ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)
+                : $value;
+        }
+        $handle = curl_init('https://api.telegram.org/bot' . $this->token . '/' . $method);
+        if ($handle === false) throw new RuntimeException('Không thể khởi tạo kết nối Telegram upload.');
+        curl_setopt_array($handle, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $fields,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => max(1, min(15, $connectTimeoutSeconds)),
+            CURLOPT_TIMEOUT => max(2, min(120, $timeoutSeconds)),
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_MAXREDIRS => 0,
+            CURLOPT_USERAGENT => 'HendyBot-Cybertech/2.1',
+        ]);
+        $response = curl_exec($handle);
+        $status = (int)curl_getinfo($handle, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($handle);
+        curl_close($handle);
+        if ($response === false) {
+            throw new RuntimeException('Telegram upload failed: ' . ($curlError !== '' ? $curlError : 'network error'));
+        }
+        if (strlen((string)$response) > 5_242_880) throw new RuntimeException('Phản hồi Telegram vượt quá giới hạn cho phép.');
+        $decoded = json_decode((string)$response, true);
+        if (!is_array($decoded) || !($decoded['ok'] ?? false) || $status < 200 || $status >= 300) {
+            $description = is_array($decoded) ? (string)($decoded['description'] ?? 'Telegram API trả về lỗi.') : 'Phản hồi Telegram không hợp lệ.';
+            $errorCode = is_array($decoded) ? (int)($decoded['error_code'] ?? $status) : $status;
+            throw new RuntimeException('Telegram API lỗi ' . $errorCode . ': ' . mb_substr($description, 0, 300));
+        }
+        return is_array($decoded['result'] ?? null) ? $decoded['result'] : ['value'=>$decoded['result'] ?? null];
+    }
+
     public function answerCallback(string $callbackId, string $text = ''): void
     {
         $this->call('answerCallbackQuery', [

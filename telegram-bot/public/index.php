@@ -28,6 +28,7 @@ require dirname(__DIR__) . '/app/AiMediaService.php';
 require dirname(__DIR__) . '/app/BotService.php';
 require dirname(__DIR__) . '/app/Realtime.php';
 require dirname(__DIR__) . '/app/NeonStorage.php';
+require dirname(__DIR__) . '/app/AiCoverService.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/WebServiceContract.php';
 require dirname(__DIR__) . '/app/WebServiceKernel.php';
@@ -321,6 +322,23 @@ try {
             'status' => 'success',
             'message' => 'Xin chào ' . $name . ', tuyến đường tùy chỉnh đã hoạt động thành công!'
         ]);
+    }
+
+    if ($method === 'POST' && preg_match('#^/internal/ai-cover/jobs/([0-9a-f-]{36})/notify$#i', $path, $aiCoverMatch)) {
+        $expected = trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''));
+        $received = (string) ($_SERVER['HTTP_X_HENDY_AI_COVER_SECRET'] ?? '');
+        if (strlen($expected) < 32 || !hash_equals($expected, $received)) {
+            respond(['error' => 'unauthorized'], 401);
+        }
+        $token = TelegramAuth::token('primary');
+        if ($token === '') respond(['error' => 'primary_bot_unavailable'], 503);
+        try {
+            $delivery = AiCoverService::deliverJob($aiCoverMatch[1], $received, new TelegramApi($token));
+            respond(['ok' => true, ...$delivery]);
+        } catch (Throwable $error) {
+            error_log('[ai-cover-delivery] ' . $error::class . ': ' . $error->getMessage());
+            respond(['error' => 'delivery_retry'], 502);
+        }
     }
 
     if ($method === 'POST' && $path === '/webhook/video') {

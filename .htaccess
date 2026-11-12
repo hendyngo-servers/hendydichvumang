@@ -1,8 +1,8 @@
 Options -Indexes -MultiViews
 DirectoryIndex index.php
 
-# Deny access to hidden files, SQL dumps, logs and local configuration.
-<FilesMatch "(^\\.|\\.(?:sql|log|ini|ya?ml|bak|old|pem|key|dump)$)">
+# Deny hidden files, SQL dumps, logs, certificates and local configuration.
+<FilesMatch "(^\.|\.(?:sql|log|ini|ya?ml|bak|old|pem|key|dump)$)">
     Require all denied
 </FilesMatch>
 

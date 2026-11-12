@@ -2,11 +2,11 @@ Options -Indexes -MultiViews
 RewriteEngine On
 RewriteBase /app_store/
 
-<FilesMatch "(^\\.|\\.(?:sql|md|log|ini|ya?ml|env|bak|old|pem|key|dump)$)">
-  Require all denied
+<FilesMatch "(^\.|\.(?:sql|md|log|ini|ya?ml|env|bak|old|pem|key|dump)$)">
+    Require all denied
 </FilesMatch>
 
-# Keep real files/directories untouched.
+# Existing files and directories must be served normally.
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]

@@ -78,7 +78,18 @@ function authorized(request, secret) {
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-    if (request.method === 'GET' && url.pathname.endsWith('/healthz')) return json({ status: 'ok', service: 'hendy-neon-storage' });
+    if (request.method === 'GET' && url.pathname.endsWith('/healthz')) {
+      try {
+        buildPresignedUrl({
+          method: 'GET',
+          key: 'modules/health/0123456789abcdef0123456789abcdef.txt',
+          expiresIn: 60,
+        });
+        return json({ status: 'ok', service: 'hendy-neon-storage', storage: 'ready' });
+      } catch {
+        return json({ status: 'degraded', service: 'hendy-neon-storage', storage: 'unavailable' }, 503);
+      }
+    }
     if (request.method !== 'POST' || !url.pathname.endsWith('/presign')) return json({ error: 'Not found' }, 404);
     const apiKey = process.env.HENDY_FUNCTION_API_KEY || '';
     if (!apiKey || !authorized(request, apiKey)) return json({ error: 'Unauthorized' }, 401);

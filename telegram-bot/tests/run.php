@@ -158,7 +158,7 @@ $assert(!str_contains($envManifest, 'BOT2_TOKEN') && !str_contains($envManifest,
 $assert(str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY') && str_contains($envManifest, 'HOMEPROXY_ENCRYPTION_KEY'), 'HomeProxy encryption secret remains documented in Blueprint and env manifest');
 $assert(str_contains($runtimeWorkflow, 'working-directory: telegram-bot') && str_contains($runtimeWorkflow, 'composer test'), 'monorepo CI runs Bot tests from the isolated application directory');
 $assert(str_contains($sitemapSource, 'hendydichvumang.onrender.com') && str_contains($robotsSource, 'hendydichvumang.onrender.com'), 'sitemap and robots reference the new Static Site hostname');
-$assert(str_contains($databaseSchema, $productionHost) && str_contains($databaseSchema, "'https://hendy-bot-tele.onrender.com'"), 'Bot PostgreSQL migration uses the new URL and keeps legacy URL migration rules');
+$assert(str_contains($databaseSchema, 'https://hendydichvumang.onrender.com') && str_contains($databaseSchema, "'https://hendy-bot-tele.onrender.com'"), 'Bot PostgreSQL migration seeds the new Static Site URL and keeps legacy URL migration rules');
 $assert(str_contains($deployScript, '${APP_URL:?') && str_contains($syncScript, 'RENDER_EXTERNAL_URL') && !str_contains($syncScript, 'hendy-bot-cybertech-1.onrender.com'), 'operational scripts resolve the active Render URL instead of hardcoding the former service');
 $assert(str_contains($botServiceSource, $productionHost) && !str_contains($botServiceSource, 'https://hendy-bot-cybertech-1.onrender.com'), 'Bot welcome links fall back to the new Render service');
 $assert(str_contains($websiteDbBootstrap, 'HENDY DIGITAL ECOSYSTEM') && str_contains($websiteDbBootstrap, 'CODE TELEGRAM'), 'Static Website contains only public-facing ecosystem content');
@@ -167,6 +167,7 @@ $publicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
 $registerWebhookSource = file_get_contents(dirname(__DIR__) . '/bin/register-webhooks.php');
 $assert(str_contains($publicRouterSource, "SELECT value FROM app_settings WHERE key = ? AND is_public = TRUE"), 'public Bot config uses the cached URL discovered from getMe');
 $assert(str_contains($registerWebhookSource, "call('getMe'") && str_contains($registerWebhookSource, "'primary_bot_url'"), 'Bot startup discovers and caches its public username through Telegram getMe');
+$assert(str_contains($botServiceSource, "key = 'primary_bot_url'") && str_contains($botServiceSource, "Env::get('BOT1_PUBLIC_URL'"), 'Referral links prefer the optional override and otherwise use the getMe-discovered Bot URL');
 $assert(str_contains($moduleRegistrySource, 'NeonStorage::uploadFile') && str_contains($moduleRegistrySource, 'sha256'), 'module uploads use private Neon Object Storage and preserve SHA-256 validation');
 $assert(str_contains($neonStorageSource, 'NEON_STORAGE_FUNCTION_KEY') && str_contains($neonStorageSource, 'CURLOPT_SSL_VERIFYPEER'), 'storage signing key stays server-side and HTTPS verification remains enabled');
 $assert(str_contains($neonFunctionSource, 'timingSafeEqual') && str_contains($neonFunctionSource, "const BUCKET = 'uploads'"), 'Neon Function authenticates internal requests and restricts uploads to private bucket');

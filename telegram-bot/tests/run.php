@@ -121,6 +121,10 @@ $assert(str_contains($deployScript, '${APP_URL:?') && str_contains($syncScript, 
 $assert(str_contains($botServiceSource, $productionHost) && !str_contains($botServiceSource, 'https://hendy-bot-cybertech-1.onrender.com'), 'Bot welcome links fall back to the new Render service');
 $assert(str_contains($websiteDbBootstrap, 'mysql:host=') && str_contains($websiteDbBootstrap, 'function telegram_bot_url()'), 'Website keeps MySQL and validates the public Telegram URL');
 $assert(str_contains($websiteHeader, 'Telegram Bot ↗'), 'Website navigation links to the Bot without exposing a token');
+$publicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
+$registerWebhookSource = file_get_contents(dirname(__DIR__) . '/bin/register-webhooks.php');
+$assert(str_contains($publicRouterSource, "SELECT value FROM app_settings WHERE key = ? AND is_public = TRUE"), 'public Bot config uses the cached URL discovered from getMe');
+$assert(str_contains($registerWebhookSource, "call('getMe'") && str_contains($registerWebhookSource, "'primary_bot_url'"), 'Bot startup discovers and caches its public username through Telegram getMe');
 $assert(str_contains($moduleRegistrySource, 'NeonStorage::uploadFile') && str_contains($moduleRegistrySource, 'sha256'), 'module uploads use private Neon Object Storage and preserve SHA-256 validation');
 $assert(str_contains($neonStorageSource, 'NEON_STORAGE_FUNCTION_KEY') && str_contains($neonStorageSource, 'CURLOPT_SSL_VERIFYPEER'), 'storage signing key stays server-side and HTTPS verification remains enabled');
 $assert(str_contains($neonFunctionSource, 'timingSafeEqual') && str_contains($neonFunctionSource, "const BUCKET = 'uploads'"), 'Neon Function authenticates internal requests and restricts uploads to private bucket');

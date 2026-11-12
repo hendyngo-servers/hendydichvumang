@@ -252,6 +252,17 @@ try {
     // Public website config. Telegram entry links are configured explicitly in deployment environment.
     if ($method === 'GET' && $path === '/api/v1/public/config') {
         $primaryBotUrl = Hendy\TelegramLink::normalize((string) Env::get('BOT1_PUBLIC_URL', ''));
+        if ($primaryBotUrl === '') {
+            try {
+                $cachedPrimaryUrl = (string) (Database::value(
+                    "SELECT value FROM app_settings WHERE key = ? AND is_public = TRUE",
+                    ['primary_bot_url']
+                ) ?? '');
+                $primaryBotUrl = Hendy\TelegramLink::normalize($cachedPrimaryUrl);
+            } catch (Throwable $error) {
+                error_log('Không đọc được Telegram Bot URL đã cache: ' . $error->getMessage());
+            }
+        }
         $secondaryBotUrl = Hendy\TelegramLink::normalize((string) Env::get('BOT2_PUBLIC_URL', ''));
         $groupUrl = Hendy\TelegramLink::normalize((string) (Env::get('GROUP_URL') ?: Env::get('GROUP_CHAT_URL', '')));
         $channelUrl = Hendy\TelegramLink::normalize((string) (Env::get('CHANNEL_URL') ?: Env::get('NEWS_CHANNEL_URL', '')));

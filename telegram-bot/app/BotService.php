@@ -492,7 +492,7 @@ final class BotService
                 'action' => 'admin',
                 'label' => self::truncate((string) ($labels['admin'] ?? '🛡️ BẢNG ĐIỀU KHIỂN ADMIN'), 60),
                 'description' => self::truncate((string) ($descriptions['admin'] ?? 'Mở bảng quản trị dành riêng cho Admin.'), 160),
-                'style' => in_array($styles['admin'] ?? '', ['primary', 'success', 'danger'], true) ? $styles['admin'] : 'primary',
+                'style' => in_array($styles['admin'] ?? '', ['primary', 'success', 'danger'], true) ? $styles['admin'] : 'danger',
                 'iconCustomEmojiId' => preg_match('/^[0-9]{5,32}$/', (string) ($icons['admin'] ?? '')) ? (string) $icons['admin'] : '',
             ];
         }
@@ -569,7 +569,49 @@ final class BotService
 
     private function inlineMenu(array $rows): array
     {
-        return ['inline_keyboard' => $rows];
+        // Keep every submenu visually consistent: two buttons, then one centered
+        // button, repeating in a staggered 2-1 rhythm.
+        $buttons = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($row as $button) {
+                if (is_array($button)) {
+                    $buttons[] = $button;
+                }
+            }
+        }
+
+        $keyboard = [];
+        $widths = [2, 1];
+        $widthIndex = 0;
+        while ($buttons !== []) {
+            $current = array_splice($buttons, 0, $widths[$widthIndex]);
+            foreach ($current as &$button) {
+                $style = (string) ($button['style'] ?? '');
+                if (!in_array($style, ['primary', 'success', 'danger'], true)) {
+                    $intent = mb_strtolower(
+                        (string) ($button['text'] ?? '') . ' ' . (string) ($button['callback_data'] ?? ''),
+                        'UTF-8'
+                    );
+                    if (preg_match('/(?:cancel|delete|remove|reject|deny|close|back|home|huy|hủy|quay lại|đóng|trở về|thoát|từ chối)/u', $intent) === 1) {
+                        $style = 'danger';
+                    } elseif (preg_match('/(?:buy|order|purchase|confirm|approve|deposit|payment|pay|topup|claim|create|submit|activate|nap|nạp|mua|đặt|xác nhận|duyệt|thanh toán|kích hoạt|nhận|đăng ký|mở gói)/u', $intent) === 1) {
+                        $style = 'success';
+                    } else {
+                        $style = 'primary';
+                    }
+                }
+                $button['style'] = $style;
+            }
+            unset($button);
+
+            $keyboard[] = $current;
+            $widthIndex = 1 - $widthIndex;
+        }
+
+        return ['inline_keyboard' => $keyboard];
     }
 
     private function actionForText(string $text, string $userId): ?string
@@ -2036,9 +2078,9 @@ final class BotService
             'User: <code>' . self::escape($userId) . '</code>' . "\n" .
             'Nội dung CK: <code>' . self::escape((string) $request['transfer_content']) . '</code>' . "\n" .
             'Chỉ duyệt sau khi đối chiếu sao kê.',
-            ['inline_keyboard' => [[
-                ['text' => '✅ MỞ DANH SÁCH DUYỆT', 'callback_data' => 'member:admin-payments'],
-            ]]]
+            $this->inlineMenu([
+                [['text' => '✅ MỞ DANH SÁCH DUYỆT', 'callback_data' => 'member:admin-payments']],
+            ])
         );
     }
 
@@ -2078,7 +2120,7 @@ final class BotService
                         'Job: <code>' . self::escape($shortId) . '</code>' . "\n" .
                         'User: <code>' . self::escape($userId) . '</code>' . "\n" .
                         'Nguồn: ' . self::escape(self::truncate($text, 180)),
-                        ['inline_keyboard' => [[['text' => '🎬 XEM VIDEO JOBS', 'callback_data' => 'member:admin-jobs']]]]
+                        $this->inlineMenu([[['text' => '🎬 XEM VIDEO JOBS', 'callback_data' => 'member:admin-jobs']]])
                     );
                 } catch (Throwable $error) {
                     $this->telegram->sendMessage($chatId, '❌ Không thể tạo video job: ' . self::escape($error->getMessage()));
@@ -2146,7 +2188,7 @@ final class BotService
                         'User: <code>' . self::escape($userId) . '</code>' . "\n" .
                         'Đơn: <code>' . self::escape($orderCode) . '</code>' . "\n" .
                         'Nội dung: ' . self::escape(mb_substr($text, 0, 1600)),
-                        ['inline_keyboard' => [[['text' => '🎧 MỞ QUẢN LÝ TICKET', 'callback_data' => 'member:admin']]]]
+                        $this->inlineMenu([[['text' => '🎧 MỞ QUẢN LÝ TICKET', 'callback_data' => 'member:admin']]])
                     );
                     $this->telegram->sendMessage($chatId, '✅ Đã tạo ticket hỗ trợ dính lạm dụng #' . (int) $ticket['id'] . ' cho đơn ' . self::escape($orderCode) . '. CSKH sẽ kiểm tra và phản hồi. Việc bồi hoàn (nếu có) cần Admin xác minh thủ công.');
                     return true;

@@ -1,13 +1,66 @@
 <?php
-require_once __DIR__.'/db.php';
-$pageTitle=$pageTitle??'HENDY | Kho ứng dụng & dịch vụ';
-$notice=$_SESSION['_flash']??null;unset($_SESSION['_flash']);
-$telegramBotUrl=telegram_bot_url();
+require_once 'includes/db.php';
+$current_cat = isset($_GET['cat']) ? $_GET['cat'] : 'all';
+$search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
+$current_page = basename($_SERVER['PHP_SELF']);
 ?>
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101827"><title><?=e($pageTitle)?></title><link rel="stylesheet" href="style.css"></head><body>
-<header class="topbar"><a class="brand" href="index.php"><span class="brand-mark">H</span><span>HENDY<small>CYBERTECH</small></span></a><nav>
-<a href="index.php">Trang chủ</a><?php if($telegramBotUrl): ?><a class="nav-cta" href="<?=e($telegramBotUrl)?>" target="_blank" rel="noopener noreferrer">Telegram Bot ↗</a><?php endif;?>
-<?php if(is_admin()): ?><a href="admin.php">Quản trị</a><?php endif;?>
-<?php if(current_user()): ?><span class="nav-user"><?=e(current_user()['name'])?></span><form method="post" action="logout.php" class="nav-logout"><input type="hidden" name="_csrf" value="<?=e(csrf_token())?>"><button type="submit">Đăng xuất</button></form>
-<?php else: ?><a href="login.php">Đăng nhập</a><a class="nav-cta" href="register.php">Tạo tài khoản</a><?php endif;?>
-</nav></header><main class="container"><?php if($notice): ?><div class="alert <?=e($notice['type'])?>"><?=e($notice['message'])?></div><?php endif;?>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AppStore - Kho Ứng Dụng & Dịch Vụ Mạng</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-brands fa-microsoft"></i>
+                <span>AppStore</span>
+            </div>
+            <nav class="side-nav">
+                <a href="index.php?cat=all" class="<?php echo ($current_page == 'index.php' && $current_cat == 'all') ? 'active' : ''; ?>">
+                    <i class="fa-solid fa-house"></i> Trang chủ
+                </a>
+                <a href="index.php?cat=app" class="<?php echo ($current_page == 'index.php' && $current_cat == 'app') ? 'active' : ''; ?>">
+                    <i class="fa-solid fa-layer-group"></i> Ứng dụng
+                </a>
+                <a href="index.php?cat=game" class="<?php echo ($current_page == 'index.php' && $current_cat == 'game') ? 'active' : ''; ?>">
+                    <i class="fa-solid fa-gamepad"></i> Trò chơi
+                </a>
+                <a href="dichvumang.php" class="<?php echo $current_page == 'dichvumang.php' ? 'active' : ''; ?>">
+                    <i class="fa-solid fa-network-wired"></i> Dịch vụ mạng
+                </a>
+                <?php if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] == 1): ?>
+                    <a href="admin.php" style="color: #2563eb; margin-top: 20px;">
+                        <i class="fa-solid fa-gauge-high"></i> Quản trị (Admin)
+                    </a>
+                <?php endif; ?>
+            </nav>
+        </aside>
+
+        <div class="main-wrapper">
+            <header class="top-bar">
+                <form action="index.php" method="GET" class="search-box">
+                    <input type="hidden" name="cat" value="<?php echo htmlspecialchars($current_cat); ?>">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" name="q" placeholder="Tìm kiếm ứng dụng, trò chơi..." value="<?php echo htmlspecialchars($search_query); ?>">
+                </form>
+
+                <div class="user-auth-area">
+                    <?php if (isset($_SESSION['username'])): ?>
+                        <div class="user-logged">
+                            <span class="avatar"><?php echo strtoupper(substr($_SESSION['username'], 0, 1)); ?></span>
+                            <span class="username"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
+                            <a href="logout.php" class="btn-logout" title="Đăng xuất"><i class="fa-solid fa-right-from-bracket"></i></a>
+                        </div>
+                    <?php else: ?>
+                        <div class="auth-links">
+                            <a href="login.php" class="btn-login">Đăng nhập</a>
+                            <a href="register.php" class="btn-register">Đăng ký</a>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </header>

@@ -109,8 +109,8 @@ $neonFunctionSource = file_get_contents($repoRoot . '/neon-functions/hendystorag
 $neonConfigSource = file_get_contents($repoRoot . '/neon.ts');
 $deployScript = file_get_contents(dirname(__DIR__) . '/scripts/deploy-verify-render.sh');
 $syncScript = file_get_contents(dirname(__DIR__) . '/scripts/sync-render-env.sh');
-$websiteDbBootstrap = file_get_contents($repoRoot . '/includes/db.php');
-$websiteHeader = file_get_contents($repoRoot . '/includes/header.php');
+$websiteDbBootstrap = file_get_contents($repoRoot . '/app_store/includes/db.php');
+$websiteHeader = file_get_contents($repoRoot . '/app_store/includes/header.php');
 $assert(str_contains($landingSource, $productionHost) && str_contains($privacySource, $productionHost) && str_contains($termsSource, $productionHost), 'SEO metadata uses the new isolated Telegram Bot service hostname');
 $assert(str_contains($renderSource, 'name: hendydichvumang-telegram-bot') && str_contains($renderSource, 'dockerfilePath: ./telegram-bot/Dockerfile') && str_contains($renderSource, 'dockerContext: ./telegram-bot') && !str_contains($renderSource, 'rootDir: telegram-bot'), 'Render Blueprint adopts the existing Bot service using the verified Docker context and file paths');
 $assert(!str_contains($renderSource, 'BOT2_TOKEN') && str_contains($renderSource, 'BOT1_TOKEN') && str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY'), 'production Blueprint documents the single bot and existing private secrets without copying secret values');

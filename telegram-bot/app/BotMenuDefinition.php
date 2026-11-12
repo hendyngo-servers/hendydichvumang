@@ -7,7 +7,7 @@ namespace Hendy;
 final class BotMenuDefinition
 {
     public const ITEMS = [
-        ['action' => 'live', 'label' => '🚀 MINIGAME LIVE', 'description' => 'Chọn nhóm Mini Game Live và quản lý tài khoản.', 'style' => 'primary'],
+        ['action' => 'live', 'label' => '🚀 MINIGAME LIVE', 'description' => 'Chọn nhà cái, xem gói dịch vụ MiniGame Live và thanh toán bằng Ví Chính.', 'style' => 'primary'],
         ['action' => 'otp', 'label' => '▦ OTP & PROXY', 'description' => 'Mở trung tâm OTP, Proxy và ví NYC.', 'style' => 'primary'],
         ['action' => 'wallet', 'label' => '💳 NẠP TIỀN', 'description' => 'Tạo yêu cầu nạp và xem trạng thái VietQR.', 'style' => 'success'],
         ['action' => 'vip', 'label' => '👑 TRUNG TÂM VIP', 'description' => 'Xem cấp VIP, quyền lợi và điểm danh.', 'style' => 'success'],

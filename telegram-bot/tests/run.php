@@ -50,8 +50,14 @@ $assert(TelegramLink::normalize('https://t.me/hendy_cyber_bot?start=old') === 'h
 $assert(TelegramLink::normalize('https://example.com/hendy_cyber_bot') === '', 'từ chối URL public bot ngoài Telegram');
 
 $assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','otp','wallet','vip','codes','customer','music-ai','image-ai','group','news','vip-coming-soon'], 'menu chính có AI music và AI image theo yêu cầu');
-$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet','vip'],['codes'],['customer'],['music-ai','image-ai'],['group','news'],['vip-coming-soon'],['admin']], 'layout Inline Menu khớp ảnh và có hai nút AI');
+$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet'],['vip','codes'],['customer'],['music-ai','image-ai'],['group'],['news','vip-coming-soon'],['admin']], 'layout Inline Menu dùng nhịp so le hai nút - một nút và có hai nút AI');
+$styles = array_column(BotMenuDefinition::ITEMS, 'style');
+$assert(count($styles) === count(BotMenuDefinition::ITEMS) && count(array_diff($styles, ['primary','success','danger'])) === 0, 'mọi nút menu chính đều có màu Telegram hợp lệ');
 $botServiceSource = file_get_contents(dirname(__DIR__) . '/app/BotService.php');
+$assert(str_contains($botServiceSource, '$widths = [2, 1]') && str_contains($botServiceSource, "$button['style'] = $style;") && str_contains($botServiceSource, "member:home"), 'mọi menu con được sắp so le và tự gán màu từng nút');
+$startupSource = file_get_contents(dirname(__DIR__) . '/docker/start.sh');
+$webhookRegistrationSource = file_get_contents(dirname(__DIR__) . '/bin/register-webhook.php');
+$assert(str_contains($startupSource, 'php bin/register-webhook.php') && str_contains($webhookRegistrationSource, '$telegram->setWebhook($webhookUrl, $secret)') && str_contains($webhookRegistrationSource, 'getWebhookInfo'), 'Render startup đăng ký và xác minh webhook Telegram chính');
 $assert(str_contains($botServiceSource, "'menu_mode' => 'inline_keyboard'"), 'menu mặc định là Inline Keyboard');
 $assert(str_contains($botServiceSource, "return ['inline_keyboard' => \$rows];"), 'menu luôn gửi Inline Keyboard, kể cả cấu hình cũ');
 $assert(str_contains($botServiceSource, "if (\$item['action'] === 'miniapp')") && str_contains($botServiceSource, "'web_app' => ['url' => \$url]"), 'nút Mở Mini App dùng Telegram Web App trực tiếp');

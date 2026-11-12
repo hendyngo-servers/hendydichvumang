@@ -46,6 +46,16 @@ if [[ "${AI_MEDIA_QUEUE_ENABLED:-false}" == "true" ]]; then
     echo "HENDY AI media worker đã khởi chạy."
 fi
 
+if [[ "${CODE_TELEGRAM_WORKER_ENABLED:-false}" == "true" ]]; then
+    if [[ "${CODE_TELEGRAM_ENABLED:-false}" != "true" ]]; then
+        echo "CODE_TELEGRAM_WORKER_ENABLED=true nhưng CODE_TELEGRAM_ENABLED=false." >&2
+        exit 1
+    fi
+    php bin/code-telegram-worker.php &
+    background_pids+=("$!")
+    echo "HENDY Code Telegram OCR worker đã khởi chạy."
+fi
+
 if [[ "${WEBSOCKET_ENABLED:-false}" == "true" ]]; then
     if [[ -z "${WEBSOCKET_ALLOWED_ORIGINS:-}" ]]; then
         echo "WEBSOCKET_ALLOWED_ORIGINS bắt buộc khi bật WebSocket." >&2

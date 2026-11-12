@@ -54,7 +54,7 @@ $assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet'],['vip','codes']
 $styles = array_column(BotMenuDefinition::ITEMS, 'style');
 $assert(count($styles) === count(BotMenuDefinition::ITEMS) && count(array_diff($styles, ['primary','success','danger'])) === 0, 'mọi nút menu chính đều có màu Telegram hợp lệ');
 $botServiceSource = file_get_contents(dirname(__DIR__) . '/app/BotService.php');
-$assert(str_contains($botServiceSource, '$widths = [2, 1]') && str_contains($botServiceSource, "$button['style'] = $style;") && str_contains($botServiceSource, "member:home"), 'mọi menu con được sắp so le và tự gán màu từng nút');
+$assert(str_contains($botServiceSource, '$widths = [2, 1]') && str_contains($botServiceSource, '$button[\'style\'] = $style;') && str_contains($botServiceSource, "member:home"), 'mọi menu con được sắp so le và tự gán màu từng nút');
 $startupSource = file_get_contents(dirname(__DIR__) . '/docker/start.sh');
 $webhookRegistrationSource = file_get_contents(dirname(__DIR__) . '/bin/register-webhook.php');
 $assert(str_contains($startupSource, 'php bin/register-webhook.php') && str_contains($webhookRegistrationSource, '$telegram->setWebhook($webhookUrl, $secret)') && str_contains($webhookRegistrationSource, 'getWebhookInfo'), 'Render startup đăng ký và xác minh webhook Telegram chính');

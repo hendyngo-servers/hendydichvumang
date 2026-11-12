@@ -1,15 +1,69 @@
 <?php
-require_once __DIR__.'/includes/db.php';
-$id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT);
-$statement=$pdo->prepare("SELECT * FROM products WHERE id=? AND status='published'");$statement->execute([$id]);$product=$statement->fetch();
-if(!$product){http_response_code(404);$pageTitle='Không tìm thấy';require __DIR__.'/includes/header.php';echo '<div class="empty-state"><h2>Không tìm thấy nội dung</h2><a href="index.php">Về trang chủ</a></div>';require __DIR__.'/includes/footer.php';exit;}
-$statement=$pdo->prepare("SELECT * FROM screenshots WHERE product_id=? ORDER BY sort_order,id");$statement->execute([$id]);$shots=$statement->fetchAll();
-$pageTitle=$product['title'].' | HENDY';require __DIR__.'/includes/header.php';
+require_once 'includes/db.php';
+
+$app_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$stmt = $pdo->prepare("SELECT * FROM apps WHERE id = ?");
+$stmt->execute([$app_id]);
+$current_app = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$current_app) {
+    header("Location: index.php");
+    exit;
+}
+
+$stmt_img = $pdo->prepare("SELECT image_url FROM app_screenshots WHERE app_id = ?");
+$stmt_img->execute([$app_id]);
+$screenshots = $stmt_img->fetchAll(PDO::FETCH_COLUMN);
+
+include 'includes/header.php';
 ?>
-<a class="back-link" href="index.php">← Quay lại danh sách</a><section class="detail-layout"><div class="detail-main"><div class="eyebrow"><?=e($product['category'])?></div><h1><?=e($product['title'])?></h1>
-<div class="price-large"><?=e($product['price']?:'Liên hệ')?></div><div class="prose"><?=nl2br(e($product['description']))?></div>
-<?php if($product['external_url']): ?><a class="button primary" href="<?=e($product['external_url'])?>" target="_blank" rel="noopener noreferrer">Truy cập dịch vụ ↗</a><?php endif;?></div>
-<aside class="detail-side"><div class="side-label">THÔNG TIN</div><p><strong>Danh mục</strong><br><?=e($product['category']?:'Dịch vụ')?></p><p><strong>Cập nhật</strong><br><?=e(date('d/m/Y',strtotime($product['updated_at'])))?></p></aside></section>
-<?php if($shots): ?><section class="screens-section"><div class="eyebrow">GALLERY</div><h2>Hình ảnh & giao diện</h2><div class="screens-grid">
-<?php foreach($shots as $shot): $url=screenshot_url($shot['image_path']);if($url==='')continue; ?><a href="<?=e($url)?>" target="_blank" rel="noopener"><img src="<?=e($url)?>" alt="<?=e($shot['caption'])?>" loading="lazy"><span><?=e($shot['caption'])?></span></a><?php endforeach;?>
-</div></section><?php endif;?><?php require __DIR__.'/includes/footer.php';?>
+
+<main class="content">
+    <div class="back-nav">
+        <a href="index.php"><i class="fa-solid fa-arrow-left"></i> Quay lại Kho ứng dụng</a>
+    </div>
+
+    <div class="app-detail-hero">
+        <img src="<?php echo htmlspecialchars($current_app['icon']); ?>" alt="" class="detail-icon">
+        <div class="detail-meta">
+            <h1><?php echo htmlspecialchars($current_app['name']); ?></h1>
+            <p class="dev-name"><?php echo htmlspecialchars($current_app['dev']); ?></p>
+            
+            <div class="detail-stats">
+                <span><i class="fa-solid fa-star" style="color: #f59e0b;"></i> <?php echo $current_app['rating']; ?></span>
+                <span>•</span>
+                <span>Dung lượng: <?php echo htmlspecialchars($current_app['size']); ?></span>
+                <span>•</span>
+                <span>Phiên bản: v<?php echo htmlspecialchars($current_app['version']); ?></span>
+            </div>
+
+            <div class="detail-actions">
+                <a href="<?php echo htmlspecialchars($current_app['download_link']); ?>" class="btn-install-large">
+                    <i class="fa-solid fa-download"></i> Tải xuống (<?php echo htmlspecialchars($current_app['price']); ?>)
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <?php if (!empty($screenshots)): ?>
+    <div class="section-block">
+        <h2>Ảnh chụp màn hình</h2>
+        <div class="screenshot-slider">
+            <?php foreach ($screenshots as $img): ?>
+                <img src="<?php echo htmlspecialchars($img); ?>" alt="Screenshot" class="screenshot-img">
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <div class="section-block">
+        <h2>Mô tả</h2>
+        <div class="long-desc-box">
+            <p><?php echo nl2br(htmlspecialchars($current_app['long_desc'])); ?></p>
+        </div>
+    </div>
+</main>
+        </div>
+    </div>
+</body>
+</html>

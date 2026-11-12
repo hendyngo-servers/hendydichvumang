@@ -3,7 +3,7 @@ FROM composer:2 AS composer
 FROM php:8.3-apache
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev libonig-dev libcurl4-openssl-dev unzip \
+    && apt-get install -y --no-install-recommends libpq-dev libonig-dev libcurl4-openssl-dev unzip ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-vie \
     && docker-php-ext-install -j"$(nproc)" pdo_pgsql mbstring curl \
     && a2enmod rewrite headers proxy proxy_http proxy_wstunnel \
     && rm -rf /var/lib/apt/lists/*

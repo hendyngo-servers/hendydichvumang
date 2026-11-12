@@ -38,7 +38,7 @@ if ($layout === 'website'):
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1220"><title><?=e($pageTitle)?></title>
 <link rel="stylesheet" href="/app_store/style.css">
-<?php if ($activeMenu === 'admin-center'): ?><link rel="stylesheet" href="/app_store/admin-center.css"><?php endif; ?>
+<?php if (in_array($activeMenu, ['admin-center','admin-products','admin-users','admin-system'], true)): ?><link rel="stylesheet" href="/app_store/admin-center.css"><?php endif; ?>
 </head><body class="store-body"><div class="store-shell">
 <aside class="store-sidebar">
 <a class="store-brand" href="/"><span class="store-brand-mark">H</span><span>HENDY<small>DIGITAL ECOSYSTEM</small></span></a>
@@ -57,6 +57,9 @@ if ($layout === 'website'):
 <a class="<?=$activeMenu==='admin-center'?'active':''?>" href="/admin.php">▣ <span>Tổng quan quản trị</span></a>
 <a class="<?=$activeMenu==='admin'?'active':''?>" href="/app_store/admin.php">▦ <span>Quản trị App Store</span></a>
 <a class="<?=$activeMenu==='admin-services'?'active':''?>" href="/app_store/admin_services.php">⌁ <span>Quản trị dịch vụ mạng</span></a>
+<a class="<?=$activeMenu==='admin-products'?'active':''?>" href="/admin-products.php">▤ <span>Danh mục Website</span></a>
+<a class="<?=$activeMenu==='admin-users'?'active':''?>" href="/admin-users.php">♙ <span>Thành viên & Admin</span></a>
+<a class="<?=$activeMenu==='admin-system'?'active':''?>" href="/admin-system.php">⚙ <span>Trạng thái hệ thống</span></a>
 <a href="<?=e($botAdminUrl)?>" target="_blank" rel="noopener noreferrer">🛡️ <span>Quản trị Telegram Bot ↗</span></a>
 </nav>
 <?php endif; ?>

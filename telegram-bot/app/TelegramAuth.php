@@ -247,7 +247,7 @@ final class TelegramAuth
         }
 
         $requestedBotKey = trim((string) ($_SERVER['HTTP_X_TELEGRAM_BOT_KEY'] ?? 'primary'));
-        if (!in_array($requestedBotKey, ['primary', 'secondary'], true)) {
+        if ($requestedBotKey !== 'primary') {
             throw new RuntimeException('Bot Key không hợp lệ.');
         }
         $initData = str_starts_with($authorization, 'tma ')

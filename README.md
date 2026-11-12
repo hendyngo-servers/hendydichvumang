@@ -20,7 +20,7 @@ A single GitHub repository deploying two separate Render services with isolated 
 ## Telegram Bot deployment
 
 See `telegram-bot/README.md` and `docs/TELEGRAM-BOT-INTEGRATION.md`.
-- Only `BOT1_TOKEN` is used for the production Bot. BOT2_TOKEN remains unset.
+- Exactly one production Telegram bot is enabled: the runtime reads only `BOT1_TOKEN` and rejects the secondary bot route. Legacy secondary-token values, if present in Render, are ignored.
 - `ADMIN_ID` or `ADMIN_IDS` must contain the numeric Telegram administrator ID.
 - Bot database uses Neon `hendydichvumang` with runtime role `hendy_bot_app`.
 - `RUN_MIGRATIONS_ON_START=false`; schema changes are managed separately.

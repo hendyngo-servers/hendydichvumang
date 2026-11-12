@@ -5,7 +5,7 @@
 # BOT1_TOKEN, ADMIN_ID(S), HOMEPROXY_ENCRYPTION_KEY, bank/account details) stay in
 # the existing Render Environment. They are intentionally omitted here: Render
 # preserves existing env vars omitted from a Blueprint, avoiding secret re-entry.
-# BOT2_TOKEN is retired; TelegramAuth accepts only BOT1_TOKEN.
+# Runtime is intentionally single-bot; only the primary token is read.
 services:
   - type: web
     name: hendydichvumang-website

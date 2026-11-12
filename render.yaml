@@ -1,5 +1,5 @@
 # HENDY: one primary Telegram Bot, one static public Website and a temporary static fallback.
-# Secrets stay in the existing Render Environment and are never committed here.
+# Secrets (DATABASE_URL, BOT1_TOKEN, ADMIN_ID(S), HOMEPROXY_ENCRYPTION_KEY, bank credentials) stay in Render Environment and are never committed here.
 services:
   - type: web
     name: hendydichvumang-website

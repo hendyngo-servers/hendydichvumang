@@ -19,6 +19,8 @@ services:
         value: "https://br-wild-cell-az3siwry-hendystorage.compute.c-3.ap-southeast-1.aws.neon.tech"
       - key: NEON_STORAGE_FUNCTION_KEY
         sync: false
+      - key: TELEGRAM_BOT_URL
+        sync: false
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD

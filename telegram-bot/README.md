@@ -43,6 +43,7 @@ Các biến quan trọng cấu hình tại Render Environment:
 - `DATABASE_SSL=true` cho Neon.
 - `WEBHOOK_AUTO_REGISTER=true`; Render cung cấp `RENDER_EXTERNAL_URL`.
 - `TELEGRAM_WEBHOOK_SECRET` là tùy chọn; để trống, backend tạo secret ngẫu nhiên 256-bit và lưu trong PostgreSQL.
+- Khi container khởi động, `bin/register-webhook.php` gọi `getMe`, đăng ký duy nhất `https://<Render Bot domain>/webhook/telegram` bằng `setWebhook`, rồi xác minh bằng `getWebhookInfo`; `drop_pending_updates=false` để không xóa update đang chờ.
 - `BANK_WEBHOOK_ENABLED=false` cho đến khi có adapter kiểm tra chữ ký theo ngân hàng.
 - `NEON_STORAGE_FUNCTION_URL` và `NEON_STORAGE_FUNCTION_KEY` chỉ đặt nếu bật Object Storage.
 

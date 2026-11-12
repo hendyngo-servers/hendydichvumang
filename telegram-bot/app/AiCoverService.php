@@ -431,6 +431,19 @@ final class AiCoverService
         if ($row === null) throw new RuntimeException('Không tìm thấy preset AI Cover.');
     }
 
+    public static function isAudioMessage(array $message): bool
+    {
+        return self::audioMedia($message) !== null;
+    }
+
+    public static function clearSelection(string $userId): void
+    {
+        Database::run(
+            'UPDATE ai_cover_sessions SET selected_voice_id=NULL,updated_at=NOW() WHERE telegram_user_id=?',
+            [$userId]
+        );
+    }
+
     private static function audioMedia(array $message): ?array
     {
         $media = null;

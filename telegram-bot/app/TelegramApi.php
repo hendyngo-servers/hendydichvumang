@@ -406,7 +406,7 @@ final class TelegramApi
         $result = $this->call('getUpdates', [
             'offset' => $offset,
             'timeout' => $timeout,
-            'allowed_updates' => ['message', 'callback_query'],
+            'allowed_updates' => ['message', 'callback_query', 'channel_post', 'edited_channel_post'],
         ]);
         return array_is_list($result) ? $result : [];
     }

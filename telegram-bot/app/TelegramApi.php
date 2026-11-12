@@ -245,6 +245,76 @@ final class TelegramApi
      *
      * @return array{path:string,mime:string}
      */
+    /**
+     * Download a Telegram audio/voice/document as a validated temporary file.
+     * Caller owns the returned file and must unlink it.
+     *
+     * @return array{path:string,mime:string,size:int}
+     */
+    public function downloadAudioToTemp(string $fileId, int $maxBytes = 20_971_520): array
+    {
+        if ($fileId === '' || strlen($fileId) > 512) throw new RuntimeException('Telegram audio file_id không hợp lệ.');
+        $maxBytes = max(1024, min(20_971_520, $maxBytes));
+        $file = $this->call('getFile', ['file_id' => $fileId], 15, 5);
+        $remotePath = (string) ($file['file_path'] ?? '');
+        $remoteSize = (int) ($file['file_size'] ?? 0);
+        if ($remotePath === '' || strlen($remotePath) > 512
+            || !preg_match('#\A[A-Za-z0-9_./-]+\z#D', $remotePath)
+            || str_contains($remotePath, '..')) {
+            throw new RuntimeException('Telegram trả về đường dẫn audio không hợp lệ.');
+        }
+        if ($remoteSize > $maxBytes) throw new RuntimeException('Audio vượt giới hạn tải về của HENDY AI Cover.');
+
+        $curl = curl_init('https://api.telegram.org/file/bot' . $this->token . '/' . $remotePath);
+        if ($curl === false) throw new RuntimeException('Không thể khởi tạo tải audio từ Telegram.');
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_MAXFILESIZE => $maxBytes,
+            CURLOPT_HTTPHEADER => ['Accept: audio/mpeg,audio/wav,audio/flac,audio/mp4,audio/aac,audio/ogg,application/octet-stream'],
+            CURLOPT_USERAGENT => 'HendyAICover/1.0',
+        ]);
+        $bytes = curl_exec($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($curl);
+        curl_close($curl);
+        if ($bytes === false || $status < 200 || $status >= 300) {
+            throw new RuntimeException('Không tải được audio từ Telegram (HTTP ' . $status . ')' . ($error !== '' ? ': ' . $error : '.'));
+        }
+        if (!is_string($bytes) || strlen($bytes) < 128 || strlen($bytes) > $maxBytes) {
+            throw new RuntimeException('Audio rỗng hoặc vượt giới hạn dung lượng.');
+        }
+
+        $mime = strtolower((string) ((new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes) ?: ''));
+        $mimeMap = [
+            'audio/mpeg' => 'audio/mpeg',
+            'audio/mp3' => 'audio/mpeg',
+            'audio/wav' => 'audio/wav',
+            'audio/x-wav' => 'audio/wav',
+            'audio/vnd.wave' => 'audio/wav',
+            'audio/flac' => 'audio/flac',
+            'audio/x-flac' => 'audio/flac',
+            'audio/mp4' => 'audio/mp4',
+            'audio/aac' => 'audio/aac',
+            'audio/ogg' => 'audio/ogg',
+            'application/ogg' => 'audio/ogg',
+            'application/octet-stream' => 'application/octet-stream',
+        ];
+        if (!isset($mimeMap[$mime])) throw new RuntimeException('Tệp Telegram không phải audio được hỗ trợ.');
+        $mime = $mimeMap[$mime];
+        $temporary = tempnam(sys_get_temp_dir(), 'hendy-ai-cover-input-');
+        if ($temporary === false) throw new RuntimeException('Không tạo được tệp audio tạm.');
+        if (file_put_contents($temporary, $bytes, LOCK_EX) !== strlen($bytes)) {
+            @unlink($temporary);
+            throw new RuntimeException('Không lưu được audio tạm.');
+        }
+        return ['path' => $temporary, 'mime' => $mime, 'size' => strlen($bytes)];
+    }
+
     public function downloadImageToTemp(string $fileId, int $maxBytes = 20_971_520): array
     {
         if ($fileId === '' || strlen($fileId) > 512) throw new RuntimeException('Telegram file_id không hợp lệ.');

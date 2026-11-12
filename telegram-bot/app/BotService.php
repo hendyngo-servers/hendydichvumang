@@ -2376,10 +2376,13 @@ final class BotService
 
     private function showReferral(string $chatId, string $userId): void
     {
-        $botPublicUrl = TelegramLink::normalize((string) Env::get(
-            $this->botKey === 'secondary' ? 'BOT2_PUBLIC_URL' : 'BOT1_PUBLIC_URL',
-            ''
-        ));
+        $botPublicUrl = TelegramLink::normalize((string) Env::get('BOT1_PUBLIC_URL', ''));
+        if ($botPublicUrl === '') {
+            // register-webhook.php populates this value from Telegram getMe().
+            $botPublicUrl = TelegramLink::normalize((string) Database::value(
+                "SELECT value FROM app_settings WHERE key = 'primary_bot_url'"
+            ));
+        }
         $count = (int) Database::value('SELECT COUNT(*) FROM users WHERE ref_by = ?', [$userId]);
         $reward = (int) Database::value(
             "SELECT COALESCE(SUM(amount), 0) FROM wallet_ledger WHERE user_id = ? AND transaction_type = 'REFERRAL_REWARD'",

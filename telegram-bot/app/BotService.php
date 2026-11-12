@@ -412,7 +412,7 @@ final class BotService
         $appBaseUrl = rtrim((string) (Env::get('APP_URL') ?: Env::get('RENDER_EXTERNAL_URL', '')), '/');
         $websiteUrl = trim((string) ($settings['website_url'] ?? ''));
         if (!self::isHttpsUrl($websiteUrl)) {
-            $websiteUrl = 'https://hendydichvumang.onrender.com/';
+            $websiteUrl = 'https://hendydichvumang-szad.onrender.com/';
         }
         $groupUrl = trim((string) ($settings['GROUP_URL'] ?? Env::get('GROUP_URL', 'https://t.me/Hendy_Support_Group')));
         if (!self::isHttpsUrl($groupUrl)) $groupUrl = 'https://t.me/Hendy_Support_Group';

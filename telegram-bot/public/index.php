@@ -19,6 +19,7 @@ require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/BotMenuDefinition.php';
 require dirname(__DIR__) . '/app/PaymentService.php';
 require dirname(__DIR__) . '/app/VideoJobService.php';
+require dirname(__DIR__) . '/app/CodeTelegramService.php';
 require dirname(__DIR__) . '/app/VoucherService.php';
 require dirname(__DIR__) . '/app/VipService.php';
 require dirname(__DIR__) . '/app/OperationsService.php';

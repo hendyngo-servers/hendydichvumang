@@ -239,6 +239,62 @@ final class TelegramApi
         return is_array($decoded['result'] ?? null) ? $decoded['result'] : ['value'=>$decoded['result'] ?? null];
     }
 
+    /**
+     * Resolve a Telegram file_id into a validated temporary image.
+     * The returned file is owned by the caller and must be unlinked.
+     *
+     * @return array{path:string,mime:string}
+     */
+    public function downloadImageToTemp(string $fileId, int $maxBytes = 20_971_520): array
+    {
+        if ($fileId === '' || strlen($fileId) > 512) throw new RuntimeException('Telegram file_id không hợp lệ.');
+        $file = $this->call('getFile', ['file_id' => $fileId], 15, 5);
+        $remotePath = (string)($file['file_path'] ?? '');
+        if ($remotePath === '' || strlen($remotePath) > 512
+            || !preg_match('#\A[A-Za-z0-9_./-]+\z#D', $remotePath)
+            || str_contains($remotePath, '..')) {
+            throw new RuntimeException('Telegram trả về đường dẫn ảnh không hợp lệ.');
+        }
+
+        $curl = curl_init('https://api.telegram.org/file/bot' . $this->token . '/' . $remotePath);
+        if ($curl === false) throw new RuntimeException('Không thể khởi tạo tải ảnh từ Telegram.');
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_MAXFILESIZE => $maxBytes,
+            CURLOPT_USERAGENT => 'HendyBot-Cybertech/2.1',
+        ]);
+        $bytes = curl_exec($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($curl);
+        curl_close($curl);
+        if ($bytes === false || $status < 200 || $status >= 300) {
+            throw new RuntimeException('Không tải được ảnh từ Telegram (HTTP ' . $status . ')' . ($error !== '' ? ': ' . $error : '.'));
+        }
+        if (!is_string($bytes) || strlen($bytes) < 16 || strlen($bytes) > $maxBytes) {
+            throw new RuntimeException('Ảnh vượt giới hạn dung lượng cho phép.');
+        }
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+        $imageInfo = @getimagesizefromstring($bytes);
+        if (!in_array($mime, ['image/jpeg','image/png','image/webp'], true)
+            || $imageInfo === false || ($imageInfo['mime'] ?? '') !== $mime
+            || (int)($imageInfo[0] ?? 0) < 1 || (int)($imageInfo[1] ?? 0) < 1
+            || (int)$imageInfo[0] * (int)$imageInfo[1] > 40_000_000) {
+            throw new RuntimeException('Chỉ nhận ảnh JPG, PNG hoặc WEBP hợp lệ (tối đa 40 MP).');
+        }
+        $temporary = tempnam(sys_get_temp_dir(), 'hendy-ai-input-');
+        if ($temporary === false) throw new RuntimeException('Không tạo được tệp tạm cho ảnh.');
+        if (file_put_contents($temporary, $bytes, LOCK_EX) !== strlen($bytes)) {
+            @unlink($temporary);
+            throw new RuntimeException('Không lưu được ảnh tạm.');
+        }
+        return ['path' => $temporary, 'mime' => $mime];
+    }
+
     public function answerCallback(string $callbackId, string $text = ''): void
     {
         $this->call('answerCallbackQuery', [

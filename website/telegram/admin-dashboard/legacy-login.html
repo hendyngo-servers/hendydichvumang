@@ -38,8 +38,14 @@
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ticket,scope}),cache:'no-store',credentials:'same-origin'
     });
-    const result=await response.json();
-    if(!response.ok) throw new Error(result.error||'Liên kết đã hết hạn hoặc được sử dụng.');
+    const responseText=await response.text();
+    let result={};
+    try{result=responseText?JSON.parse(responseText):{};}catch(_){throw new Error('Máy chủ xác thực trả về dữ liệu không hợp lệ. Hãy thử lại hoặc tạo link mới từ HENDY BOT.');}
+    if(!response.ok){
+      if(response.status===401) throw new Error(result.error||'Link đăng nhập đã hết hạn hoặc đã được sử dụng. Hãy quay lại HENDY BOT và tạo link mới.');
+      if(response.status===503) throw new Error(result.error||'Dịch vụ dữ liệu đang tạm thời không khả dụng. Vui lòng thử lại sau.');
+      throw new Error(result.error||'Không thể xác minh link đăng nhập.');
+    }
     state.innerHTML='<strong>✓ Đăng nhập thành công</strong><br><span class="muted">Phiên Website bảo mật đã được cấp. Đang mở HENDY…</span>';
     const profile=document.createElement('p');
     profile.textContent='Xin chào '+(result.user?.name||result.user?.username||'thành viên')+' · Telegram ID: '+(result.user?.id||'');

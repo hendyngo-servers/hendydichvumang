@@ -39,7 +39,7 @@ $telegramAuthSource = file_get_contents(dirname(__DIR__) . '/app/TelegramAuth.ph
 $schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
 $assert(str_contains($telegramAuthSource, 'ON CONFLICT (bot_key) DO UPDATE SET') && str_contains($telegramAuthSource, 'RETURNING secret_value'), 'webhook/session secrets persist using atomic PostgreSQL upserts');
 $assert(!str_contains($telegramAuthSource, 'pg_advisory_xact_lock'), 'webhook/session secret startup does not rely on multi-statement advisory-lock transactions');
-$assert(!str_contains($telegramAuthSource, '{32,256}') && str_contains($telegramAuthSource, 'char_length(telegram_webhook_secrets.secret_value) BETWEEN 32 AND 256'), 'PostgreSQL-safe secret length validation avoids unsupported regex repetition');
+$assert(str_contains($telegramAuthSource, 'char_length(telegram_webhook_secrets.secret_value) BETWEEN 32 AND 256') && str_contains($telegramAuthSource, "telegram_webhook_secrets.secret_value !~ \\\'[^A-Za-z0-9_-]\\\'"), 'PostgreSQL-safe secret validation combines character allowlist and length bounds');
 $assert(str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS website_session_secrets'), 'database schema creates the website session secret table used by authentication');
 $assert(TelegramLink::normalize('https://t.me/HendySupportGroup') === 'https://t.me/HendySupportGroup', 'chấp nhận liên kết Telegram HTTPS hợp lệ');
 $assert(TelegramLink::normalize('https://t.me/+Invite_Code-123') === 'https://t.me/+Invite_Code-123', 'chấp nhận liên kết mời Telegram');

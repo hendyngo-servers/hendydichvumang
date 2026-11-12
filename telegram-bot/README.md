@@ -122,3 +122,24 @@ Cấu hình các biến trong Render Environment của Bot:
 - `AI_MEDIA_MAX_PER_DAY=3`, `AI_MEDIA_WORKER_POLL_SECONDS=5`.
 
 Music API của ElevenLabs yêu cầu tài khoản có quyền API phù hợp; việc tạo media có thể phát sinh chi phí tại nhà cung cấp. HENDY không tự khấu trừ ví thành viên trong luồng thử nghiệm.
+
+
+## Code Telegram HENDY (tùy chọn, mặc định tắt)
+
+Phân hệ này chỉ đọc bài đăng từ Telegram channel đã được Admin kết nối và Bot chính đã xác minh quyền quản trị. Bot nhận `channel_post` và `edited_channel_post`; tin chữ được phân tích trực tiếp, video được đưa vào hàng đợi PostgreSQL để worker tải clip và OCR bằng FFmpeg/Tesseract (tiếng Việt + tiếng Anh).
+
+- Hỗ trợ nhận diện mã khuyến mãi, code game, code phần mềm, Code Tele và code màn.
+- Trùng mã đã có trong trạng thái chờ duyệt/đang phát hành/đã dùng sẽ bị bỏ qua ở nguồn khác.
+- Mã từ video luôn chờ Admin duyệt. Mã từ tin chữ cũng chờ duyệt theo mặc định; Admin có thể bật tự xuất bản riêng cho từng nguồn đã xác minh.
+- Chỉ kết quả trạng thái `active` mới hiển thị cho thành viên trong Bot qua mục **MUA LÌ XÌ - CODE MÀN - CODE TELE** hoặc lệnh `/code từ khóa`.
+- Video tải qua Bot API hosted bị giới hạn tối đa 20 MB; worker trích tối đa 24 khung hình trong 120 giây đầu, xóa tệp tạm sau OCR.
+- Admin: tab **Code Telegram** để kết nối nguồn, bật/tắt nguồn, quản lý tự xuất bản, duyệt/từ chối/đánh dấu đã dùng mã và retry OCR.
+
+### Mở tính năng
+
+1. Chạy migration additive `database/migrations/20261112_code_telegram.sql` trên database Bot `hendydichvumang` (role runtime cần grant DML như trong migration).
+2. Thêm Bot chính làm **quản trị viên** của từng channel nguồn. Chỉ cấp quyền tối thiểu cần thiết; không cần quyền xóa bài hoặc mời thành viên.
+3. Trong Render Environment của Telegram Bot, đặt `CODE_TELEGRAM_ENABLED=true` và `CODE_TELEGRAM_WORKER_ENABLED=true`. Giữ `CODE_TELEGRAM_MAX_VIDEO_BYTES=20971520` nếu dùng Telegram Bot API hosted.
+4. Mở Website Admin → **Code Telegram** → kết nối channel bằng `@username` hoặc channel ID. Mặc định để **Chờ Admin duyệt** trước khi xuất mã cho thành viên.
+
+Nếu migration chưa được áp dụng hoặc chưa bật hai biến trên, phân hệ giữ trạng thái an toàn và không đọc kênh. Không dùng user session/MTProto để vượt quyền riêng tư, không tự động tham gia kênh, và không thu thập mật khẩu, OTP đăng nhập hoặc dữ liệu cá nhân.

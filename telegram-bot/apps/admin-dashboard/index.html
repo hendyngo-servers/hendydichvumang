@@ -1471,6 +1471,39 @@
       } catch (error) { toast(error.message); paymentAction.disabled = false; }
       return;
     }
+    const codeSourceSetting = event.target.closest('[data-code-source-setting]');
+    if (codeSourceSetting) {
+      const id = Number(codeSourceSetting.dataset.id);
+      const next = codeSourceSetting.dataset.next === 'true';
+      const field = codeSourceSetting.dataset.codeSourceSetting === 'active' ? 'isActive' : 'autoPublish';
+      try {
+        await api('/api/admin/code-telegram/sources/' + id,'PATCH',{[field]:next});
+        toast(field === 'isActive' ? (next ? 'Đã bật theo dõi kênh.' : 'Đã tạm dừng kênh.') : (next ? 'Đã bật tự xuất bản mã chữ.' : 'Đã tắt tự xuất bản.'));
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
+      return;
+    }
+    const codeStatus = event.target.closest('[data-code-status]');
+    if (codeStatus) {
+      const id = Number(codeStatus.dataset.id), status = codeStatus.dataset.codeStatus;
+      if (status === 'rejected' && !window.confirm('Từ chối mã này? Mã sẽ không hiển thị cho thành viên.')) return;
+      try {
+        await api('/api/admin/code-telegram/codes/' + id,'PATCH',{status});
+        toast('Đã cập nhật trạng thái mã.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
+      return;
+    }
+    const codeRetry = event.target.closest('[data-code-post-retry]');
+    if (codeRetry) {
+      codeRetry.disabled = true;
+      try {
+        await api('/api/admin/code-telegram/posts/' + Number(codeRetry.dataset.codePostRetry) + '/retry','POST',{});
+        toast('Đã đưa bài đăng vào hàng chờ OCR.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); codeRetry.disabled = false; }
+      return;
+    }
     const videoRetry = event.target.closest('[data-video-retry]');
     if (videoRetry) {
       videoRetry.disabled = true;
@@ -1578,7 +1611,15 @@
       submitButton.disabled = true;
     }
     try {
-      if (form.id === 'admin-module-upload') {
+      if (form.id === 'admin-code-telegram-source-form') {
+        const result = await api('/api/admin/code-telegram/sources','POST',{
+          chat:String(data.chat||'').trim(),
+          title:String(data.title||'').trim(),
+          autoPublish:data.autoPublish === 'true'
+        });
+        toast(result.message || 'Đã kết nối kênh nguồn.');
+        await renderPage();
+      } else if (form.id === 'admin-module-upload') {
         const file = form.elements.file.files[0];
         if (!file) throw new Error('Chọn tệp cần tải lên.');
         const payload = new FormData(form);

@@ -12,9 +12,9 @@ final class BotService
     private const BRANDS = ['QQ88', 'HI88', '78WIN', 'RR88', 'MM88', 'GG88', 'ABCVIP', 'XX8', 'U888', 'J88', 'ABC8', '88CLB', 'AD88', 'SC88', 'C168', 'CM88', 'F8BET'];
 
     private const MINIGAME_GROUPS = [
-        'group1' => ['label' => 'Nhóm 1 · QQ88 HI88 78WIN', 'brands' => ['QQ88', 'HI88', '78WIN']],
-        'group2' => ['label' => 'Nhóm 2 · RR88 MM88 GG88', 'brands' => ['RR88', 'MM88', 'GG88']],
-        'group3' => ['label' => 'Nhóm 3 · [ABCVIP] XX8 U888 J88 ABC8 88CLB', 'brands' => ['ABCVIP', 'XX8', 'U888', 'J88', 'ABC8', '88CLB']],
+        'group1' => ['label' => 'QQ88 HI88 78WIN', 'brands' => ['QQ88', 'HI88', '78WIN']],
+        'group2' => ['label' => 'RR88 MM88 GG88', 'brands' => ['RR88', 'MM88', 'GG88']],
+        'group3' => ['label' => '[ABCVIP] XX8 U888 J88 ABC8 88CLB', 'brands' => ['ABCVIP', 'XX8', 'U888', 'J88', 'ABC8', '88CLB']],
     ];
 
 

@@ -25,6 +25,14 @@ else
     echo "RUN_MIGRATIONS_ON_START=false; bỏ qua migration lúc khởi động."
 fi
 
+# Register only the production bot. The script persists/reuses the webhook secret,
+# sets the HTTPS endpoint and verifies Telegram's getWebhookInfo response.
+if [[ "${WEBHOOK_AUTO_REGISTER:-true}" == "true" ]]; then
+    php bin/register-webhook.php
+else
+    echo "WEBHOOK_AUTO_REGISTER=false; bỏ qua đăng ký webhook tự động."
+fi
+
 # Start independent workers only when explicitly enabled. All secrets are read from
 # Render Environment; they are never passed on command lines or printed to logs.
 background_pids=()

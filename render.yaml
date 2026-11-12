@@ -1,5 +1,5 @@
 # HENDY production: one public Static Site and one primary Telegram Bot.
-# Secrets (BOT1_TOKEN, ADMIN_ID, DATABASE_URL and provider credentials) stay in Render Environment.
+# Secrets (BOT1_TOKEN, ADMIN_ID, DATABASE_URL, HOMEPROXY_ENCRYPTION_KEY and provider credentials) stay in Render Environment.
 services:
   - type: web
     name: hendydichvumang

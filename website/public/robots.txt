@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
-Sitemap: https://hendydichvumang-static-site.onrender.com/sitemap.xml
+Sitemap: https://hendydichvumang.onrender.com/sitemap.xml

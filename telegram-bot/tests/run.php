@@ -19,6 +19,7 @@ require dirname(__DIR__) . '/app/OperationsService.php';
 require dirname(__DIR__) . '/app/ProxyService.php';
 
 use Hendy\VideoJobService;
+use Hendy\CodeTelegramService;
 use Hendy\TelegramAuth;
 use Hendy\TelegramLink;
 use Hendy\BotMenuDefinition;

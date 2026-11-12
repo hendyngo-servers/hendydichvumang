@@ -7,18 +7,21 @@ on:
 permissions:
   contents: read
 jobs:
-  website-php:
-    name: Website PHP lint
+  static-website:
+    name: Static Website validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, fileinfo, pdo_mysql, pdo_pgsql, curl, gd
-          coverage: none
-      - name: Lint website PHP
-        run: find . -type f -name '*.php' -not -path './telegram-bot/*' -print0 | xargs -0 -r -n1 php -l
+      - name: Validate published assets
+        run: |
+          test -s website/public/index.html
+          test -s website/public/healthz.html
+          test -s website/public/robots.txt
+          test -s website/public/sitemap.xml
+          ! find website/public -type f -name '*.php' | grep .
+          ! find website/public -type f \( -name '*.env' -o -name '*.sql' -o -name '*.pem' -o -name '*.key' \) | grep .
+          grep -q 'HENDY DIGITAL' website/public/index.html
+          grep -q 'hendydichvumang-telegram-bot.onrender.com/admin' website/public/index.html
   telegram-bot:
     name: Telegram Bot lint and tests
     runs-on: ubuntu-latest

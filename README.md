@@ -1,39 +1,25 @@
-# HENDY Digital Ecosystem
+# HENDY DIGITAL ECOSYSTEM
 
-HENDY uses one canonical Website application source directory: **`website/`**.
+Production monorepo: one Telegram Bot backend and one public Static Website.
 
-## Website architecture
+## Website
+- All public Website source: `website/public/` — static HTML, CSS/JS, SVG, JSON and SEO files only.
+- Render Static Site: `hendydichvumang-static-site`, publishes `website/public` through the CDN.
+- Tabs: Trang chủ, App Store, Dịch vụ mạng, AI Studio, Code Telegram, Giới thiệu.
+- Public navigation intentionally does not show Trung tâm khách hàng.
+- The Website never connects directly to PostgreSQL and does not process payments or store credentials.
+- Catalog prices, stock, orders and payment flows remain in the Telegram Bot.
+- Admin entry: `https://hendydichvumang-telegram-bot.onrender.com/admin`, protected by Telegram Admin authentication.
 
-- `website/app-store/`: Website home, App Store, application/game details, network services, Website Admin, login/register, shared PHP includes, CSS and uploads.
-- `website/telegram/admin-dashboard/`: Telegram Bot Admin interface source. It is served only by authenticated Bot route `/admin`.
-- `website/telegram/customer-center/`: Telegram Customer/Mini App interface source. It is served by Bot routes `/customer` and `/miniapp`; it is deliberately not listed in public Website navigation.
-- `website/healthz.php`: Website Render health endpoint.
-- `website/.htaccess`: canonical Website routing and private source protection.
+## Telegram Bot
+- One primary Bot; backend, webhook, API, workers and PostgreSQL remain in `telegram-bot/`.
+- Admin/Customer HTML is stored in `website/telegram/` and copied by the Bot Docker build to a location outside the Bot public document root. It is not inside `website/public`, so the Static Site cannot publish those files.
+- Bot account data, wallets, ledger, transactions, orders, Code Telegram and AI Cover remain in the separate Bot database.
 
-Legacy public routes remain available: `/app_store/`, `/admin.php`, `/detail.php`, `/dichvumang.php`, `/login.php`, `/register.php`, `/admin-products.php`, `/admin-users.php`, and `/admin-system.php`. They are rewritten into `website/app-store/`.
+## Render
+- `hendydichvumang-static-site`: public Static Site.
+- `hendydichvumang-website`: temporary Nginx static fallback during CDN verification.
+- `hendydichvumang-telegram-bot`: PHP API/webhook and workers.
 
-The Website DocumentRoot is `/var/www/html/website`. The top-level `Dockerfile` is deployment infrastructure; Website application code is under `website/`.
-
-## Services
-
-| Component | Render service | Runtime | Database |
-|---|---|---|---|
-| Website, App Store, Network Services, Website Admin | hendydichvumang-website | PHP 8.3 / Apache | Neon `hendydichvumang_website` |
-| One Telegram Bot, webhook, API, Telegram Admin/Customer UI | hendydichvumang-telegram-bot | PHP 8.3 / Apache | Neon `hendydichvumang` |
-
-The Bot Docker context is the repository root so it can copy `website/telegram/*` to `/var/www/website/`, outside the Bot's public DocumentRoot. The Bot root/marketing/legal routes redirect to the canonical Website; authenticated Bot Admin and Customer routes remain served by the Bot backend.
-
-Website and Bot PostgreSQL databases remain separate. Website passwords, Telegram IDs, balances, wallets and histories are not inferred or silently merged. Cross-account linking requires a verified identity flow.
-
-## AI Cover integration
-
-The primary Telegram Bot has a native PHP service and additive PostgreSQL schema for AI Cover. The AI inference worker is isolated from the webhook process and uses the private Neon Object Storage signer. The service stays disabled until the additive migration, worker service, callback secret and at least one authorized voice model are configured. Voice models must have documented license and owner consent; no pretrained or third-party model is bundled.
-
-## Data preservation
-
-- Website schema: `database/website-postgresql.sql`
-- App Store and Network Services migration: `website/app-store/database.postgresql.sql`
-- Bot schema: `telegram-bot/database/schema.sql`
-- Additive feature migrations: `telegram-bot/database/migrations/`
-
-No application tables or member balances are merged or dropped as part of the source-folder consolidation.
+## Website PostgreSQL cleanup
+The old Website database is Neon project `calm-forest-79251169`, database `hendydichvumang_website`. A recovery branch `pre-static-website-20261113` was created before cleanup. Current row counts: `users=1`; `products=0`; `screenshots=0`; `apps=0`; `app_screenshots=0`; `network_services=0`. The single user row is retained pending confirmation because deleting it also removes the Website Admin account. The Telegram Bot database is separate and is not part of this cleanup.

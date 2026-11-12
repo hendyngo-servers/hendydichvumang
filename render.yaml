@@ -1,11 +1,5 @@
-# HENDY monorepo Blueprint: adopt the existing two Render web services.
-# Service names intentionally match the current Render resources. Do not rename.
-# Neon PostgreSQL remains externally managed and is not replaced by Render Postgres.
-# Secrets and account-specific settings (DATABASE_URL, NEON_STORAGE_FUNCTION_KEY,
-# BOT1_TOKEN, ADMIN_ID(S), HOMEPROXY_ENCRYPTION_KEY, bank/account details) stay in
-# the existing Render Environment. They are intentionally omitted here: Render
-# preserves existing env vars omitted from a Blueprint, avoiding secret re-entry.
-# Runtime is intentionally single-bot; only the primary token is read.
+# HENDY: one primary Telegram Bot, one static public Website and a temporary static fallback.
+# Secrets stay in the existing Render Environment and are never committed here.
 services:
   - type: web
     name: hendydichvumang-website
@@ -15,13 +9,29 @@ services:
     branch: main
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /healthz.php
+    healthCheckPath: /healthz.html
     autoDeployTrigger: checksPass
-    envVars:
-      - key: DATABASE_SSL
-        value: "true"
-      - key: NEON_STORAGE_FUNCTION_URL
-        value: "https://br-wild-cell-az3siwry-hendystorage.compute.c-3.ap-southeast-1.aws.neon.tech"
+
+  - type: web
+    name: hendydichvumang-static-site
+    runtime: static
+    branch: main
+    buildCommand: echo "HENDY Static Site - no build step"
+    staticPublishPath: ./website/public
+    autoDeployTrigger: checksPass
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
 
   - type: web
     name: hendydichvumang-telegram-bot
@@ -37,7 +47,7 @@ services:
       - key: APP_ENV
         value: production
       - key: WEBSITE_PUBLIC_URL
-        value: "https://hendydichvumang-website.onrender.com"
+        value: https://hendydichvumang-static-site.onrender.com
       - key: PORT
         value: "10000"
       - key: RUN_MIGRATIONS_ON_START

@@ -25,7 +25,10 @@ if ($token === '') {
     throw new RuntimeException('BOT1_TOKEN chưa được cấu hình; không thể đăng ký webhook.');
 }
 
-$baseUrl = rtrim(trim((string) (Env::get('APP_URL') ?: Env::get('RENDER_EXTERNAL_URL', ''))), '/');
+// Prefer Render's service-owned public domain so the bot webhook cannot
+// accidentally point at the separate Website service through a stale APP_URL.
+$renderUrl = trim((string) Env::get('RENDER_EXTERNAL_URL', ''));
+$baseUrl = rtrim($renderUrl !== '' ? $renderUrl : trim((string) Env::get('APP_URL', '')), '/');
 $parts = $baseUrl !== '' ? parse_url($baseUrl) : false;
 if (
     !is_array($parts)

@@ -102,3 +102,22 @@ GitHub Actions chạy lint/test Bot, lint PHP Website và test Neon Function.
 - Website và Bot dùng hai Neon database/role riêng. Không tự đồng bộ số dư, đơn hàng hoặc hồ sơ tài khoản giữa hai database.
 
 Nếu Bot Token cũ từng bị commit, hãy thu hồi token tại BotFather, tạo token mới và cập nhật `BOT1_TOKEN` trong Render; chỉ xóa file khỏi commit mới không xóa token khỏi Git history.
+
+
+## AI Media (tùy chọn, mặc định tắt)
+
+Hai mục menu **TẠO ÂM NHẠC AI** và **CHỈNH SỬA ẢNH AI** dùng hàng đợi PostgreSQL và worker riêng để webhook Telegram không chờ tác vụ tạo media.
+
+- Âm nhạc: ElevenLabs Music API, mặc định model `music_v2_5`, clip thử nghiệm 30 giây.
+- Chỉnh ảnh: OpenAI Images Edit API, mặc định model `gpt-image-2.5-sunburst`; thành viên gửi ảnh rồi mô tả chỉnh sửa.
+- Giới hạn mặc định: tối đa 1 tác vụ đang chạy và 3 tác vụ mỗi tài khoản trong ngày Việt Nam. Không trừ ví trong bản thử nghiệm này.
+- Tệp ảnh đầu vào chỉ được tải về tạm thời từ Telegram, kiểm tra loại ảnh/kích thước rồi xóa sau khi xử lý. Tệp kết quả cũng được xóa sau khi gửi.
+- Bảng `ai_media_jobs` là migration bổ sung; không tự tạo bảng ở runtime. Worker chỉ chạy khi `AI_MEDIA_QUEUE_ENABLED=true`, migration đã được áp dụng và API key tương ứng đã có.
+
+Cấu hình các biến trong Render Environment của Bot:
+- `AI_MEDIA_QUEUE_ENABLED=false` (chỉ bật sau migration và khi đã cấu hình provider).
+- `OPENAI_API_KEY`, `ELEVENLABS_API_KEY`: secrets; không commit và không nhập qua Telegram.
+- `OPENAI_IMAGE_MODEL=gpt-image-2.5-sunburst`, `ELEVENLABS_MUSIC_MODEL=music_v2_5`.
+- `AI_MEDIA_MAX_PER_DAY=3`, `AI_MEDIA_WORKER_POLL_SECONDS=5`.
+
+Music API của ElevenLabs yêu cầu tài khoản có quyền API phù hợp; việc tạo media có thể phát sinh chi phí tại nhà cung cấp. HENDY không tự khấu trừ ví thành viên trong luồng thử nghiệm.

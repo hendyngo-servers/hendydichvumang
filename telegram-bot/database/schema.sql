@@ -216,6 +216,8 @@ WHERE key = 'website_url'
       'https://lethituanem.com',
       'https://hendy-bot-tele.onrender.com',
       'https://hendy-bot-cybertech.onrender.com',
+      'https://hendy-bot-cybertech-1.onrender.com',
+      'https://hendy-bot-cybertech-1.onrender.com/',
       'https://hendydichvumang-telegram-bot.onrender.com/'
   );
 

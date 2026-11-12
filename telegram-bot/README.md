@@ -15,7 +15,7 @@
 
 ## Menu Telegram và liên kết bot công khai
 
-Menu cố định dùng Reply Keyboard hai cột theo ảnh mẫu: MiniGame/OTP & Proxy; Nạp tiền/Trung tâm VIP; Mua Lì Xì - Code Màn - Code Tele; Trung tâm khách hàng; Nhóm chat/Kênh thông báo; VIP dịch vụ sắp triển khai. Các nút đều có action định danh; nhóm và kênh sẽ mở liên kết đã cấu hình, còn nút VIP sắp triển khai chỉ hiển thị thông báo và nút quay lại.
+Menu cố định dùng Inline Keyboard theo bố cục HENDY: MiniGame/OTP & Proxy; Nạp tiền/Trung tâm VIP; Mua Lì Xì - Code Màn - Code Tele; Trung tâm khách hàng; Nhóm chat/Kênh thông báo; VIP dịch vụ sắp triển khai. Các nút đều có action định danh; nhóm và kênh sẽ mở liên kết đã cấu hình, còn nút VIP sắp triển khai chỉ hiển thị thông báo và nút quay lại.
 
 Liên kết Telegram công khai được khai báo tường minh bằng `BOT1_PUBLIC_URL`, ví dụ `https://t.me/your_bot_username`. Backend chỉ chấp nhận URL HTTPS thuộc `t.me`/`telegram.me`; không suy đoán username, không gọi Telegram `getMe()` để tạo URL và không gửi Bot Token ra trình duyệt. Nếu chưa khai báo URL, website hiển thị hướng dẫn liên hệ CSKH thay vì thông báo đồng bộ giả.
 
@@ -41,7 +41,7 @@ Tạo secret ngẫu nhiên:
 
     php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
 
-Mỗi bot phải có token và webhook secret riêng. Secret tự sinh được lưu bền vững để dùng lại sau restart; việc xoay vòng BOT1 không thay đổi secret BOT2. Có thể cấu hình override thủ công trong Render Environment nhưng không bắt buộc.
+Production chỉ bật BOT1. Codebase vẫn giữ khả năng tương thích với bot phụ cũ, nhưng không khai báo BOT2_TOKEN/BOT2_PUBLIC_URL ở service hiện tại. Webhook secret của BOT1 có thể để Render tự tạo; secret được giữ an toàn phía máy chủ và không đưa vào trình duyệt.
 
 ## Triển khai Render
 
@@ -56,7 +56,7 @@ Với Render PostgreSQL nội bộ, đặt DATABASE_SSL=false nếu connection s
 
 ## Website, Mini App và API
 
-Trang chủ công khai được tách khỏi ứng dụng thành viên và Admin. Giao diện giới thiệu dùng CSS/JS tự host trong `public/assets/`, không phụ thuộc Tailwind CDN, Font Awesome CDN hoặc Google Fonts CDN. `/customer` tiếp tục phục vụ Trung tâm khách hàng; `/admin` dùng Dashboard Pro mới. Liên kết bot được khai báo thủ công bằng `BOT1_PUBLIC_URL`/`BOT2_PUBLIC_URL`; trình duyệt không nhận Bot Token.
+Trang chủ công khai được tách khỏi ứng dụng thành viên và Admin. Giao diện giới thiệu dùng CSS/JS tự host trong `public/assets/`, không phụ thuộc Tailwind CDN, Font Awesome CDN hoặc Google Fonts CDN. `/customer` tiếp tục phục vụ Trung tâm khách hàng; `/admin` dùng Dashboard Pro mới. Liên kết bot được khai báo bằng `BOT1_PUBLIC_URL`; trình duyệt không nhận Bot Token.
 
 ### Trải nghiệm Telegram Mini App
 
@@ -104,7 +104,7 @@ Trang chủ công khai được tách khỏi ứng dụng thành viên và Admin
 | Video provider callback | `/webhook/video` |
 | Bank callback (mặc định khóa) | `/webhook/bank` |
 
-Liên kết bot chính/phụ đọc từ `BOT1_PUBLIC_URL` và `BOT2_PUBLIC_URL`; cộng đồng, kênh và hỗ trợ đọc từ `GROUP_URL`, `CHANNEL_URL`, `SUPPORT_URL`. Backend chỉ công khai URL HTTPS thuộc Telegram (`t.me`/`telegram.me`); URL khác bị loại bỏ. Khai báo các biến này tại Render Environment.
+Liên kết Bot chính đọc từ `BOT1_PUBLIC_URL`; cộng đồng, kênh và hỗ trợ đọc từ `GROUP_URL`, `CHANNEL_URL`, `SUPPORT_URL`. Backend chỉ công khai URL HTTPS thuộc Telegram (`t.me`/`telegram.me`); URL khác bị loại bỏ. Khai báo các biến này tại Render Environment.
 
 ## Kiểm tra trước khi deploy
 
@@ -129,8 +129,8 @@ GitHub Actions kiểm tra cú pháp PHP, test logic, quét credential bị commi
 ### Nếu token từng bị commit
 
 1. Mở @BotFather, thu hồi token cũ và tạo token mới cho từng bot.
-2. Cập nhật BOT1_TOKEN/BOT2_TOKEN trong Render Environment và GitHub Secrets (nếu workflow cần).
-3. Khi token bot bị lộ hoặc thay đổi, xoay vòng token trong BotFather và cập nhật `BOT1_TOKEN`/`BOT2_TOKEN`. Ứng dụng tự tạo secret webhook ngẫu nhiên mới cho bot tương ứng và gọi `setWebhook`; không cần sao chép secret vào source code.
+2. Cập nhật BOT1_TOKEN trong Render Environment và GitHub Secrets (nếu workflow cần).
+3. Khi token BOT1 bị lộ hoặc thay đổi, thu hồi trong BotFather và cập nhật `BOT1_TOKEN`. Ứng dụng tự tạo hoặc sử dụng webhook secret an toàn mới và gọi `setWebhook`; không cần sao chép secret vào source code.
 4. Xem xét làm sạch lịch sử Git bằng git-filter-repo/BFG sau khi phối hợp với mọi collaborator; force-push có thể ảnh hưởng các clone đang tồn tại.
 5. Kiểm tra lại repo và log; không coi việc xóa token khỏi file mới là đã xóa khỏi Git history.
 

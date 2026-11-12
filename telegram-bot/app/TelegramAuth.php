@@ -53,7 +53,7 @@ final class TelegramAuth
             'secret_value = CASE ' .
             'WHEN telegram_webhook_secrets.token_fingerprint = EXCLUDED.token_fingerprint ' .
             'AND telegram_webhook_secrets.override_fingerprint = EXCLUDED.override_fingerprint ' .
-            'AND telegram_webhook_secrets.secret_value ~ \'^[A-Za-z0-9_-]{32,256}$\' ' .
+            'AND char_length(telegram_webhook_secrets.secret_value) BETWEEN 32 AND 256 AND telegram_webhook_secrets.secret_value !~ \'[^A-Za-z0-9_-]\' ' .
             'THEN telegram_webhook_secrets.secret_value ELSE EXCLUDED.secret_value END, ' .
             'override_fingerprint = EXCLUDED.override_fingerprint, updated_at = NOW() ' .
             'RETURNING secret_value',
@@ -89,7 +89,7 @@ final class TelegramAuth
             'INSERT INTO website_session_secrets (bot_key, secret_value) VALUES (?, ?) ' .
             'ON CONFLICT (bot_key) DO UPDATE SET ' .
             'secret_value = CASE ' .
-            'WHEN website_session_secrets.secret_value ~ \'^[A-Za-z0-9_-]{32,256}$\' ' .
+            'WHEN char_length(website_session_secrets.secret_value) BETWEEN 32 AND 256 AND website_session_secrets.secret_value !~ \'[^A-Za-z0-9_-]\' ' .
             'THEN website_session_secrets.secret_value ELSE EXCLUDED.secret_value END, ' .
             'updated_at = NOW() RETURNING secret_value',
             [$key, $candidate]

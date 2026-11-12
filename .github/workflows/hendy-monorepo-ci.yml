@@ -1,0 +1,51 @@
+name: HENDY monorepo CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  website-php:
+    name: Website PHP lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, fileinfo, pdo_mysql, gd
+          coverage: none
+      - name: Lint website PHP
+        run: |
+          find . -type f -name '*.php' -not -path './telegram-bot/*' -print0 | xargs -0 -r -n1 php -l
+
+  telegram-bot:
+    name: Telegram Bot lint and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-bot
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring, pdo, pdo_pgsql
+          coverage: none
+      - name: Validate Composer manifest
+        run: composer validate --no-check-publish
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: PHP lint
+        run: composer lint
+      - name: Unit tests
+        run: composer test
+      - name: Scan source for committed secrets
+        run: php scripts/secret-scan.php

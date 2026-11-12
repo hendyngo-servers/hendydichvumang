@@ -13,3 +13,15 @@ function is_admin():bool{return(current_user()['role']??'')==='admin';}
 function store_screenshot(array $f):?string{if(($f['error']??UPLOAD_ERR_NO_FILE)===UPLOAD_ERR_NO_FILE)return null;if(($f['error']??0)!==UPLOAD_ERR_OK)throw new RuntimeException('Tải ảnh lên thất bại.');if(($f['size']??0)>5242880)throw new RuntimeException('Mỗi ảnh tối đa 5 MB.');$mime=(new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']);$types=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','image/gif'=>'gif'];if(!isset($types[$mime])||@getimagesize($f['tmp_name'])===false)throw new RuntimeException('Chỉ nhận ảnh JPG, PNG, WEBP hoặc GIF hợp lệ.');$dir=__DIR__.'/../uploads/screenshots';if(!is_dir($dir)&&!mkdir($dir,0755,true))throw new RuntimeException('Không tạo được thư mục ảnh.');$n=bin2hex(random_bytes(16)).'.'.$types[$mime];if(!move_uploaded_file($f['tmp_name'],$dir.'/'.$n))throw new RuntimeException('Không lưu được ảnh.');return'uploads/screenshots/'.$n;}
 function delete_local_image(?string $p):void{if(!$p||!str_starts_with($p,'uploads/screenshots/'))return;$b=realpath(__DIR__.'/../uploads/screenshots');$f=realpath(__DIR__.'/../'.$p);if($b&&$f&&str_starts_with($f,$b.DIRECTORY_SEPARATOR)&&is_file($f))@unlink($f);}
 $ae=envv('ADMIN_EMAIL');$ap=envv('ADMIN_PASSWORD');if($ae&&$ap&&filter_var($ae,FILTER_VALIDATE_EMAIL)&&(int)$pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn()===0){$s=$pdo->prepare("INSERT INTO users(name,email,password,role) VALUES(?,?,?,'admin')");$s->execute(['HENDY Administrator',strtolower($ae),password_hash($ap,PASSWORD_DEFAULT)]);}
+
+function telegram_bot_url():?string{
+    $url=trim((string)envv('TELEGRAM_BOT_URL',''));
+    if($url==='')return null;
+    $parts=parse_url($url);
+    if(!is_array($parts)
+        || strtolower((string)($parts['scheme']??''))!=='https'
+        || !in_array(strtolower((string)($parts['host']??'')),['t.me','telegram.me'],true)
+        || isset($parts['user'])||isset($parts['pass'])
+        || empty($parts['path'])||trim((string)$parts['path'],'/')==='')return null;
+    return $url;
+}

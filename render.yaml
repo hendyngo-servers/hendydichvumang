@@ -1,0 +1,59 @@
+# Blueprint chỉ tạo service Telegram Bot riêng.
+# Website ở repository root tiếp tục dùng Web Service/MySQL hiện tại.
+services:
+  - type: web
+    name: hendydichvumang-telegram-bot
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    rootDir: telegram-bot
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: RUN_MIGRATIONS_ON_START
+        value: "true"
+      - key: DB_STARTUP_WAIT_SECONDS
+        value: "120"
+      - key: WEBHOOK_AUTO_REGISTER
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: BOT1_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: BOT1_PUBLIC_URL
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: HOMEPROXY_ENCRYPTION_KEY
+        sync: false
+      - key: BANK_WEBHOOK_ENABLED
+        value: "false"
+      - key: WEBSOCKET_ENABLED
+        value: "false"
+      - key: TELEGRAM_INIT_DATA_MAX_AGE_SECONDS
+        value: "3600"
+      - key: VIETQR_BANK_ID
+        sync: false
+      - key: VIETQR_ACCOUNT_NO
+        sync: false
+      - key: VIETQR_ACCOUNT_NAME
+        sync: false
+      - key: GROUP_URL
+        sync: false
+      - key: CHANNEL_URL
+        sync: false
+      - key: SUPPORT_URL
+        sync: false

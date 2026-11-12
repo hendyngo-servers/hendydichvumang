@@ -31,7 +31,7 @@ final class CodeTelegramService
 
         $text = trim((string) ($message['text'] ?? ''));
         $caption = trim((string) ($message['caption'] ?? ''));
-        $combined = trim(implode("\n\n", array_filter([$text, $caption], static fn(string $value): bool => $value !== ''));
+        $combined = trim(implode("\n\n", array_filter([$text, $caption], static fn(string $value): bool => $value !== '')));
 
         $media = null;
         if (is_array($message['video'] ?? null)) {

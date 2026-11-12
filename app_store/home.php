@@ -19,7 +19,7 @@ $pageTitle='HENDY | Kho ứng dụng & dịch vụ';$layout='website'; $activeMe
 <article class="product-card"><a class="product-cover" href="/detail.php?id=<?=(int)$product['id']?>">
 <?php if($cover!==''): ?><img src="<?=e($cover)?>" alt="<?=e($product['title'])?>" loading="lazy"><?php else: ?><div class="cover-placeholder">HENDY ✦</div><?php endif;?>
 <span class="category-tag"><?=e($product['category']?:'Dịch vụ')?></span></a>
-<div class="product-info"><h3><a href="detail.php?id=<?=(int)$product['id']?>"><?=e($product['title'])?></a></h3><p><?=e(mb_strimwidth(strip_tags($product['description']),0,125,'…','UTF-8'))?></p>
-<div class="product-bottom"><strong><?=e($product['price']?:'Liên hệ')?></strong><a href="detail.php?id=<?=(int)$product['id']?>">Chi tiết →</a></div></div></article><?php endforeach;?></div>
+<div class="product-info"><h3><a href="/detail.php?id=<?=(int)$product['id']?>"><?=e($product['title'])?></a></h3><p><?=e(mb_strimwidth(strip_tags($product['description']),0,125,'…','UTF-8'))?></p>
+<div class="product-bottom"><strong><?=e($product['price']?:'Liên hệ')?></strong><a href="/detail.php?id=<?=(int)$product['id']?>">Chi tiết →</a></div></div></article><?php endforeach;?></div>
 <?php if(!$products): ?><div class="empty-state"><div>✦</div><h3>Chưa có sản phẩm phù hợp</h3><p>Hãy thử từ khóa hoặc danh mục khác.</p></div><?php endif;?>
 <?php require __DIR__.'/includes/footer.php';?>

@@ -182,6 +182,9 @@ function screenshot_url(?string $path): string
         try { return $cache[$path] = (string) neon_storage_request('download', $path)['url']; }
         catch (Throwable $error) { error_log('Neon screenshot URL failed: ' . $error->getMessage()); return ''; }
     }
+    // The public home page now lives under /app_store/, while legacy website
+    // screenshots remain in the root /uploads directory.
+    if (str_starts_with($path, 'uploads/screenshots/')) return $cache[$path] = '/' . $path;
     return $path;
 }
 

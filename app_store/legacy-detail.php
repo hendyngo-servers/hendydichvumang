@@ -8,7 +8,7 @@ if (!$id || $id < 1) {
     http_response_code(404);
     $pageTitle = 'Không tìm thấy sản phẩm | HENDY';
     $layout='website'; require __DIR__ . '/includes/header.php';
-    echo '<section class="empty-state"><h2>Không tìm thấy sản phẩm</h2><a href="index.php">Quay lại trang chủ</a></section>';
+    echo '<section class="empty-state"><h2>Không tìm thấy sản phẩm</h2><a href="/">Quay lại trang chủ</a></section>';
     require __DIR__ . '/includes/footer.php';
     exit;
 }
@@ -20,6 +20,7 @@ $product = $stmt->fetch();
 if (!$product) {
     http_response_code(404);
     $pageTitle = 'Không tìm thấy sản phẩm | HENDY';
+    $layout = 'website';
     require __DIR__ . '/includes/header.php';
     echo '<section class="empty-state"><h2>Không tìm thấy sản phẩm</h2><a href="index.php">Quay lại trang chủ</a></section>';
     require __DIR__ . '/includes/footer.php';
@@ -39,6 +40,7 @@ $externalUrlIsSafe = is_array($externalParts)
     && !isset($externalParts['pass']);
 
 $pageTitle = (string)$product['title'] . ' | HENDY Cybertech';
+$layout = 'website';
 require __DIR__ . '/includes/header.php';
 ?>
 <a class="back-link" href="index.php">← Quay lại kho sản phẩm</a>

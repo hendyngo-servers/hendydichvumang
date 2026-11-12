@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 require dirname(__DIR__) . '/app/Env.php';
+require dirname(__DIR__) . '/app/NeonStorage.php';
+require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/TelegramAuth.php';
 require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/BotMenuDefinition.php';
@@ -94,6 +96,10 @@ $runtimeWorkflow = file_get_contents($repoRoot . '/.github/workflows/hendy-monor
 $sitemapSource = file_get_contents(dirname(__DIR__) . '/public/sitemap.xml');
 $robotsSource = file_get_contents(dirname(__DIR__) . '/public/robots.txt');
 $databaseSchema = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
+$neonStorageSource = file_get_contents(dirname(__DIR__) . '/app/NeonStorage.php');
+$moduleRegistrySource = file_get_contents(dirname(__DIR__) . '/app/ModuleRegistry.php');
+$neonFunctionSource = file_get_contents($repoRoot . '/neon-functions/hendystorage/index.mjs');
+$neonConfigSource = file_get_contents($repoRoot . '/neon.ts');
 $deployScript = file_get_contents(dirname(__DIR__) . '/scripts/deploy-verify-render.sh');
 $syncScript = file_get_contents(dirname(__DIR__) . '/scripts/sync-render-env.sh');
 $websiteDbBootstrap = file_get_contents($repoRoot . '/includes/db.php');
@@ -109,6 +115,10 @@ $assert(str_contains($deployScript, '${APP_URL:?') && str_contains($syncScript, 
 $assert(str_contains($botServiceSource, $productionHost) && !str_contains($botServiceSource, 'https://hendy-bot-cybertech-1.onrender.com'), 'Bot welcome links fall back to the new Render service');
 $assert(str_contains($websiteDbBootstrap, 'mysql:host=') && str_contains($websiteDbBootstrap, 'function telegram_bot_url()'), 'Website keeps MySQL and validates the public Telegram URL');
 $assert(str_contains($websiteHeader, 'Telegram Bot ↗'), 'Website navigation links to the Bot without exposing a token');
+$assert(str_contains($moduleRegistrySource, 'NeonStorage::uploadFile') && str_contains($moduleRegistrySource, 'sha256'), 'module uploads use private Neon Object Storage and preserve SHA-256 validation');
+$assert(str_contains($neonStorageSource, 'NEON_STORAGE_FUNCTION_KEY') && str_contains($neonStorageSource, 'CURLOPT_SSL_VERIFYPEER'), 'storage signing key stays server-side and HTTPS verification remains enabled');
+$assert(str_contains($neonFunctionSource, 'timingSafeEqual') && str_contains($neonFunctionSource, "const BUCKET = 'uploads'"), 'Neon Function authenticates internal requests and restricts uploads to private bucket');
+$assert(str_contains($neonConfigSource, 'realtime: true') && str_contains($neonConfigSource, 'hendystorage'), 'Neon config declares Function, Object Storage and Realtime');
 $webhookSecret = 'sample-webhook-secret-for-tests-000001';
 $assert(WebhookSecurity::verifySecret($webhookSecret, $webhookSecret), 'webhook secret đúng được chấp nhận');
 $assert(!WebhookSecurity::verifySecret($webhookSecret, 'wrong-webhook-secret-for-tests-000001'), 'webhook secret sai bị từ chối');

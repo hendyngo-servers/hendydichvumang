@@ -25,6 +25,7 @@ require dirname(__DIR__) . '/app/OperationsService.php';
 require dirname(__DIR__) . '/app/ProxyService.php';
 require dirname(__DIR__) . '/app/BotService.php';
 require dirname(__DIR__) . '/app/Realtime.php';
+require dirname(__DIR__) . '/app/NeonStorage.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/WebServiceContract.php';
 require dirname(__DIR__) . '/app/WebServiceKernel.php';

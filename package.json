@@ -1,0 +1,12 @@
+{
+  "name": "hendydichvumang-neon-runtime",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node --check neon-functions/hendystorage/index.mjs && tsc -p tsconfig.json",
+    "test": "node --test tests/neon-storage-function.test.mjs"
+  },
+  "dependencies": { "@neon/config": "^1.13.0" },
+  "devDependencies": { "typescript": "^5.8.0" }
+}

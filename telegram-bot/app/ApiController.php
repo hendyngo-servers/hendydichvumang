@@ -526,11 +526,23 @@ final class ApiController
                  FROM code_telegram_posts p JOIN code_telegram_sources s ON s.id = p.source_id
                  ORDER BY p.created_at DESC LIMIT 50"
             );
+            $requests = Database::all(
+                "SELECT a.id AS account_id, a.request_id, a.username, a.status AS account_status,
+                        a.code_value, a.charged_amount, a.result_note, a.created_at,
+                        r.user_id, r.service_name_snapshot, r.brand_snapshot, r.code_type_snapshot,
+                        r.price_min_snapshot, r.price_max_snapshot, r.status AS request_status
+                 FROM code_telegram_request_accounts a
+                 JOIN code_telegram_requests r ON r.id = a.request_id
+                 ORDER BY CASE a.status WHEN 'queued' THEN 0 WHEN 'processing' THEN 1 ELSE 2 END,
+                          a.created_at DESC
+                 LIMIT 200"
+            );
             return self::response([
                 'enabled' => CodeTelegramService::enabled(),
                 'sources' => $sources,
                 'codes' => $codes,
                 'posts' => $posts,
+                'requests' => $requests,
                 'stats' => [
                     'sources' => (int) Database::value('SELECT COUNT(*) FROM code_telegram_sources'),
                     'activeSources' => (int) Database::value('SELECT COUNT(*) FROM code_telegram_sources WHERE is_active = TRUE'),
@@ -610,6 +622,133 @@ final class ApiController
             $this->audit('code_telegram.code.' . $status, (string) $codeMatch[1], ['code' => (string) $code['code_value']]);
             Realtime::publish('admin.code_telegram.changed', ['codeId' => (int) $codeMatch[1]], 'admin');
             return self::response(['code' => $code, 'message' => 'Đã cập nhật trạng thái mã.']);
+        }
+
+        if (preg_match('#^/api/admin/code-telegram/accounts/([0-9]+)$#', $path, $accountMatch) && $method === 'PATCH') {
+            $accountId = (int) $accountMatch[1];
+            $status = $this->text($this->body['status'] ?? '', 24);
+            if (!in_array($status, ['processing', 'failed', 'completed'], true)) {
+                throw new HttpException(400, 'Trạng thái tài khoản không hợp lệ.');
+            }
+
+            if ($status !== 'completed') {
+                $row = Database::one(
+                    "UPDATE code_telegram_request_accounts
+                     SET status = ?, result_note = ?, processed_by = ?, updated_at = NOW(),
+                         processed_at = CASE WHEN ? = 'failed' THEN NOW() ELSE NULL END
+                     WHERE id = ? AND status <> 'completed'
+                     RETURNING id, request_id, username, status",
+                    [$status, $this->text($this->body['note'] ?? '', 500), (string) $this->user['id'], $status, $accountId]
+                );
+                if ($row === null) throw new HttpException(409, 'Tài khoản không tồn tại hoặc đã được xử lý thành công.');
+                Database::run(
+                    "UPDATE code_telegram_requests r
+                     SET status = CASE
+                         WHEN EXISTS (SELECT 1 FROM code_telegram_request_accounts a WHERE a.request_id = r.id AND a.status = 'processing') THEN 'processing'
+                         WHEN EXISTS (SELECT 1 FROM code_telegram_request_accounts a WHERE a.request_id = r.id AND a.status = 'queued') THEN 'queued'
+                         ELSE 'partial' END,
+                         updated_at = NOW()
+                     WHERE r.id = ?",
+                    [(int) $row['request_id']]
+                );
+                $this->audit('code_telegram.account.' . $status, (string) $accountId, ['username' => (string) $row['username']]);
+                return self::response(['account' => $row, 'message' => 'Đã cập nhật trạng thái tài khoản.']);
+            }
+
+            $codeValue = strtoupper(trim($this->text($this->body['codeValue'] ?? '', 64)));
+            $chargeAmount = $this->parseMoney($this->body['chargeAmount'] ?? null, false);
+            if (preg_match('/^[A-Z0-9][A-Z0-9_-]{4,63}$/', $codeValue) !== 1) {
+                throw new HttpException(400, 'Mã xác nhận thành công không hợp lệ.');
+            }
+
+            try {
+                $result = Database::transaction(function () use ($accountId, $codeValue, $chargeAmount): array {
+                    $account = Database::one(
+                        "SELECT a.id, a.request_id, a.username, a.status,
+                                r.user_id, r.service_id, r.service_name_snapshot,
+                                r.price_min_snapshot, r.price_max_snapshot, r.status AS request_status
+                         FROM code_telegram_request_accounts a
+                         JOIN code_telegram_requests r ON r.id = a.request_id
+                         WHERE a.id = ? FOR UPDATE OF a, r",
+                        [$accountId]
+                    );
+                    if ($account === null) throw new HttpException(404, 'Không tìm thấy tài khoản yêu cầu.');
+                    if ($account['status'] === 'completed') throw new HttpException(409, 'Tài khoản này đã được tính phí và hoàn tất.');
+                    if ($chargeAmount < (int) $account['price_min_snapshot'] || $chargeAmount > (int) $account['price_max_snapshot']) {
+                        throw new HttpException(400, 'Phí thành công phải nằm trong khoảng giá của dịch vụ.');
+                    }
+
+                    $member = Database::one('SELECT balance FROM users WHERE user_id = ? FOR UPDATE', [(string) $account['user_id']]);
+                    if ($member === null) throw new HttpException(404, 'Không tìm thấy thành viên.');
+                    if ((int) $member['balance'] < $chargeAmount) {
+                        throw new HttpException(402, 'Ví Chính của thành viên không đủ để thu phí thành công.');
+                    }
+
+                    $reference = 'code-telegram:account:' . $accountId;
+                    Database::run('UPDATE users SET balance = balance - ? WHERE user_id = ?', [$chargeAmount, (string) $account['user_id']]);
+                    Database::run(
+                        "INSERT INTO wallet_ledger (reference_code, user_id, amount, transaction_type, description, wallet_type)
+                         VALUES (?, ?, ?, 'PURCHASE', ?, 'MAIN')",
+                        [$reference, (string) $account['user_id'], -$chargeAmount, 'Code Telegram thành công · ' . $account['service_name_snapshot']]
+                    );
+                    Database::run(
+                        "INSERT INTO transactions (user_id, amount, type, reference_code, status, wallet_type)
+                         VALUES (?, ?, 'PURCHASE', ?, 'paid', 'MAIN')",
+                        [(string) $account['user_id'], $chargeAmount, $reference]
+                    );
+                    Database::run(
+                        "UPDATE code_telegram_request_accounts
+                         SET status = 'completed', code_value = ?, charged_amount = ?, result_note = ?,
+                             processed_by = ?, processed_at = NOW(), updated_at = NOW()
+                         WHERE id = ?",
+                        [
+                            $codeValue, $chargeAmount,
+                            $this->text($this->body['note'] ?? 'Đã xử lý mã thành công.', 500),
+                            (string) $this->user['id'], $accountId,
+                        ]
+                    );
+                    Database::run(
+                        "UPDATE code_telegram_requests r
+                         SET status = CASE
+                             WHEN NOT EXISTS (SELECT 1 FROM code_telegram_request_accounts a WHERE a.request_id = r.id AND a.status <> 'completed') THEN 'completed'
+                             WHEN EXISTS (SELECT 1 FROM code_telegram_request_accounts a WHERE a.request_id = r.id AND a.status = 'completed') THEN 'partial'
+                             ELSE 'queued' END,
+                             updated_at = NOW()
+                         WHERE r.id = ?",
+                        [(int) $account['request_id']]
+                    );
+                    $balance = (int) Database::value('SELECT balance FROM users WHERE user_id = ?', [(string) $account['user_id']]);
+                    return [
+                        'accountId' => $accountId,
+                        'requestId' => (int) $account['request_id'],
+                        'userId' => (string) $account['user_id'],
+                        'username' => (string) $account['username'],
+                        'service' => (string) $account['service_name_snapshot'],
+                        'code' => $codeValue,
+                        'chargedAmount' => $chargeAmount,
+                        'balance' => $balance,
+                    ];
+                });
+            } catch (HttpException $error) {
+                throw $error;
+            } catch (Throwable $error) {
+                throw new HttpException(409, 'Không thể hoàn tất và thu phí: ' . $error->getMessage());
+            }
+
+            $this->audit('code_telegram.account.completed', (string) $accountId, [
+                'username' => $result['username'], 'chargedAmount' => $chargeAmount,
+            ]);
+            $this->notify(
+                $result['userId'],
+                '✅ <b>CODE TELEGRAM ĐÃ XỬ LÝ THÀNH CÔNG</b>' . "\n" .
+                'Dịch vụ: <b>' . htmlspecialchars($result['service'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</b>' . "\n" .
+                'Tài khoản: <code>' . htmlspecialchars($result['username'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code>' . "\n" .
+                'Mã: <code>' . htmlspecialchars($result['code'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code>' . "\n" .
+                'Phí đã trừ: ' . number_format($chargeAmount, 0, ',', '.') . ' VNĐ · Ví Chính còn ' .
+                number_format($result['balance'], 0, ',', '.') . ' VNĐ.'
+            );
+            $this->publishUserDataChanged('wallet');
+            return self::response(['account' => $result, 'message' => 'Đã xác nhận thành công và thu đúng phí.']);
         }
 
         if (preg_match('#^/api/admin/code-telegram/posts/([0-9]+)/retry$#', $path, $postMatch) && $method === 'POST') {

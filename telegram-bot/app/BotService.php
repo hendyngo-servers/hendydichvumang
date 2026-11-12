@@ -90,13 +90,38 @@ final class BotService
         $userId = (string) ($from['id'] ?? '');
         $chatId = (string) ($chat['id'] ?? '');
         $text = trim((string) ($message['text'] ?? ''));
+        $photos = is_array($message['photo'] ?? null) ? $message['photo'] : [];
 
-        if (!preg_match('/^\d{5,20}$/', $userId) || $chatId === '' || $text === '') {
+        if (!preg_match('/^\d{5,20}$/', $userId) || $chatId === '' || ($text === '' && $photos === [])) {
             return;
         }
         if (preg_match('/^\/status(?:@\w+)?$/u', $text)) { $this->sendOperationalNotice($chatId); return; }
         $operation=OperationsService::forBot($this->botKey);
         if ($operation['active'] && !TelegramAuth::isAdmin($userId)) { $this->sendOperationalNotice($chatId); return; }
+
+        // Accept a photo only while the member is in the AI image-edit flow.
+        if ($photos !== []) {
+            $pendingPhoto = $this->getPending($userId);
+            if ($pendingPhoto !== null && (string)$pendingPhoto['input_type'] === 'ai_image_photo') {
+                $largest = $photos[count($photos) - 1] ?? [];
+                $fileId = trim((string)($largest['file_id'] ?? ''));
+                if ($fileId === '') {
+                    $this->telegram->sendMessage($chatId, 'Không đọc được ảnh. Vui lòng gửi lại ảnh JPG, PNG hoặc WEBP.');
+                    return;
+                }
+                if ($text !== '' && !str_starts_with($text, '/')) {
+                    $this->createAiMediaJob($chatId, $userId, 'image', $text, $fileId);
+                } else {
+                    $this->setPending($userId, 'ai_image_prompt', ['file_id' => $fileId]);
+                    $this->telegram->sendMessage($chatId, '✅ Đã nhận ảnh. Hãy mô tả cách bạn muốn chỉnh sửa ảnh (ví dụ: xóa nền, đổi phong cách, cải thiện ánh sáng, thay phông nền).');
+                }
+                return;
+            }
+            if ($text === '') {
+                $this->telegram->sendMessage($chatId, 'Để chỉnh sửa ảnh bằng AI, hãy chọn nút 🖼️ CHỈNH SỬA ẢNH AI trước.');
+                return;
+            }
+        }
 
         $firstName = trim((string) ($from['first_name'] ?? ''));
         $lastName = trim((string) ($from['last_name'] ?? ''));
@@ -404,17 +429,38 @@ final class BotService
         $replyMarkup = ['reply_markup' => $this->menuMarkup($items, $config)];
         $homePhoto = trim((string) Env::get('BOT_HOME_PHOTO', ''));
         if ($homePhoto === '') $homePhoto = 'https://i.postimg.cc/rcD583NW/anh-quan-cao.png?dl=1';
-        $validPhoto = self::isHttpsUrl($homePhoto)
-            || preg_match('/\A[A-Za-z0-9_-]{30,512}\z/D', $homePhoto) === 1;
-        if ($validPhoto && mb_strlen($caption, 'UTF-8') <= 1000) {
+        $isFileId = preg_match('/\A[A-Za-z0-9_-]{30,512}\z/D', $homePhoto) === 1;
+        if (($isFileId || self::isHttpsUrl($homePhoto)) && mb_strlen($caption, 'UTF-8') <= 1000) {
             try {
-                $this->telegram->sendPhoto($chatId, $homePhoto, $caption, $replyMarkup);
+                if ($isFileId) {
+                    $this->telegram->sendPhoto($chatId, $homePhoto, $caption, $replyMarkup);
+                } else {
+                    $this->telegram->sendPhotoFromUrl($chatId, $homePhoto, $caption, $replyMarkup);
+                }
                 return;
             } catch (Throwable $error) {
-                error_log('[telegram:' . $this->botKey . '] Không gửi được banner trang chủ; chuyển sang tin nhắn văn bản: ' . $error->getMessage());
+                error_log('[telegram:' . $this->botKey . '] Home banner upload failed; falling back to text: ' . $error->getMessage());
             }
         }
         $this->telegram->sendMessage($chatId, $caption, $replyMarkup);
+    }
+
+    private function createAiMediaJob(string $chatId, string $userId, string $type, string $prompt, string $sourceFileId = ''): void
+    {
+        try {
+            $job = AiMediaService::create($userId, $this->botKey, $type, $prompt, $sourceFileId);
+            $shortId = substr((string)$job['id'], 0, 8);
+            $this->clearPending($userId);
+            $this->telegram->sendMessage(
+                $chatId,
+                '✅ <b>ĐÃ NHẬN YÊU CẦU AI</b>' . "\n" .
+                'Mã yêu cầu: <code>' . self::escape($shortId) . '</code>' . "\n" .
+                'Trạng thái: <b>Đang chờ xử lý</b>. HENDY sẽ gửi kết quả vào cuộc trò chuyện này khi hoàn tất.' . "\n" .
+                'Hạn mức thử nghiệm: ' . (int)Env::int('AI_MEDIA_MAX_PER_DAY', 3) . ' tác vụ/ngày/tài khoản.'
+            );
+        } catch (Throwable $error) {
+            $this->telegram->sendMessage($chatId, '⚠️ ' . self::escape($error->getMessage()));
+        }
     }
 
     private function menuConfig(): array
@@ -744,6 +790,26 @@ final class BotService
                 return;
             case 'customer':
                 $this->showCustomer($chatId, $userId);
+                return;
+            case 'music-ai':
+                if (!Env::bool('AI_MEDIA_QUEUE_ENABLED', false) || trim((string)Env::get('ELEVENLABS_API_KEY', '')) === '') {
+                    $this->telegram->sendMessage($chatId, '🎵 <b>TẠO ÂM NHẠC AI</b>' . "\n" .
+                        'Phân hệ đang chờ cấu hình nhà cung cấp. Admin cần bật AI_MEDIA_QUEUE_ENABLED và thêm ELEVENLABS_API_KEY trong Render Environment của Bot. API key không được nhập qua Telegram.');
+                    return;
+                }
+                $this->setPending($userId, 'ai_music_prompt');
+                $this->telegram->sendMessage($chatId, '🎵 <b>MÔ TẢ BẢN NHẠC BẠN MUỐN TẠO</b>' . "\n" .
+                    'Hãy mô tả thể loại, cảm xúc, nhạc cụ, nhịp độ và thời lượng mong muốn (tối đa 500 ký tự). Không yêu cầu sao chép nguyên bản bài hát có bản quyền.');
+                return;
+            case 'image-ai':
+                if (!Env::bool('AI_MEDIA_QUEUE_ENABLED', false) || trim((string)Env::get('OPENAI_API_KEY', '')) === '') {
+                    $this->telegram->sendMessage($chatId, '🖼️ <b>CHỈNH SỬA ẢNH AI</b>' . "\n" .
+                        'Phân hệ đang chờ cấu hình nhà cung cấp. Admin cần bật AI_MEDIA_QUEUE_ENABLED và thêm OPENAI_API_KEY trong Render Environment của Bot. API key không được nhập qua Telegram.');
+                    return;
+                }
+                $this->setPending($userId, 'ai_image_photo');
+                $this->telegram->sendMessage($chatId, '🖼️ <b>GỬI ẢNH BẠN MUỐN CHỈNH SỬA</b>' . "\n" .
+                    'Gửi một ảnh JPG, PNG hoặc WEBP. Bạn có thể ghi yêu cầu ngay trong caption hoặc gửi mô tả sau khi ảnh được nhận.');
                 return;
             case 'linked-accounts':
                 $this->showLiveAccounts($chatId, $userId);
@@ -2053,6 +2119,22 @@ final class BotService
                 } catch (Throwable $error) {
                     $this->telegram->sendMessage($chatId, '❌ Không thể tạo video job: ' . self::escape($error->getMessage()));
                 }
+                return true;
+
+            case 'ai_music_prompt':
+                if (mb_strlen($text) < 10 || mb_strlen($text) > 500) {
+                    $this->telegram->sendMessage($chatId, 'Mô tả nhạc cần từ 10 đến 500 ký tự. Hãy mô tả rõ thể loại và cảm xúc.');
+                    return true;
+                }
+                $this->createAiMediaJob($chatId, $userId, 'music', $text);
+                return true;
+
+            case 'ai_image_prompt':
+                if (mb_strlen($text) < 5 || mb_strlen($text) > 1000) {
+                    $this->telegram->sendMessage($chatId, 'Mô tả chỉnh sửa ảnh cần từ 5 đến 1.000 ký tự.');
+                    return true;
+                }
+                $this->createAiMediaJob($chatId, $userId, 'image', $text, (string)($payload['file_id'] ?? ''));
                 return true;
 
             case 'giftcode':

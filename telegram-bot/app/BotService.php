@@ -360,15 +360,16 @@ final class BotService
         $firstName = trim((string) ($from['first_name'] ?? ''));
         $lastName = trim((string) ($from['last_name'] ?? ''));
         $username = trim((string) ($from['username'] ?? ''));
-        $displayName = trim($firstName . ' ' . $lastName);
-        $user = $this->getUser($userId, $displayName, $username);
+        $user = $this->getUser($userId, trim($firstName . ' ' . $lastName), $username);
         $config = $this->menuConfig();
         $items = $this->menuItems($config, $userId);
 
         $settings = $this->settings(['website_url', 'GROUP_URL']);
         $appBaseUrl = rtrim((string) (Env::get('APP_URL') ?: Env::get('RENDER_EXTERNAL_URL', '')), '/');
         $websiteUrl = trim((string) ($settings['website_url'] ?? ''));
-        if (!self::isHttpsUrl($websiteUrl)) $websiteUrl = self::isHttpsUrl($appBaseUrl) ? $appBaseUrl . '/' : 'https://hendydichvumang-telegram-bot.onrender.com/';
+        if (!self::isHttpsUrl($websiteUrl)) {
+            $websiteUrl = self::isHttpsUrl($appBaseUrl) ? $appBaseUrl . '/' : 'https://hendydichvumang-telegram-bot.onrender.com/';
+        }
         $groupUrl = trim((string) ($settings['GROUP_URL'] ?? Env::get('GROUP_URL', 'https://t.me/Hendy_Support_Group')));
         if (!self::isHttpsUrl($groupUrl)) $groupUrl = 'https://t.me/Hendy_Support_Group';
 
@@ -381,20 +382,14 @@ final class BotService
             default => 'buổi đêm',
         };
         $name = $firstName !== '' ? $firstName : ($username !== '' ? '@' . $username : 'bạn');
-        $botPublicUrl = TelegramLink::normalize((string) Env::get(
-            $this->botKey === 'secondary' ? 'BOT2_PUBLIC_URL' : 'BOT1_PUBLIC_URL',
-            ''
-        ));
-        $botLabel = 'HENDY BOT';
         $vipLevel = (int) ($user['vip_level'] ?? 0);
-        $intro = self::truncate(trim((string) ($config['intro_text'] ?? '')), 220);
 
         $lines = [
             '💠 <b>⩤ HENDY DIGITAL ECOSYSTEM ⩥</b>',
             '✨ <i>Công nghệ kết nối giá trị thật</i>',
             '━━━━━━━━━━━━━━━━━━━━',
             '👋 Chúc ' . $greeting . ' vui vẻ, <b>' . self::escape($name) . '</b>!',
-            '🤖 <b>' . $botLabel . '</b> · Luồng dịch vụ riêng',
+            '🤖 <b>HENDY BOT</b>',
             '🆔 Telegram ID: <code>' . self::escape($userId) . '</code>',
             '━━━━━━━━━━━━━━━━━━━━',
             '💰 Ví Chính: <b>' . self::money($user['balance'] ?? 0) . '</b>',
@@ -403,23 +398,14 @@ final class BotService
             '📈 Tổng nạp: <b>' . self::money($user['total_deposited'] ?? 0) . '</b>',
             '👑 Thành viên: <b>' . ($vipLevel > 0 ? 'VIP ' . $vipLevel : 'HENDY MEMBER') . '</b>',
             '━━━━━━━━━━━━━━━━━━━━',
-            '🚀 <b>CHỌN DỊCH VỤ CỦA BẠN</b>',
-            'Mini Game Live · Tool · Code · OTP · Proxy · Vietsub · VIP · CSKH.',
+            '<a href="' . self::escape($websiteUrl) . '">🌐 Website HENDY</a> · <a href="' . self::escape($groupUrl) . '">💬 Nhóm hỗ trợ</a>',
         ];
-        if ($intro !== '') $lines[] = self::escape($intro);
-        $links = ['<a href="' . self::escape($websiteUrl) . '">🌐 Website HENDY</a>'];
-        if (self::isHttpsUrl($groupUrl)) $links[] = '<a href="' . self::escape($groupUrl) . '">💬 Nhóm hỗ trợ</a>';
-        if ($botPublicUrl !== '') {
-            $links[] = '<a href="' . self::escape($botPublicUrl) . '">🤖 Mở Telegram Bot</a>';
-        }
-        $lines[] = implode(' · ', $links);
-
         $caption = implode("\n", $lines);
         $replyMarkup = ['reply_markup' => $this->menuMarkup($items, $config)];
         $homePhoto = trim((string) Env::get('BOT_HOME_PHOTO', ''));
         if ($homePhoto === '') $homePhoto = 'https://i.postimg.cc/rcD583NW/anh-quan-cao.png?dl=1';
         $validPhoto = self::isHttpsUrl($homePhoto)
-            || preg_match('/\\A[A-Za-z0-9_-]{30,512}\\z/D', $homePhoto) === 1;
+            || preg_match('/\A[A-Za-z0-9_-]{30,512}\z/D', $homePhoto) === 1;
         if ($validPhoto && mb_strlen($caption, 'UTF-8') <= 1000) {
             try {
                 $this->telegram->sendPhoto($chatId, $homePhoto, $caption, $replyMarkup);

@@ -86,8 +86,19 @@ final class TelegramAuth
             return hash_hmac('sha256', 'hendy-website-session:' . $key, $override);
         }
 
-        // Atomic upsert keeps the existing valid session key while avoiding a
-        // multi-statement transaction on the pooled production database.
+        // The signing key is read on every authenticated API request. Read the
+        // already-provisioned key first so normal Admin traffic does not UPDATE
+        // the same PostgreSQL row on every page/API request.
+        $existing = Database::value(
+            'SELECT secret_value FROM website_session_secrets WHERE bot_key = ?',
+            [$key]
+        );
+        if (is_string($existing) && preg_match('~^[A-Za-z0-9_-]{32,256}$~D', $existing) === 1) {
+            return $existing;
+        }
+
+        // First creation or repair remains atomic; concurrent workers converge on
+        // one valid secret and never rotate a key that is already valid.
         $candidate = bin2hex(random_bytes(32));
         $stored = Database::value(
             'INSERT INTO website_session_secrets (bot_key, secret_value) VALUES (?, ?) ' .

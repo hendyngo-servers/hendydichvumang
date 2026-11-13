@@ -1962,6 +1962,15 @@
         const result = await api('/api/admin/vouchers/' + encodeURIComponent(form.dataset.voucherForm) + '/' + data.action,'POST',data);
         toast(result.message);
         await renderPage();
+      } else if (form.dataset.userAccessForm) {
+        data.isBlocked = Boolean(form.querySelector('[name="isBlocked"]')?.checked);
+        if (data.isBlocked && !String(data.reason || '').trim()) {
+          throw new Error('Cần nhập lý do khi khóa tài khoản.');
+        }
+        const result = await api('/api/admin/users/' + form.dataset.userAccessForm + '/access','PATCH',data);
+        toast(result.message || (data.isBlocked ? 'Đã khóa tài khoản.' : 'Đã mở khóa tài khoản.'));
+        state.adminData.users = (await api('/api/admin/users')).users;
+        await renderPage();
       } else if (form.dataset.adjustForm) {
         data.amount = Number(data.amount);
         await api('/api/admin/users/' + form.dataset.adjustForm + '/adjust-balance','POST',data);

@@ -46,7 +46,7 @@ services:
       - key: PORT
         value: "10000"
       - key: RUN_MIGRATIONS_ON_START
-        value: "false"
+        value: "true"
       - key: DB_STARTUP_WAIT_SECONDS
         value: "120"
       - key: WEBHOOK_AUTO_REGISTER
@@ -58,6 +58,8 @@ services:
       - key: BANK_WEBHOOK_ENABLED
         value: "false"
       - key: WEBSOCKET_ENABLED
+        value: "false"
+      - key: VIDEO_WORKER_ENABLED
         value: "false"
       - key: TELEGRAM_INIT_DATA_MAX_AGE_SECONDS
         value: "3600"

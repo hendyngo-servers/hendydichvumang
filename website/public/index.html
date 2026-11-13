@@ -12,4 +12,64 @@
 <section id="code" class="section" data-panel="code"><span class="eyebrow">04 / TELEGRAM INTELLIGENCE</span><h2>📡 CODE <em>TELEGRAM</em></h2><p class="muted">Tự đọc bài đăng chữ và video từ những kênh Telegram đã được cấp quyền; nhận diện mã khuyến mãi, code game, code phần mềm và code màn.</p><div class="steps"><div><b>01</b><h3>Kết nối nguồn</h3><p>Admin thêm Bot vào kênh và xác minh quyền quản trị.</p></div><div><b>02</b><h3>Trích xuất</h3><p>Phân tích nội dung chữ, caption và OCR khung hình video.</p></div><div><b>03</b><h3>Duyệt & tra cứu</h3><p>Lọc trùng, duyệt mã và hiển thị mã được phép phát hành.</p></div></div><p class="notice">Chỉ nguồn đã được Admin kết nối mới được xử lý. Website không quét kênh riêng tư hoặc nội dung ngoài quyền truy cập.</p><a class="btn primary" href="https://t.me/hendy_dichvu_BOT">Mở CODE TELEGRAM ↗</a></section>
 <section id="about" class="section" data-panel="about"><span class="eyebrow">05 / ABOUT HENDY</span><h2>CÔNG NGHỆ KẾT NỐI <em>GIÁ TRỊ THẬT</em></h2><p class="muted">HENDY Digital Ecosystem kết nối Website tĩnh, Telegram Bot, dịch vụ số và công cụ sáng tạo trên kiến trúc phân quyền.</p><div class="about"><div><span class="eyebrow">PUBLIC WEBSITE</span><h3>Static-first · Fast · Secure</h3><p class="muted">Website chỉ phát hành HTML, CSS, JavaScript và tài nguyên công khai qua CDN. Dữ liệu nhạy cảm, thanh toán và quản trị không chạy trong trình duyệt công khai.</p></div><div><span class="eyebrow">OPERATIONS</span><h3>Quản trị tập trung</h3><p class="muted">Dashboard quản trị được phục vụ bởi Bot backend và yêu cầu xác thực Telegram Admin.</p><a class="btn primary" href="https://hendydichvumang-telegram-bot.onrender.com/admin" target="_blank" rel="noopener">Quản trị hệ thống ↗</a></div></div></section>
 </main><footer class="footer"><div class="footer-inner"><div><b>HENDY DIGITAL ECOSYSTEM</b><p>✨ Công nghệ kết nối giá trị thật.</p></div><div><a href="/privacy/">Quyền riêng tư</a><a href="/terms/">Điều khoản</a><a href="https://t.me/Hendy_Support_Group">Hỗ trợ</a></div><small>© <span id="year"></span> HENDY Cybertech.</small></div></footer>
-<script>const nav=document.querySelector('.nav'),toggle=document.querySelector('.toggle'),links=[...document.querySelectorAll('[data-tab]')],panels=[...document.querySelectorAll('[data-panel]')];function show(id){const p=panels.find(x=>x.dataset.panel===id)||panels[0];panels.forEach(x=>x.classList.toggle('active',x===p));links.forEach(x=>x.classList.toggle('active',x.dataset.tab===p.dataset.panel));nav.classList.remove('open');toggle.setAttribute('aria-expanded','false');if(location.hash!=='#'+p.id)history.replaceState(null,'','#'+p.id);window.scrollTo({top:0,behavior:'smooth'})}links.forEach(a=>a.addEventListener('click',e=>{e.preventDefault();show(a.dataset.tab)}));window.addEventListener('hashchange',()=>{const id=location.hash.slice(1);if(panels.some(p=>p.dataset.panel===id))show(id)});toggle.addEventListener('click',()=>{const v=nav.classList.toggle('open');toggle.setAttribute('aria-expanded',String(v))});document.querySelector('#year').textContent=new Date().getFullYear();if(location.hash&&panels.some(p=>p.dataset.panel===location.hash.slice(1)))show(location.hash.slice(1));</script></body></html>
+<script>
+const nav=document.querySelector('.nav'),toggle=document.querySelector('.toggle'),links=[...document.querySelectorAll('[data-tab]')],panels=[...document.querySelectorAll('[data-panel]')];
+function show(id){
+  const p=panels.find(x=>x.dataset.panel===id)||panels[0];
+  panels.forEach(x=>x.classList.toggle('active',x===p));
+  links.forEach(x=>x.classList.toggle('active',x.dataset.tab===p.dataset.panel));
+  nav.classList.remove('open');toggle.setAttribute('aria-expanded','false');
+  if(location.hash!=='#'+p.id)history.replaceState(null,'','#'+p.id);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+links.forEach(a=>a.addEventListener('click',e=>{e.preventDefault();show(a.dataset.tab)}));
+window.addEventListener('hashchange',()=>{const id=location.hash.slice(1);if(panels.some(p=>p.dataset.panel===id))show(id)});
+toggle.addEventListener('click',()=>{const v=nav.classList.toggle('open');toggle.setAttribute('aria-expanded',String(v))});
+document.querySelector('#year').textContent=new Date().getFullYear();
+if(location.hash&&panels.some(p=>p.dataset.panel===location.hash.slice(1)))show(location.hash.slice(1));
+
+const API_BASE='https://hendydichvumang-telegram-bot.onrender.com';
+const currency=new Intl.NumberFormat('vi-VN');
+const categoryIcon={minigame:'🎮',tools:'▦',codes:'⌘',otp:'▤',proxy:'🌐',vip:'👑'};
+function productCard(product,botUrl){
+  const article=document.createElement('article');article.className='card';
+  const icon=document.createElement('span');icon.className='ico';icon.textContent=categoryIcon[product.category]||'✦';article.append(icon);
+  const title=document.createElement('h3');title.textContent=product.brand?product.brand+' · '+product.name:product.name;article.append(title);
+  const description=document.createElement('p');description.textContent=product.description||'Sản phẩm số HENDY. Mở Telegram để xem chi tiết và đặt hàng.';article.append(description);
+  const details=document.createElement('p');
+  const price=Number(product.price||0);
+  const priceText=price===0?'Miễn phí':currency.format(price)+' VNĐ';
+  const stockText=product.stock===null?'Không giới hạn':('Còn '+Number(product.stock)+' sản phẩm');
+  const durationText=Number(product.durationDays)>0?(' · '+Number(product.durationDays)+' ngày'):'';
+  details.textContent=priceText+' · '+stockText+durationText;article.append(details);
+  const link=document.createElement('a');link.href=botUrl;link.target='_blank';link.rel='noopener';link.textContent='Mở Telegram để đặt hàng ↗';article.append(link);
+  return article;
+}
+async function loadPublicCatalog(){
+  const store=document.querySelector('#store .cards'),network=document.querySelector('#network .cards');
+  if(!store||!network)return;
+  try{
+    const response=await fetch(API_BASE+'/api/v1/public/catalog',{method:'GET',mode:'cors',credentials:'omit',headers:{'Accept':'application/json'},cache:'no-store'});
+    if(!response.ok)throw new Error('catalog_unavailable');
+    const result=await response.json();
+    if(!result||result.ok!==true||!Array.isArray(result.products))throw new Error('catalog_invalid');
+    const configResponse=await fetch(API_BASE+'/api/v1/public/config',{method:'GET',mode:'cors',credentials:'omit',headers:{'Accept':'application/json'},cache:'no-store'}).catch(()=>null);
+    const config=configResponse&&configResponse.ok?await configResponse.json().catch(()=>({})): {};
+    const botUrl=config.botConfigured&&/^https:\/\/t\.me\//i.test(config.botUrl||'')?config.botUrl:'https://t.me/hendy_dichvu_BOT';
+    const products=result.products.filter(item=>item&&typeof item==='object'&&item.isActive!==false);
+    const storeItems=products.filter(p=>['minigame','tools','codes','vip'].includes(String(p.category)));
+    const networkItems=products.filter(p=>['otp','proxy'].includes(String(p.category)));
+    if(storeItems.length){store.replaceChildren(...storeItems.map(p=>productCard(p,botUrl)));}
+    if(networkItems.length){network.replaceChildren(...networkItems.map(p=>productCard(p,botUrl)));}
+    const storeNotice=document.querySelector('#store .notice');
+    if(storeNotice&&storeItems.length)storeNotice.textContent='Đang hiển thị '+storeItems.length+' sản phẩm công khai từ kho HENDY. Giá, tồn kho và đặt hàng được kiểm tra lại trong Telegram Bot.';
+    const networkNotice=document.querySelector('#network .notice');
+    if(networkNotice&&networkItems.length){
+      networkNotice.textContent='Đang hiển thị '+networkItems.length+' gói dịch vụ đang mở bán. Nhà cung cấp OTP/Proxy và điều kiện giao hàng được xác nhận trong Bot.';
+    }
+  }catch(error){
+    // Preserve the published static fallback cards when the Bot API is asleep or unavailable.
+  }
+}
+loadPublicCatalog();
+</script></body></html>

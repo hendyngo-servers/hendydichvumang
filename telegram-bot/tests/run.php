@@ -218,7 +218,7 @@ $assert(str_contains($apiControllerSource, 'username_normalized') && str_contain
 $assert(str_contains($customerCenterSource, 'Tên TK CODE TELEGRAM') && str_contains($customerCenterSource, 'code-telegram-order-form') && str_contains($customerCenterSource, '/api/code-telegram/requests') && str_contains($customerCenterSource, 'ĐƠN CODE TELEGRAM CỦA BẠN'), 'Customer Center can create and track Code Telegram orders per username');
 $assert(str_contains($adminDashboardSource, 'Tên TK CODE TELEGRAM') && str_contains($adminDashboardSource, 'CT'), 'Admin request cards clearly label Code Telegram account names and order IDs');
 $assert(str_contains($publicWebsiteSource, 'id="server-status"') && str_contains($publicWebsiteSource, 'updateServerStatus()') && str_contains($publicWebsiteSource, '/api/health'), 'Public Website shows live connectivity to the management API');
-$assert(str_contains($mainPublicRouterSource, "'database' => $databaseReady ? 'ok' : 'unavailable'") && str_contains($mainPublicRouterSource, '$databaseReady ? 200 : 503'), 'Health endpoint reports PostgreSQL failure rather than returning a false healthy status');
+$assert(str_contains($mainPublicRouterSource, "'database' => \\$databaseReady ? 'ok' : 'unavailable'") && str_contains($mainPublicRouterSource, "\\$databaseReady ? 200 : 503"), 'Health endpoint reports PostgreSQL failure rather than returning a false healthy status');
 $aiCoverSource = file_get_contents(dirname(__DIR__) . '/app/AiCoverService.php');
 $aiCoverStorageSource = file_get_contents(dirname(__DIR__) . '/app/NeonStorage.php');
 $aiCoverFunctionSource = file_get_contents(dirname(__DIR__, 2) . '/neon-functions/hendystorage/index.mjs');

@@ -5,6 +5,7 @@ require dirname(__DIR__) . '/app/Env.php';
 require dirname(__DIR__) . '/app/NeonStorage.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/ProductReadinessService.php';
+require dirname(__DIR__) . '/app/ServiceReadinessService.php';
 require dirname(__DIR__) . '/app/TelegramAuth.php';
 require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/BotMenuDefinition.php';
@@ -47,6 +48,11 @@ $productReadinessBase = [
     'fulfillment_mode' => 'manual',
 ];
 $assert(ProductReadinessService::isSellable($productReadinessBase), 'product can sell only after source permission and supplier access verification');
+$assert(class_exists(ServiceReadinessService::class), 'Admin service readiness report is registered without exposing provider secret values');
+$serviceReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ServiceReadinessService.php');
+$assert(str_contains($serviceReadinessSource, "'secretValuesReturned' => false") && str_contains($serviceReadinessSource, "'providerCredentialsStoredInDatabase' => false"), 'service readiness exposes configuration status only, never secret values');
+$assert(str_contains($schemaSource, 'source_permission_status') && str_contains($schemaSource, 'supplier_access_status'), 'production schema includes additive supplier/source readiness fields');
+
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'supplier_access_status' => 'pending']), 'unverified supplier keeps product locked');
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'source_permission_status' => 'pending']), 'unverified source permission keeps product locked');
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'fulfillment_mode' => 'api']), 'generic API fulfillment stays locked without a provider adapter');

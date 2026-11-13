@@ -116,7 +116,20 @@ final class ServiceReadinessService
         $otpProducts = (int) (($categories['otp']['ready'] ?? 0));
         $proxyProducts = (int) (($categories['proxy']['ready'] ?? 0));
 
+        $missingProductColumns = ProductReadinessService::missingSchemaColumns();
         $services = [
+            self::service(
+                'product_readiness_migration',
+                'Database · migration quyền nguồn / nhà cung cấp',
+                $missingProductColumns === [],
+                $missingProductColumns === [],
+                $missingProductColumns === []
+                    ? []
+                    : ['Chạy telegram-bot/database/migrations/20261113_product_supplier_readiness.sql bằng database owner', 'Cột còn thiếu: ' . implode(', ', $missingProductColumns)],
+                $missingProductColumns === []
+                    ? 'Schema đã có đủ cột readiness.'
+                    : 'Migration chưa áp dụng. Kho sản phẩm được khóa fail-closed; runtime Bot không tự chạy DDL.'
+            ),
             self::service(
                 'products',
                 'Kho sản phẩm / quyền nguồn',

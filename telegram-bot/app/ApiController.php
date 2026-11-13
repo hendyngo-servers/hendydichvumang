@@ -118,6 +118,11 @@ final class ApiController
             throw new HttpException(403, 'Tài khoản HENDY đang tạm khóa.' . ($reason !== '' ? ' Lý do: ' . $reason : '') . ' Vui lòng liên hệ CSKH.');
         }
 
+        $operation = OperationsService::forBot($this->botKey);
+        if ($operation['active'] && !$this->isAdmin() && strtoupper($method) !== 'GET') {
+            $modeLabel = $operation['mode'] === 'upgrade' ? 'nâng cấp' : 'bảo trì';
+            throw new HttpException(503, 'HENDY đang ' . $modeLabel . '. ' . $operation['message']);
+        }
         if (WebServiceKernel::handles($path)) {
             try {
                 $result = WebServiceKernel::dispatch($method, $path, $this->body, [
@@ -145,6 +150,7 @@ final class ApiController
                 'settings' => $publicSettings,
                 'referralCount' => $referrals,
                 'botUrl' => $this->publicBotUrl(),
+                'operations' => $operation,
             ]);
         }
 

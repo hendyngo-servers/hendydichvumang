@@ -1078,6 +1078,9 @@ final class BotService
             case 'image-ai':
                 $this->startAiImage($chatId, $userId);
                 return;
+            case 'ai-cover':
+                $this->showAiCoverMenu($chatId, $userId);
+                return;
             case 'linked-accounts':
                 $this->showLiveAccounts($chatId, $userId);
                 return;

@@ -159,7 +159,7 @@ final class ProviderRegistryService
             $present = array_map(static fn(array $row): string => (string) $row['table_name'], $rows);
             $missing = array_values(array_diff($required, $present));
             return ['ready' => $missing === [], 'missingTables' => $missing];
-        } catch (\\Throwable $error) {
+        } catch (\Throwable $error) {
             error_log('[provider-registry-schema] ' . $error::class);
             return ['ready' => false, 'missingTables' => $required];
         }
@@ -453,7 +453,7 @@ final class ProviderRegistryService
                             'SELECT is_enabled, maintenance_mode, maintenance_message FROM service_registry WHERE service_key = ?',
                             [$key]
                         );
-                    } catch (\\Throwable $error) {
+                    } catch (\Throwable $error) {
                         // A missing registry migration must not turn normal member
                         // API requests into HTTP 500 responses. Admin gets an explicit
                         // schemaReady=false diagnostic through snapshot().

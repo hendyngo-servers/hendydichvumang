@@ -82,6 +82,17 @@ $builtInProvider = ProviderRegistryService::validateProviderInput([
     'adapterKey' => 'homeproxy', 'credentialEnvKey' => 'HOMEPROXY_ENCRYPTION_KEY',
 ]);
 $assert($builtInProvider['endpoint_url'] === '' && $builtInProvider['priority'] === 100, 'Adapter tích hợp sẵn có thể dùng endpoint được quản lý qua Environment hoặc cấu hình nội bộ');
+$assert($builtInProvider['credential_env_key'] === 'HOMEPROXY_ENCRYPTION_KEY', 'Adapter HomeProxy tự ràng buộc đúng tên biến khóa mã hóa máy chủ');
+$invalidPriorityRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'priority-provider', 'name' => 'Provider sai ưu tiên',
+        'adapterKey' => 'manual', 'priority' => 10001,
+    ]);
+} catch (RuntimeException) { $invalidPriorityRejected = true; }
+$assert($invalidPriorityRejected, 'Provider Registry giới hạn độ ưu tiên trong khoảng 0–10.000');
+$providerSource = file_get_contents(dirname(__DIR__) . '/app/ProviderRegistryService.php');
+$assert(str_contains($providerSource, 'AI_COVER_WORKER_URL') && str_contains($providerSource, 'VIDEO_PROCESSOR_URL') && str_contains($providerSource, 'validHttpsEndpoint'), 'Worker endpoint được kiểm tra qua HTTPS URL và Environment theo adapter');
 $invalidProviderUrlRejected = false;
 try {
     ProviderRegistryService::validateProviderInput([

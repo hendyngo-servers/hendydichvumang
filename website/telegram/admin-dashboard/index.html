@@ -335,6 +335,7 @@
       <button class="menu-item" type="button" data-admin-tab="modules"><span class="menu-icon">🧩</span>Tệp & module</button>
       <button class="menu-item" type="button" data-admin-tab="video-jobs"><span class="menu-icon">🎬</span>Video Jobs</button>
       <button class="menu-item" type="button" data-admin-tab="code-telegram"><span class="menu-icon">📡</span>Code Telegram</button>
+      <button class="menu-item" type="button" data-admin-tab="ai-cover"><span class="menu-icon">🎤</span>AI Cover / RVC</button>
       <button class="menu-item" type="button" data-admin-tab="settings"><span class="menu-icon">⚙️</span>Cấu hình chung</button>
       <button class="menu-item" type="button" data-admin-tab="audit"><span class="menu-icon">🧾</span>Nhật ký quản trị</button>
     </nav>
@@ -970,6 +971,7 @@
       state.adminData.videoJobStats = result.stats || {};
     }
     if (tab === 'code-telegram') state.adminData.codeTelegram = await api('/api/admin/code-telegram');
+    if (tab === 'ai-cover') state.adminData.aiCover = await api('/api/admin/ai-cover');
   }
 
   function adminTabs() {
@@ -1261,6 +1263,72 @@
           '<button type="button" class="primary" data-code-account-success data-id="' + Number(item.account_id) + '" data-min="' + Number(item.price_min_snapshot) + '" data-max="' + Number(item.price_max_snapshot) + '">✅ Xác nhận thành công & thu phí</button>' : '') +
         '</article>'
       ).join('') : empty('Chưa có yêu cầu tài khoản','Khi thành viên gửi username qua menu Code Telegram, yêu cầu sẽ xuất hiện tại đây.'));
+  }
+
+  function adminAiCover() {
+    const d = state.adminData.aiCover || {};
+    const stats = d.stats || {};
+    const voices = d.voices || [];
+    const jobs = d.jobs || [];
+    const readiness = [
+      ['Neon Object Storage',d.storageConfigured],
+      ['Callback HMAC secret',d.callbackSecretConfigured],
+      ['Worker URL HTTPS',d.workerConfigured],
+      ['Worker process enabled',d.workerEnabled],
+      ['AI Cover member access',d.enabled]
+    ];
+    const statusLabel = value => ({
+      queued:'Chờ xử lý',processing:'Đang xử lý',completed:'Hoàn tất',failed:'Lỗi',cancelled:'Đã hủy'
+    }[value] || value);
+    const stateTag = value => '<span class="status ' + (value ? 'completed' : 'pending') + '">' + (value ? 'Sẵn sàng' : 'Chưa cấu hình') + '</span>';
+    return '<div class="app-banner"><div><b>🎤 HENDY AI COVER · RVC</b><small>Preset giọng có hồ sơ cấp phép, consent, model riêng tư và xác minh worker trước khi mở cho thành viên.</small></div><span class="banner-icon">🎤</span></div>' +
+      '<div class="stat-grid">' +
+        '<div class="stat"><small>Preset giọng</small><b>' + Number(stats.voices || 0) + '</b></div>' +
+        '<div class="stat"><small>Sẵn sàng sử dụng</small><b>' + Number(stats.availableVoices || 0) + '</b></div>' +
+        '<div class="stat"><small>Job chờ / chạy</small><b>' + Number(stats.queued || 0) + ' / ' + Number(stats.processing || 0) + '</b></div>' +
+        '<div class="stat"><small>Hoàn tất / lỗi</small><b>' + Number(stats.completed || 0) + ' / ' + Number(stats.failed || 0) + '</b></div>' +
+      '</div>' +
+      '<div class="card"><div class="section-head"><h3>Kiểm tra điều kiện vận hành</h3>' + stateTag(Boolean(d.ready)) + '</div>' +
+        readiness.map(item => '<div class="list-row"><span>' + escapeHtml(item[0]) + '</span>' + stateTag(Boolean(item[1])) + '</div>').join('') +
+        '<p class="small muted">AI Cover chỉ mở cho thành viên khi đủ Storage + callback secret + HTTPS RVC worker và worker dispatcher được bật. Hiện tại không có worker engine đã đăng ký; không bật tính năng bán cho đến khi kiểm tra thành công.</p>' +
+      '</div>' +
+      '<form class="card form" id="admin-ai-cover-voice-form" enctype="multipart/form-data"><b>➕ Thêm / cập nhật preset giọng có cấp phép</b>' +
+        '<div class="two-col"><div class="field"><label>Preset ID</label><input name="id" maxlength="48" pattern="[a-z0-9][a-z0-9_-]{1,47}" placeholder="voice-hendy-01" required></div>' +
+        '<div class="field"><label>Tên hiển thị</label><input name="name" maxlength="50" required></div></div>' +
+        '<div class="field"><label>Mô tả</label><input name="description" maxlength="300" placeholder="Mô tả chất giọng / model"></div>' +
+        '<div class="field"><label>Chủ sở hữu quyền giọng nói</label><input name="rightsHolder" maxlength="160" required></div>' +
+        '<div class="two-col"><div class="field"><label>Giấy phép / hợp đồng</label><input name="license" maxlength="160" required></div>' +
+        '<div class="field"><label>Mã tham chiếu văn bản đồng ý</label><input name="authorizationReference" maxlength="200" required></div></div>' +
+        '<div class="field"><label>Model RVC (.pth) · tối đa 200 MB</label><input name="model" type="file" accept=".pth,application/octet-stream" required></div>' +
+        '<div class="field"><label>Index RVC (.index) · tùy chọn, tối đa 50 MB</label><input name="index" type="file" accept=".index,application/octet-stream"></div>' +
+        '<div class="two-col"><div class="field"><label>Speaker ID</label><input name="speakerId" type="number" min="0" max="109" value="0" required></div>' +
+        '<div class="field"><label>Pitch</label><input name="pitch" type="number" min="-12" max="12" value="0" required></div></div>' +
+        '<div class="two-col"><div class="field"><label>Index rate (0–1)</label><input name="indexRate" type="number" min="0" max="1" step="0.001" value="0.65" required></div>' +
+        '<div class="field"><label>F0 method</label><select name="f0Method"><option value="rmvpe">RMVPE</option><option value="pm">PM</option></select></div></div>' +
+        '<label class="check-row"><input type="checkbox" name="voiceOwnerConsent" value="true" required> Đã xác minh đồng ý sử dụng giọng từ chủ sở hữu / người có thẩm quyền</label>' +
+        '<label class="check-row"><input type="checkbox" name="commercialUseAllowed" value="true"> Giấy phép cho phép sử dụng thương mại (chỉ bật khi văn bản cho phép rõ ràng)</label>' +
+        '<label class="check-row"><input type="checkbox" name="enabled" value="true"> Cho phép preset được xét dùng sau bước xác minh worker</label>' +
+        '<div class="notice warn">Không tải lên giọng người khác nếu không có consent hợp lệ. Việc lưu preset chưa tự động làm nó khả dụng; cần worker kiểm tra được model và index.</div>' +
+        '<button class="primary">Lưu preset và tải model lên Neon</button>' +
+      '</form>' +
+      '<div class="section-head"><h3>Preset đã lưu</h3><span>' + voices.length + ' preset</span></div>' +
+      (voices.length ? voices.map(voice =>
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(voice.name) + ' · ' + escapeHtml(voice.id) + '</b><small>' + escapeHtml(voice.rights_holder) + ' · ' + escapeHtml(voice.license_name) + '</small></div>' + stateTag(Boolean(voice.available && voice.enabled)) + '</div>' +
+        '<p class="small">' + escapeHtml(voice.description || '') + '<br>Consent: ' + (voice.voice_owner_consent ? 'Đã xác minh' : 'Chưa xác minh') + ' · Commercial: ' + (voice.commercial_use_allowed ? 'Được phép theo hồ sơ' : 'Không khai báo / không bật') + '</p>' +
+        (voice.last_error ? '<p class="notice warn">' + escapeHtml(voice.last_error) + '</p>' : '') +
+        '<p class="small muted">Kiểm tra gần nhất: ' + (voice.checked_at ? new Date(voice.checked_at).toLocaleString('vi-VN') : 'Chưa kiểm tra') + '</p>' +
+        '<div class="two-col"><button type="button" class="tiny-btn" data-ai-cover-verify="' + escapeHtml(voice.id) + '">🔍 Kiểm tra model</button>' +
+        '<button type="button" class="tiny-btn" data-ai-cover-toggle="' + escapeHtml(voice.id) + '" data-next="' + String(!voice.enabled) + '">' + (voice.enabled ? 'Tắt preset' : 'Bật preset') + '</button></div></article>'
+      ).join('') : empty('Chưa có preset giọng','Admin cần model RVC và hồ sơ đồng ý/cấp phép hợp lệ. Preset chưa có worker xác minh sẽ không xuất hiện trong Bot.')) +
+      '<div class="section-head"><h3>Job AI Cover</h3></div>' +
+      (jobs.length ? jobs.map(job =>
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(String(job.id).slice(0,8)) + ' · User ' + escapeHtml(job.telegram_user_id) + '</b><small>' + escapeHtml(job.voice_name) + ' · ' + new Date(job.created_at).toLocaleString('vi-VN') + '</small></div><span class="status ' + escapeHtml(job.status) + '">' + escapeHtml(statusLabel(job.status)) + '</span></div>' +
+        '<p class="small muted">Lần thử: ' + Number(job.attempts || 0) + '/' + Number(job.max_attempts || 0) + (job.duration_seconds ? ' · ' + Number(job.duration_seconds).toFixed(1) + ' giây' : '') + '</p>' +
+        (job.last_error ? '<p class="notice warn">' + escapeHtml(job.last_error) + '</p>' : '') +
+        (job.status === 'failed' ? '<button type="button" class="tiny-btn" data-ai-cover-retry="' + escapeHtml(job.id) + '">Đưa job chạy lại</button>' : '') +
+        '</article>'
+      ).join('') : empty('Chưa có job AI Cover','Job sẽ xuất hiện khi thành viên gửi audio sau khi AI Cover được bật hợp lệ.')) +
+      '<div class="notice">Worker API contract: POST /jobs và POST /voices/verify. Worker phải upload MP3 bằng URL Neon Storage có thời hạn, sau đó gọi callback HMAC do HENDY cấp. Không gửi BOT_TOKEN hoặc khóa Storage cho worker.</div>';
   }
 
   function adminUsers() {

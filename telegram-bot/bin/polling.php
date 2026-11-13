@@ -13,6 +13,7 @@ require dirname(__DIR__) . '/app/VipService.php';
 require dirname(__DIR__) . '/app/VoucherService.php';
 require dirname(__DIR__) . '/app/Realtime.php';
 require dirname(__DIR__) . '/app/OperationsService.php';
+require dirname(__DIR__) . '/app/MatchmakingService.php';
 require dirname(__DIR__) . '/app/ProxyService.php';
 require dirname(__DIR__) . '/app/AiMediaService.php';
 require dirname(__DIR__) . '/app/BotService.php';

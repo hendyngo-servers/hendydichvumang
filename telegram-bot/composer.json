@@ -20,6 +20,7 @@
     "lint": "find app public bin tests -name '*.php' -print0 | xargs -0 -n1 php -l",
     "test": "php tests/run.php",
     "migrate": "php bin/migrate.php",
+    "database-doctor": "php bin/database-doctor.php",
     "validate-config": "php bin/validate-config.php",
     "websocket": "php bin/websocket.php",
     "video-worker": "php bin/video-worker.php",

@@ -362,6 +362,239 @@ final class AiCoverService
         }
     }
 
+    /** Claim and dispatch one queued job to the configured external RVC worker. */
+    public static function dispatchOnce(): bool
+    {
+        self::assertEnabled();
+        $workerId = trim((string) Env::get('RENDER_INSTANCE_ID', '')) ?: 'hendy-ai-cover-dispatcher';
+        $job = Database::transaction(static function () use ($workerId): ?array {
+            $row = Database::one(
+                "SELECT j.id,j.telegram_user_id,j.chat_id,j.source_key,j.source_filename,j.source_mime_type,
+                        j.voice_id,j.attempts,j.max_attempts,v.name AS voice_name,v.model_key,v.index_key,
+                        v.speaker_id,v.pitch,v.index_rate,v.f0_method
+                 FROM ai_cover_jobs j
+                 JOIN ai_cover_voices v ON v.id=j.voice_id
+                 WHERE j.status='queued' AND j.available_at<=NOW()
+                   AND v.enabled=TRUE AND v.voice_owner_consent=TRUE AND v.available=TRUE
+                   AND v.checked_at>NOW()-INTERVAL '30 minutes'
+                 ORDER BY j.available_at ASC,j.created_at ASC
+                 LIMIT 1 FOR UPDATE OF j SKIP LOCKED"
+            );
+            if ($row === null) return null;
+            $claimed = Database::one(
+                "UPDATE ai_cover_jobs
+                 SET status='processing',attempts=attempts+1,worker_id=?,started_at=NOW(),updated_at=NOW()
+                 WHERE id=? AND status='queued'
+                 RETURNING attempts,max_attempts",
+                [$workerId, $row['id']]
+            );
+            if ($claimed === null) return null;
+            $row['attempts'] = (int) $claimed['attempts'];
+            $row['max_attempts'] = (int) $claimed['max_attempts'];
+            Database::run(
+                "INSERT INTO ai_cover_events(job_id,event_type,details)
+                 VALUES(?,'dispatch.claimed',jsonb_build_object('attempt',?,'worker',?))",
+                [$row['id'], $row['attempts'], $workerId]
+            );
+            return $row;
+        });
+        if ($job === null) return false;
+
+        $jobId = (string) $job['id'];
+        try {
+            $resultKey = 'ai-cover/results/' . $jobId . '/cover.mp3';
+            $callbackBase = rtrim((string) (Env::get('APP_URL') ?: Env::get('RENDER_EXTERNAL_URL', '')), '/');
+            $callbackParts = parse_url($callbackBase);
+            if (!is_array($callbackParts) || strtolower((string) ($callbackParts['scheme'] ?? '')) !== 'https'
+                || empty($callbackParts['host']) || isset($callbackParts['user']) || isset($callbackParts['pass'])) {
+                throw new RuntimeException('APP_URL/RENDER_EXTERNAL_URL HTTPS chưa được cấu hình cho callback AI Cover.');
+            }
+            $indexUrl = !empty($job['index_key'])
+                ? NeonStorage::presignedDownloadUrl((string) $job['index_key'], 300)
+                : null;
+            $upload = NeonStorage::presignedUploadRequest($resultKey, 'audio/mpeg', 300);
+            $payload = [
+                'jobId' => $jobId,
+                'source' => [
+                    'url' => NeonStorage::presignedDownloadUrl((string) $job['source_key'], 300),
+                    'filename' => (string) $job['source_filename'],
+                    'mimeType' => (string) $job['source_mime_type'],
+                ],
+                'voice' => [
+                    'id' => (string) $job['voice_id'],
+                    'name' => (string) $job['voice_name'],
+                    'modelUrl' => NeonStorage::presignedDownloadUrl((string) $job['model_key'], 300),
+                    'indexUrl' => $indexUrl,
+                    'config' => [
+                        'speakerId' => (int) $job['speaker_id'],
+                        'pitch' => (int) $job['pitch'],
+                        'indexRate' => (float) $job['index_rate'],
+                        'f0Method' => (string) $job['f0_method'],
+                    ],
+                ],
+                'result' => [
+                    'key' => $resultKey,
+                    'upload' => $upload,
+                    'contentType' => 'audio/mpeg',
+                    'maxBytes' => 50000000,
+                ],
+                'callback' => [
+                    'url' => $callbackBase . '/internal/ai-cover/jobs/' . $jobId . '/complete',
+                    'signatureHeader' => 'X-Hendy-AI-Cover-Signature',
+                    'signatureFormat' => 'sha256=<hex-hmac-sha256-of-raw-json-body>',
+                ],
+                'limits' => [
+                    'maxDurationSeconds' => max(15, min(600, Env::int('AI_COVER_MAX_AUDIO_DURATION_SECONDS', 180))),
+                    'maxOutputBytes' => 50000000,
+                ],
+            ];
+            $accepted = self::workerRequest('jobs', $payload);
+            if (!filter_var($accepted['accepted'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                throw new RuntimeException((string) ($accepted['message'] ?? 'Worker không tiếp nhận tác vụ.'));
+            }
+            $providerId = trim((string) ($accepted['jobId'] ?? $accepted['id'] ?? ''));
+            if ($providerId === '' || mb_strlen($providerId) > 160) {
+                throw new RuntimeException('Worker không trả về mã tác vụ hợp lệ.');
+            }
+            Database::run(
+                "UPDATE ai_cover_jobs SET provider_job_id=?,updated_at=NOW() WHERE id=? AND status='processing'",
+                [$providerId, $jobId]
+            );
+            Database::run(
+                "INSERT INTO ai_cover_events(job_id,event_type,details)
+                 VALUES(?,'dispatch.accepted',jsonb_build_object('provider_job_id',?))",
+                [$jobId, $providerId]
+            );
+            return true;
+        } catch (Throwable $error) {
+            $message = mb_substr(trim($error->getMessage()), 0, 1500);
+            $attempts = (int) $job['attempts'];
+            $maxAttempts = (int) $job['max_attempts'];
+            $retry = $attempts < $maxAttempts;
+            $delay = min(300, 15 * (2 ** max(0, $attempts - 1)));
+            Database::run(
+                "UPDATE ai_cover_jobs
+                 SET status=?,available_at=NOW()+(? * INTERVAL '1 second'),
+                     completed_at=CASE WHEN ? THEN NULL ELSE NOW() END,
+                     last_error=?,worker_id=NULL,updated_at=NOW()
+                 WHERE id=? AND status='processing'",
+                [$retry ? 'queued' : 'failed', $retry ? $delay : 0, $retry, $message, $jobId]
+            );
+            Database::run(
+                "INSERT INTO ai_cover_events(job_id,event_type,details)
+                 VALUES(?,?::varchar,jsonb_build_object('error',?,'retry',?,'delay_seconds',?))",
+                [$jobId, $retry ? 'dispatch.retry' : 'dispatch.failed', $message, $retry, $retry ? $delay : 0]
+            );
+            error_log('[ai-cover-dispatch] job=' . $jobId . ' ' . $message);
+            return true;
+        }
+    }
+
+    /** Verify a signed callback and mark a processing job completed or failed exactly once. */
+    public static function completeFromWorker(string $jobId, string $rawBody, string $signature): array
+    {
+        $secret = trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''));
+        if (strlen($secret) < 32) throw new RuntimeException('AI_COVER_CALLBACK_SECRET chưa được cấu hình.');
+        if (strlen($rawBody) < 2 || strlen($rawBody) > 32768) throw new RuntimeException('Payload callback AI Cover không hợp lệ.');
+        $expected = 'sha256=' . hash_hmac('sha256', $rawBody, $secret);
+        if ($signature === '' || !hash_equals($expected, $signature)) throw new RuntimeException('Chữ ký callback AI Cover không hợp lệ.');
+        if (!preg_match('/\A[0-9a-f-]{36}\z/i', $jobId)) throw new RuntimeException('Mã job AI Cover không hợp lệ.');
+
+        $payload = json_decode($rawBody, true);
+        if (!is_array($payload) || !hash_equals($jobId, (string) ($payload['jobId'] ?? ''))) {
+            throw new RuntimeException('Callback không khớp mã tác vụ.');
+        }
+        $status = strtolower(trim((string) ($payload['status'] ?? '')));
+        if (!in_array($status, ['completed', 'failed'], true)) throw new RuntimeException('Trạng thái callback AI Cover không hợp lệ.');
+
+        $existing = Database::one(
+            'SELECT status,provider_job_id,result_key FROM ai_cover_jobs WHERE id=?',
+            [$jobId]
+        );
+        if ($existing === null) throw new RuntimeException('Không tìm thấy tác vụ AI Cover.');
+        if (in_array((string) $existing['status'], ['completed', 'failed'], true)) {
+            return ['jobId' => $jobId, 'status' => $existing['status'], 'duplicate' => true];
+        }
+        if ((string) $existing['status'] !== 'processing') throw new RuntimeException('Tác vụ AI Cover không ở trạng thái xử lý.');
+
+        $providerId = trim((string) ($payload['workerJobId'] ?? ''));
+        if ((string) $existing['provider_job_id'] !== ''
+            && ($providerId === '' || !hash_equals((string) $existing['provider_job_id'], $providerId))) {
+            throw new RuntimeException('Mã job từ worker không khớp.');
+        }
+
+        $resultKey = null;
+        $duration = null;
+        $outputBytes = null;
+        $errorMessage = '';
+        if ($status === 'completed') {
+            $resultKey = (string) ($payload['resultKey'] ?? '');
+            $expectedKey = 'ai-cover/results/' . $jobId . '/cover.mp3';
+            $durationValue = filter_var($payload['durationSeconds'] ?? null, FILTER_VALIDATE_FLOAT);
+            $bytesValue = filter_var($payload['outputSizeBytes'] ?? null, FILTER_VALIDATE_INT);
+            if (!hash_equals($expectedKey, $resultKey) || $durationValue === false
+                || $durationValue < 1 || $durationValue > 600
+                || $bytesValue === false || $bytesValue < 128 || $bytesValue > 50000000) {
+                throw new RuntimeException('Thông tin tệp kết quả AI Cover không hợp lệ.');
+            }
+            $duration = (float) $durationValue;
+            $outputBytes = (int) $bytesValue;
+        } else {
+            $errorMessage = mb_substr(trim((string) ($payload['errorMessage'] ?? 'Worker báo không thể xử lý audio.')), 0, 1500);
+        }
+
+        $row = Database::one(
+            "UPDATE ai_cover_jobs
+             SET status=?,result_key=?,duration_seconds=?,output_size_bytes=?,last_error=?,
+                 completed_at=NOW(),updated_at=NOW(),worker_id=NULL
+             WHERE id=? AND status='processing'
+             RETURNING id,status,telegram_user_id,voice_name",
+            [$status, $resultKey, $duration, $outputBytes, $errorMessage, $jobId]
+        );
+        if ($row === null) throw new RuntimeException('Tác vụ đã được cập nhật bởi một callback khác.');
+        Database::run(
+            "INSERT INTO ai_cover_events(job_id,event_type,details) VALUES(?,?,?::jsonb)",
+            [
+                $jobId,
+                'worker.' . $status,
+                json_encode([
+                    'worker_job_id' => $providerId,
+                    'duration_seconds' => $duration,
+                    'output_size_bytes' => $outputBytes,
+                    'error' => $errorMessage,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]
+        );
+        return [
+            'jobId' => $jobId,
+            'status' => $status,
+            'duplicate' => false,
+            'userId' => (string) $row['telegram_user_id'],
+        ];
+    }
+
+    public static function retryJob(string $jobId, string $adminId): array
+    {
+        if (!preg_match('/\A[0-9a-f-]{36}\z/i', $jobId)) throw new RuntimeException('Mã tác vụ AI Cover không hợp lệ.');
+        $row = Database::one(
+            "UPDATE ai_cover_jobs
+             SET status='queued',attempts=0,available_at=NOW(),provider_job_id='',result_key=NULL,
+                 duration_seconds=NULL,output_size_bytes=NULL,last_error=NULL,completed_at=NULL,
+                 delivery_claimed_at=NULL,delivery_sent_at=NULL,delivery_attempts=0,
+                 worker_id=NULL,updated_at=NOW()
+             WHERE id=? AND status='failed'
+             RETURNING id,telegram_user_id,status",
+            [$jobId]
+        );
+        if ($row === null) throw new RuntimeException('Chỉ có thể chạy lại tác vụ AI Cover đang ở trạng thái lỗi.');
+        Database::run(
+            "INSERT INTO ai_cover_events(job_id,event_type,details)
+             VALUES(?,'admin.retry',jsonb_build_object('admin_id',?))",
+            [$jobId, $adminId]
+        );
+        return $row;
+    }
+
     public static function history(string $userId, int $limit = 10): array
     {
         return Database::all(

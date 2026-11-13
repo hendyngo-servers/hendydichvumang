@@ -99,7 +99,7 @@ final class ProviderRegistryService
                 throw new RuntimeException('Endpoint nhà cung cấp phải là URL HTTPS công khai, không chứa thông tin đăng nhập hoặc fragment.');
             }
         }
-        if ($adapterKey !== 'manual' && $endpoint === '' && $adapterKey !== 'code_telegram') {
+        if ($adapterKey === 'custom_api_pending' && $endpoint === '') {
             throw new RuntimeException('Adapter tự động cần có Endpoint HTTPS.');
         }
         $credentialEnvKey = $envKey === '' ? '' : ProductReadinessService::validateEnvKey($envKey);
@@ -278,7 +278,7 @@ final class ProviderRegistryService
         } elseif ($checkedEnvKey !== '' && !$secretConfigured) {
             $status = 'missing_environment';
             $message = 'Chưa tìm thấy giá trị của biến ' . $checkedEnvKey . ' trong Environment máy chủ.';
-        } elseif ($row['adapter_key'] !== 'manual' && !$endpointConfigured && $row['adapter_key'] !== 'code_telegram') {
+        } elseif ($row['adapter_key'] === 'custom_api_pending' && !$endpointConfigured) {
             $status = 'missing_endpoint';
             $message = 'Chưa khai báo Endpoint HTTPS.';
         } else {

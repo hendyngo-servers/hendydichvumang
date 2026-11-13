@@ -188,14 +188,14 @@ final class ApiController
                 'FROM code_telegram_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
                 [$userId]
             );
-            $requestIds = array_map(static fn (array $row): int => (int) $row['request_id'], $requests);
-            if ($requestIds !== []) {
+            if ($requests !== []) {
                 $accounts = Database::all(
                     'SELECT a.id, a.request_id, a.username, a.status, a.code_value, a.charged_amount, ' .
                     'a.result_note, a.created_at, a.processed_at ' .
                     'FROM code_telegram_request_accounts a ' .
                     'JOIN code_telegram_requests r ON r.id = a.request_id ' .
-                    'WHERE r.user_id = ? AND a.request_id = ANY(SELECT id FROM code_telegram_requests WHERE user_id = ?) ' .
+                    'WHERE r.user_id = ? AND r.id IN (' .
+                    'SELECT id FROM code_telegram_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 50) ' .
                     'ORDER BY a.created_at ASC',
                     [$userId, $userId]
                 );

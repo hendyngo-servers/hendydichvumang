@@ -59,6 +59,12 @@ Recovery branch retained in Neon:
 
 The Bot schema remains in `telegram-bot/database/schema.sql`. Runtime uses `RUN_MIGRATIONS_ON_START=false`; reviewed schema changes and seed configuration are applied with the database owner role, while the Bot runtime role performs DML only.
 
+## Product and provider activation
+
+The Admin product form records supplier identity, supplier product reference, source/rights evidence, verification states and the Environment variable NAME only. Public product lists and both checkout paths fail closed until the source permission is authorized, supplier access is verified, evidence URLs are HTTPS, stock is available and manual fulfillment is selected. API fulfillment stays locked until a dedicated tested adapter exists.
+
+Before deploying this readiness change to an existing Neon database, follow [the safe migration and provider onboarding checklist](docs/product-provider-onboarding.md) using the database owner/migration role. Production intentionally keeps `RUN_MIGRATIONS_ON_START=false`; CI success alone does not apply a production migration.
+
 ## Render environment
 
 Set secrets only in Render Environment. Never commit live credentials.

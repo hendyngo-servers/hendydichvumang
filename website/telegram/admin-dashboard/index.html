@@ -335,6 +335,7 @@
       <button class="menu-item" type="button" data-admin-tab="modules"><span class="menu-icon">🧩</span>Tệp & module</button>
       <button class="menu-item" type="button" data-admin-tab="video-jobs"><span class="menu-icon">🎬</span>Video Jobs</button>
       <button class="menu-item" type="button" data-admin-tab="code-telegram"><span class="menu-icon">📡</span>Code Telegram</button>
+      <button class="menu-item" type="button" data-admin-tab="ai-media"><span class="menu-icon">🤖</span>AI Studio · Music & Image</button>
       <button class="menu-item" type="button" data-admin-tab="ai-cover"><span class="menu-icon">🎤</span>AI Cover / RVC</button>
       <button class="menu-item" type="button" data-admin-tab="settings"><span class="menu-icon">⚙️</span>Cấu hình chung</button>
       <button class="menu-item" type="button" data-admin-tab="audit"><span class="menu-icon">🧾</span>Nhật ký quản trị</button>
@@ -971,7 +972,7 @@
       state.adminData.videoJobStats = result.stats || {};
     }
     if (tab === 'code-telegram') state.adminData.codeTelegram = await api('/api/admin/code-telegram');
-    if (tab === 'ai-cover') state.adminData.aiCover = await api('/api/admin/ai-cover');
+    if (tab === 'ai-media') state.adminData.aiMedia = await api('/api/admin/ai-media');
     if (tab === 'ai-cover') state.adminData.aiCover = await api('/api/admin/ai-cover');
   }
 
@@ -1266,6 +1267,45 @@
       ).join('') : empty('Chưa có yêu cầu tài khoản','Khi thành viên gửi username qua menu Code Telegram, yêu cầu sẽ xuất hiện tại đây.'));
   }
 
+  function adminAiMedia() {
+    const d = state.adminData.aiMedia || {};
+    const stats = d.stats || {};
+    const tag = ok => '<span class="status ' + (ok ? 'completed' : 'pending') + '">' + (ok ? 'Sẵn sàng' : 'Chưa sẵn sàng') + '</span>';
+    const selected = value => value ? ' selected' : '';
+    const switchField = (name,label,value,disabled) =>
+      '<div class="field"><label>' + label + '</label><select name="' + name + '"' + (disabled ? ' disabled' : '') + '>' +
+      '<option value="false"' + selected(!value) + '>Tắt</option><option value="true"' + selected(Boolean(value)) + '>Bật</option></select></div>';
+    return '<div class="app-banner"><div><b>🤖 HENDY AI STUDIO</b><small>Điều khiển tập trung công cụ tạo nhạc AI và chỉnh sửa ảnh AI. API key chỉ được đọc từ Render Environment, không hiển thị trên Dashboard.</small></div><span class="banner-icon">🤖</span></div>' +
+      '<div class="stat-grid">' +
+        '<div class="stat"><small>AI job chờ</small><b>' + Number(stats.queued || 0) + '</b></div>' +
+        '<div class="stat"><small>Đang xử lý</small><b>' + Number(stats.processing || 0) + '</b></div>' +
+        '<div class="stat"><small>Hoàn tất</small><b>' + Number(stats.completed || 0) + '</b></div>' +
+        '<div class="stat"><small>Lỗi</small><b>' + Number(stats.failed || 0) + '</b></div>' +
+      '</div>' +
+      '<div class="card"><div class="section-head"><h3>Điều kiện máy chủ</h3>' + tag(Boolean(d.enabled && (d.musicEnabled || d.imageEnabled))) + '</div>' +
+        '<div class="list-row"><span>AI_MEDIA_QUEUE_ENABLED trong Render</span>' + tag(Boolean(d.queueConfigured)) + '</div>' +
+        '<div class="list-row"><span>ELEVENLABS_API_KEY · tạo âm nhạc</span>' + tag(Boolean(d.musicKeyConfigured)) + '</div>' +
+        '<div class="list-row"><span>OPENAI_API_KEY · chỉnh sửa ảnh</span>' + tag(Boolean(d.imageKeyConfigured)) + '</div>' +
+        '<p class="notice warn">Các API key không được nhập hoặc hiển thị tại đây. Admin phải cấu hình secret trong Render Environment và bật AI worker trước; Dashboard chỉ được bật từng tính năng khi điều kiện máy chủ đạt yêu cầu.</p>' +
+      '</div>' +
+      '<form class="card form" id="admin-ai-media-form">' +
+        '<b>⚙️ Quyền sử dụng AI cho thành viên</b>' +
+        '<div class="field"><label>AI Studio tổng</label><select name="enabled"><option value="false"' + selected(!d.adminEnabled) + '>Tắt toàn bộ AI</option><option value="true"' + selected(d.adminEnabled) + '>Cho phép AI Studio</option></select></div>' +
+        '<div class="two-col">' +
+          switchField('musicEnabled','🎵 Tạo âm nhạc AI',Boolean(d.musicFlag),!d.musicKeyConfigured || !d.queueConfigured) +
+          switchField('imageEnabled','🖼️ Chỉnh sửa ảnh AI',Boolean(d.imageFlag),!d.imageKeyConfigured || !d.queueConfigured) +
+        '</div>' +
+        '<button class="primary">Lưu cấu hình AI Studio</button>' +
+      '</form>' +
+      '<div class="section-head"><h3>Trạng thái tác vụ gần đây</h3><span>' + (d.jobs || []).length + ' job</span></div>' +
+      ((d.jobs || []).length ? d.jobs.map(job =>
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(String(job.id).slice(0,8)) + ' · ' + (job.job_type === 'music' ? '🎵 Âm nhạc AI' : '🖼️ Chỉnh ảnh AI') + '</b><small>User ' + escapeHtml(job.user_id) + ' · ' + new Date(job.created_at).toLocaleString('vi-VN') + '</small></div><span class="status ' + escapeHtml(job.status) + '">' + escapeHtml(job.status) + '</span></div>' +
+        (job.error_message ? '<p class="notice warn">' + escapeHtml(job.error_message) + '</p>' : '') +
+        '</article>'
+      ).join('') : empty('Chưa có tác vụ AI','Yêu cầu từ Telegram sẽ hiển thị tại đây sau khi AI Studio được bật.')) +
+      '<div class="notice">Tác vụ AI hiện dùng hàng đợi PostgreSQL, giới hạn một job đang chạy trên mỗi thành viên và giới hạn số job mỗi ngày. Chưa cấu hình thu phí AI tự động; không tự trừ ví cho các tác vụ này.</div>';
+  }
+
   function adminAiCover() {
     const d = state.adminData.aiCover || {};
     const stats = d.stats || {};
@@ -1276,6 +1316,7 @@
       ['Callback HMAC secret',d.callbackSecretConfigured],
       ['Worker URL HTTPS',d.workerConfigured],
       ['Worker process enabled',d.workerEnabled],
+      ['AI Cover infrastructure',d.infrastructureReady],
       ['AI Cover member access',d.enabled]
     ];
     const statusLabel = value => ({
@@ -1289,9 +1330,10 @@
         '<div class="stat"><small>Job chờ / chạy</small><b>' + Number(stats.queued || 0) + ' / ' + Number(stats.processing || 0) + '</b></div>' +
         '<div class="stat"><small>Hoàn tất / lỗi</small><b>' + Number(stats.completed || 0) + ' / ' + Number(stats.failed || 0) + '</b></div>' +
       '</div>' +
-      '<div class="card"><div class="section-head"><h3>Kiểm tra điều kiện vận hành</h3>' + stateTag(Boolean(d.ready)) + '</div>' +
+      '<div class="card"><div class="section-head"><h3>Kiểm tra điều kiện vận hành</h3>' + stateTag(Boolean(d.infrastructureReady)) + '</div>' +
         readiness.map(item => '<div class="list-row"><span>' + escapeHtml(item[0]) + '</span>' + stateTag(Boolean(item[1])) + '</div>').join('') +
-        '<p class="small muted">AI Cover chỉ mở cho thành viên khi đủ Storage + callback secret + HTTPS RVC worker và worker dispatcher được bật. Hiện tại không có worker engine đã đăng ký; không bật tính năng bán cho đến khi kiểm tra thành công.</p>' +
+        '<p class="small muted">AI Cover chỉ mở cho thành viên khi đủ Storage + callback secret + HTTPS RVC worker và worker dispatcher được bật. Công tắc bên dưới không thể vượt qua các điều kiện hạ tầng này.</p>' +
+        '<div class="two-col"><div><b>Trạng thái dịch vụ AI Cover</b><p class="small muted">' + (d.runtimeEnabled ? 'Đang cho phép thành viên dùng AI Cover.' : 'Đang khóa AI Cover với thành viên.') + '</p></div><button type="button" class="tiny-btn" data-ai-cover-service data-next="' + String(!d.runtimeEnabled) + '"' + (!d.infrastructureReady && !d.runtimeEnabled ? ' disabled' : '') + '>' + (d.runtimeEnabled ? 'Tắt dịch vụ AI Cover' : 'Bật dịch vụ AI Cover') + '</button></div>' +
       '</div>' +
       '<form class="card form" id="admin-ai-cover-voice-form" enctype="multipart/form-data"><b>➕ Thêm / cập nhật preset giọng có cấp phép</b>' +
         '<div class="two-col"><div class="field"><label>Preset ID</label><input name="id" maxlength="48" pattern="[a-z0-9][a-z0-9_-]{1,47}" placeholder="voice-hendy-01" required></div>' +
@@ -1358,6 +1400,7 @@
     if (state.adminTab === 'vouchers') body = adminVouchers();
     if (state.adminTab === 'video-jobs') body = adminVideoJobs();
     if (state.adminTab === 'code-telegram') body = adminCodeTelegram();
+    if (state.adminTab === 'ai-media') body = adminAiMedia();
     if (state.adminTab === 'ai-cover') body = adminAiCover();
     if (state.adminTab === 'runtime') body = adminRuntime();
     if (state.adminTab === 'operations') body = adminOperations();

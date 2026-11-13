@@ -168,6 +168,10 @@ $assert(str_contains($productReadinessSource, 'source_permission_status') && str
 $assert(str_contains($apiControllerSource, 'productProviderInput') && str_contains($apiControllerSource, 'ProductReadinessService::sqlPredicate()') && str_contains($apiControllerSource, 'adminProduct($product)'), 'Admin product CRUD records supplier evidence and checkout is gated');
 $assert(str_contains($apiControllerSource, '/api/admin/service-readiness') && str_contains($apiControllerSource, 'ServiceReadinessService::snapshot'), 'Admin has a protected endpoint for service and supplier readiness');
 $assert(str_contains($adminDashboardSource, 'data-admin-tab="service-readiness"') && str_contains($adminDashboardSource, 'adminServiceReadiness()') && str_contains($adminDashboardSource, '/api/admin/service-readiness'), 'Admin Dashboard exposes provider readiness and missing configuration names');
+$assert(str_contains($adminDashboardSource, 'data-admin-tab="provider-registry"') && str_contains($adminDashboardSource, 'adminProviderRegistry()') && str_contains($adminDashboardSource, '/api/admin/provider-registry'), 'Existing Admin Dashboard includes the Provider & Service Registry tab');
+$assert(str_contains($adminDashboardSource, 'data-provider-edit') && str_contains($adminDashboardSource, 'data-provider-check') && str_contains($adminDashboardSource, 'data-provider-delete') && str_contains($adminDashboardSource, 'data-registry-service-form'), 'Provider Registry UI supports edit, configuration check, delete and service maintenance controls');
+$assert(str_contains($apiControllerSource, '/api/admin/provider-registry/providers') && str_contains($apiControllerSource, '/api/admin/provider-registry/services/') && str_contains($apiControllerSource, 'ProviderRegistryService::saveProvider'), 'Admin API exposes protected provider CRUD and service-state endpoints');
+
 
 
 $assert(str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS is_blocked') && str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS blocked_reason') && str_contains($schemaSource, 'blocked_by TEXT'), 'member access controls have an additive database migration and complete schema');

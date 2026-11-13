@@ -563,27 +563,50 @@
   }
 
 
-  async function api(path, method, body) {
+  async function api(path, method, body, timeoutMs = 20000) {
     const authHeaders = initData ? {'Authorization':'tma ' + initData} : {};
-    const response = await fetch(path, {
-      method:method || 'GET',
-      headers:{
-        'Content-Type':'application/json',
-        ...authHeaders,
-        'X-Telegram-Bot-Key':botKey
-      },
-      credentials:'same-origin',
-      body:body === undefined ? undefined : JSON.stringify(body),
-      cache:'no-store'
-    });
-    let data = {};
-    try { data = await response.json(); } catch (error) {}
-    if (!response.ok) {
-      const error = new Error(typeof data.error === 'string' ? data.error : (data.error?.message || data.message || 'Không thể thực hiện yêu cầu.'));
-      error.status = response.status;
+    const controller = new AbortController();
+    const boundedTimeout = Math.max(1000, Math.min(60000, Number(timeoutMs) || 20000));
+    let timedOut = false;
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, boundedTimeout);
+    try {
+      const response = await fetch(path, {
+        method:method || 'GET',
+        headers:{
+          'Content-Type':'application/json',
+          ...authHeaders,
+          'X-Telegram-Bot-Key':botKey
+        },
+        credentials:'same-origin',
+        body:body === undefined ? undefined : JSON.stringify(body),
+        cache:'no-store',
+        signal:controller.signal
+      });
+      let data = {};
+      try { data = await response.json(); } catch (error) {}
+      if (!response.ok) {
+        const requestError = new Error(typeof data.error === 'string' ? data.error : (data.error?.message || data.message || 'Không thể thực hiện yêu cầu.'));
+        requestError.status = response.status;
+        throw requestError;
+      }
+      return data;
+    } catch (error) {
+      if (timedOut || error?.name === 'AbortError') {
+        const timeoutError = new Error('Máy chủ quản trị không phản hồi sau ' + Math.round(boundedTimeout / 1000) + ' giây. Hãy thử lại; nếu vẫn lỗi, kiểm tra trạng thái Backend và PostgreSQL trên Render.');
+        timeoutError.code = 'timeout';
+        throw timeoutError;
+      }
+      if (error && error.name === 'TypeError') {
+        error.code = 'network';
+        error.message = 'Không thể kết nối tới API quản trị. Hãy kiểm tra mạng, Backend Render và kết nối PostgreSQL.';
+      }
       throw error;
+    } finally {
+      window.clearTimeout(timer);
     }
-    return data;
   }
 
   function toast(message,kind='success') {
@@ -2211,16 +2234,55 @@
     document.body.classList.toggle('sidebar-open');
   });
 
+  function showStartupFailure(error) {
+    const unauthorized = error && [401,403].includes(Number(error.status));
+    $('admin-sidebar').hidden = true;
+    $('admin-nav').classList.add('hidden');
+    document.body.classList.add('auth-required');
+    setRealtimeStatus(unauthorized ? 'Phiên Admin chưa hợp lệ' : 'Không kết nối được API quản trị',false);
+
+    if (unauthorized) {
+      $('page-title').textContent = 'HENDY · ĐĂNG NHẬP ADMIN';
+      $('page-subtitle').textContent = 'Phiên đăng nhập đã hết hạn, đã dùng hoặc Telegram ID không còn quyền Admin.';
+      $('app').innerHTML = '<div class="card"><div class="app-banner"><div><b>🛡️ ĐĂNG NHẬP HENDY ADMIN</b><small>Quản trị hoàn toàn trên trình duyệt.</small></div><span class="banner-icon">🌐</span></div>' +
+        '<p>1. Mở bot HENDY bằng Telegram. 2. Gửi <code>/admin</code>. 3. Nhấn nút <b>MỞ BẢNG ĐIỀU KHIỂN ADMIN</b> để tạo liên kết đăng nhập mới.</p>' +
+        '<div class="notice warn">' + escapeHtml(error.message || 'Phiên Admin không còn hợp lệ.') + ' Liên kết đăng nhập chỉ dùng một lần và hết hạn sau 5 phút.</div>' +
+        '<button class="primary" type="button" id="admin-retry-start">↻ THỬ XÁC THỰC LẠI</button></div>';
+    } else {
+      $('page-title').textContent = 'HENDY · MÁY CHỦ CHƯA SẴN SÀNG';
+      $('page-subtitle').textContent = 'Đã tải Website nhưng API quản trị chưa phản hồi.';
+      $('app').innerHTML = '<div class="card"><div class="app-banner"><div><b>🛰️ KHÔNG KẾT NỐI ĐƯỢC MÁY CHỦ QUẢN TRỊ</b><small>Website vẫn mở; dữ liệu Admin chưa được tải.</small></div><span class="banner-icon">⚠️</span></div>' +
+        '<div class="notice warn">' + escapeHtml(error?.message || 'API không phản hồi. Vui lòng thử lại.') + '</div>' +
+        '<p class="small muted">Kiểm tra service <b>hendydichvumang-telegram-bot</b>, log Render và trạng thái PostgreSQL. Không cần xóa dữ liệu hoặc tạo lại tài khoản.</p>' +
+        '<button class="primary" type="button" id="admin-retry-start">↻ THỬ KẾT NỐI LẠI</button></div>';
+    }
+    $('admin-retry-start')?.addEventListener('click', () => start());
+    $('profile-name').textContent = unauthorized ? 'Chưa xác thực' : 'Máy chủ chưa kết nối';
+  }
+
   async function start() {
+    $('page-title').textContent = 'Bảng điều khiển quản trị';
+    $('page-subtitle').textContent = 'Đang kiểm tra phiên đăng nhập và kết nối API…';
+    $('live-indicator').textContent = '● Đang kết nối máy chủ quản trị…';
+    $('app').innerHTML = '<div class="empty"><span class="spinner"></span> Đang xác thực phiên Admin và tải dữ liệu máy chủ…</div>';
     try {
-      state.boot = await api('/api/bootstrap');
+      state.boot = await api('/api/bootstrap', 'GET', undefined, 20000);
+      if (!state.boot || !state.boot.user || typeof state.boot.isAdmin !== 'boolean') {
+        throw new Error('Máy chủ trả về dữ liệu bootstrap không đầy đủ. Hãy thử tải lại.');
+      }
       $('profile-name').textContent = state.boot.user.name || 'Thành viên';
-      $('brand-name').textContent = state.boot.settings.homepage_title || 'Hendy Cybertech';
+      $('brand-name').textContent = state.boot.settings?.homepage_title || 'Hendy Cybertech';
       $('profile-chip').querySelector('.avatar').textContent = (state.boot.user.name || 'H').slice(0,1).toUpperCase();
+      if (requestedView === 'admin' && !state.boot.isAdmin) {
+        const accessError = new Error('Telegram ID hiện tại không có quyền quản trị trong ADMIN_ID / ADMIN_IDS.');
+        accessError.status = 403;
+        throw accessError;
+      }
       if (state.boot.isAdmin) {
         $('admin-sidebar').hidden = false;
         document.body.classList.remove('auth-required');
         $('admin-nav').classList.remove('hidden');
+        $('page-subtitle').textContent = 'Phiên Admin hợp lệ · API quản trị đã phản hồi.';
         connectAdminRealtime();
       } else {
         $('admin-sidebar').hidden = true;
@@ -2230,20 +2292,7 @@
       }
       renderPage();
     } catch (error) {
-      if (!initData) {
-        $('admin-sidebar').hidden = true;
-        document.body.classList.add('auth-required');
-        $('page-title').textContent='HENDY · ĐĂNG NHẬP ADMIN';
-        $('page-subtitle').textContent='Đăng nhập website Admin bằng liên kết một lần từ bot HENDY. Không cần Mini App hoặc Telegram WebView.';
-        $('app').innerHTML='<div class="card"><div class="app-banner"><div><b>🛡️ ĐĂNG NHẬP HENDY ADMIN</b><small>Quản trị hoàn toàn trên website trình duyệt.</small></div><span class="banner-icon">🌐</span></div><p>1. Mở bot HENDY bằng Telegram. 2. Gửi /admin hoặc chọn nút BẢNG ĐIỀU KHIỂN ADMIN. 3. Nhấn “MỞ BẢNG ĐIỀU KHIỂN ADMIN” và hoàn tất xác thực tại website này.</p><div class="notice warn">Liên kết Admin chỉ dùng một lần, có hiệu lực 5 phút và được cấp riêng cho Telegram ID nằm trong ADMIN_ID / ADMIN_IDS. Không cần mở Mini App; không chia sẻ đường dẫn đăng nhập.</div></div>';
-        $('profile-name').textContent='Chưa đăng nhập';
-        return;
-      }
-      $('admin-sidebar').hidden = true;
-      document.body.classList.add('auth-required');
-      $('page-title').textContent='Không thể xác thực';
-      $('page-subtitle').textContent='Vui lòng mở lại Website HENDY từ Telegram Bot.';
-      $('app').innerHTML='<div class="notice warn">' + escapeHtml(error.message) + '</div>';
+      showStartupFailure(error);
     }
   }
   window.addEventListener('beforeunload',() => {

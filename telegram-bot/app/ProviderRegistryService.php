@@ -92,6 +92,18 @@ final class ProviderRegistryService
         if (!isset(self::ADAPTERS[$adapterKey])) {
             throw new RuntimeException('Loại adapter không nằm trong danh sách cho phép.');
         }
+        $adapterServices = match ($adapterKey) {
+            'manual', 'custom_api_pending' => null,
+            'homeproxy' => ['proxy'],
+            'ai_media' => ['ai_music', 'ai_image'],
+            'ai_cover_worker' => ['ai_cover'],
+            'video_worker' => ['vietsub'],
+            'code_telegram' => ['code_telegram', 'code_telegram_ocr'],
+            default => [],
+        };
+        if (is_array($adapterServices) && !in_array($serviceKey, $adapterServices, true)) {
+            throw new RuntimeException('Adapter ' . $adapterKey . ' không tương thích với dịch vụ ' . $serviceKey . '.');
+        }
         if ($endpoint !== '') {
             $parts = parse_url($endpoint);
             if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'

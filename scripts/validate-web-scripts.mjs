@@ -26,7 +26,7 @@ for (const file of files) {
     try {
       new vm.Script(source, { filename: file + '#inline-script-' + (index + 1) });
     } catch (error) {
-      failures.push(file + '#inline-script-' + (index + 1) + ': ' + error.message);
+      failures.push(file + '#inline-script-' + (index + 1) + ': ' + (error.stack || error.message));
     }
   }
 }

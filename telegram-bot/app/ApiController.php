@@ -592,6 +592,9 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && $path === '/api/admin/service-readiness') {
+            return self::response(ServiceReadinessService::snapshot());
+        }
         if ($method === 'GET' && $path === '/api/admin/ai-media') {
             return self::response(AiMediaService::adminSnapshot());
         }

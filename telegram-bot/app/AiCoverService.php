@@ -16,7 +16,19 @@ final class AiCoverService
 
     public static function enabled(): bool
     {
-        return self::infrastructureReady() && self::runtimeEnabled();
+        return self::infrastructureReady() && self::runtimeEnabled() && self::hasReadyVoice();
+    }
+
+    private static function hasReadyVoice(): bool
+    {
+        return (int) Database::value(
+            "SELECT COUNT(*) FROM ai_cover_voices
+             WHERE enabled=TRUE AND voice_owner_consent=TRUE
+               AND length(trim(rights_holder))>0
+               AND length(trim(license_name))>0
+               AND length(trim(authorization_reference))>0
+               AND available=TRUE AND checked_at > NOW() - INTERVAL '30 minutes'"
+        ) > 0;
     }
 
     private static function infrastructureReady(): bool
@@ -41,6 +53,9 @@ final class AiCoverService
         if ($enabled && !self::infrastructureReady()) {
             throw new RuntimeException('AI Cover chưa đủ cấu hình. Cần bật AI_COVER_ENABLED và AI_COVER_WORKER_ENABLED, cấu hình worker HTTPS, callback secret và Neon Object Storage trước.');
         }
+        if ($enabled && !self::hasReadyVoice()) {
+            throw new RuntimeException('Chưa có preset AI Cover nào được cấp phép và xác minh khả dụng trong 30 phút gần nhất. Hãy thêm preset, lưu hồ sơ đồng ý và bấm Kiểm tra model trước khi bật.');
+        }
         Database::run(
             'INSERT INTO app_settings(key,value,is_public,updated_at) VALUES(?,?,FALSE,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,is_public=FALSE,updated_at=NOW()',
             ['ai_cover_enabled', $enabled ? '1' : '0']
@@ -59,15 +74,17 @@ final class AiCoverService
         $secretConfigured = strlen(trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''))) >= 32;
         $workerUrl = self::workerBaseUrl();
         $infrastructureReady = self::infrastructureReady();
+        $voiceReady = self::hasReadyVoice();
         return [
             'enabled' => self::enabled(),
             'runtimeEnabled' => self::runtimeEnabled(),
             'infrastructureReady' => $infrastructureReady,
+            'voiceReady' => $voiceReady,
             'workerEnabled' => Env::bool('AI_COVER_WORKER_ENABLED', false),
             'workerConfigured' => $workerUrl !== '',
             'storageConfigured' => $storage,
             'callbackSecretConfigured' => $secretConfigured,
-            'ready' => $infrastructureReady,
+            'ready' => $infrastructureReady && $voiceReady,
         ];
     }
 

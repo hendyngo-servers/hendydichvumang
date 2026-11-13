@@ -74,8 +74,14 @@ $validProvider = ProviderRegistryService::validateProviderInput([
     'endpointUrl' => 'https://provider.example/api',
     'credentialEnvKey' => 'OTP_PROVIDER_API_KEY',
     'enabled' => true,
+    'priority' => 25,
 ]);
-$assert($validProvider['credential_env_key'] === 'OTP_PROVIDER_API_KEY' && $validProvider['enabled'], 'Provider Registry chỉ ghi tên Environment và xác thực input hợp lệ');
+$assert($validProvider['credential_env_key'] === 'OTP_PROVIDER_API_KEY' && $validProvider['enabled'] && $validProvider['priority'] === 25, 'Provider Registry chỉ ghi tên Environment và xác thực input hợp lệ');
+$builtInProvider = ProviderRegistryService::validateProviderInput([
+    'serviceKey' => 'proxy', 'providerKey' => 'homeproxy-main', 'name' => 'HomeProxy tích hợp',
+    'adapterKey' => 'homeproxy', 'credentialEnvKey' => 'HOMEPROXY_ENCRYPTION_KEY',
+]);
+$assert($builtInProvider['endpoint_url'] === '' && $builtInProvider['priority'] === 100, 'Adapter tích hợp sẵn có thể dùng endpoint được quản lý qua Environment hoặc cấu hình nội bộ');
 $invalidProviderUrlRejected = false;
 try {
     ProviderRegistryService::validateProviderInput([

@@ -44,7 +44,7 @@ $assert(!str_contains($telegramAuthSource, 'pg_advisory_xact_lock'), 'webhook/se
 $assert(str_contains($telegramAuthSource, 'char_length(telegram_webhook_secrets.secret_value) BETWEEN 32 AND 256') && str_contains($telegramAuthSource, 'secret_value !~'), 'PostgreSQL-safe secret validation combines character allowlist and length bounds');
 $assert(str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS website_session_secrets'), 'database schema creates the website session secret table used by authentication');
 $aiCoverSource = file_get_contents(dirname(__DIR__) . '/app/AiCoverService.php');
-$assert(str_contains($aiCoverSource, 'public static function runtimeEnabled()') && str_contains($aiCoverSource, 'public static function setServiceEnabled') && str_contains($adminDashboardSource ?? '', 'data-ai-cover-service'), 'AI Cover member access has an Admin runtime toggle behind infrastructure readiness');
+$assert(str_contains($aiCoverSource, 'public static function runtimeEnabled()') && str_contains($aiCoverSource, 'public static function setServiceEnabled'), 'AI Cover member access has an Admin runtime toggle behind infrastructure readiness');
 $assert(TelegramLink::normalize('https://t.me/HendySupportGroup') === 'https://t.me/HendySupportGroup', 'chấp nhận liên kết Telegram HTTPS hợp lệ');
 $assert(TelegramLink::normalize('https://t.me/+Invite_Code-123') === 'https://t.me/+Invite_Code-123', 'chấp nhận liên kết mời Telegram');
 $assert(TelegramLink::normalize('http://t.me/HendySupportGroup') === '', 'từ chối liên kết Telegram không HTTPS');
@@ -141,6 +141,7 @@ $assert(!str_contains($adminUiSource, 'telegram-web-app.js'), 'Admin không tả
 $assert(str_contains($adminUiSource, 'value="inline_keyboard"'), 'trình quản lý menu chỉ lưu Inline Keyboard');
 $assert(str_contains($adminUiSource, 'name="hendy-build" content="2026.11.07.2"') && str_contains($adminUiSource, '--primary:#ff315d'), 'Admin có release marker và giao diện HENDY đỏ đen');
 $assert(str_contains($adminUiSource, 'data-admin-tab="operations"') && str_contains($adminUiSource, 'adminOperations()'), 'Admin có bảng điều khiển bảo trì/nâng cấp cho từng bot');
+$assert(str_contains($adminUiSource, 'data-admin-tab="ai-media"') && str_contains($adminUiSource, 'adminAiMedia()') && str_contains($adminUiSource, 'data-ai-cover-service') && str_contains($adminUiSource, '/api/admin/ai-media'), 'Admin có bảng AI Studio và công tắc dịch vụ AI Cover');
 $assert(str_contains($adminUiSource, 'data-admin-tab="proxy"') && str_contains($adminUiSource, 'adminProxy()'), 'Admin có trang quản lý HomeProxy');
 $assert(str_contains($adminUiSource, 'homeproxy-connect-form') && str_contains($adminUiSource, 'data-homeproxy-action="check"') && str_contains($adminUiSource, 'data-homeproxy-action="rotate"'), 'Mini App có luồng kết nối, kiểm tra và xoay IP HomeProxy');
 $landingUiSource = file_get_contents(dirname(__DIR__, 2) . '/website/public/index.html');

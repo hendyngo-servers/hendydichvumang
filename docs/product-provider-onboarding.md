@@ -46,36 +46,54 @@ working API access. Keep each feature locked until its own readiness checks pass
 
 The additive columns and constraints are included in `telegram-bot/database/schema.sql`
 and tracked in `telegram-bot/database/migrations/20261113_product_supplier_readiness.sql`.
-Production keeps `RUN_MIGRATIONS_ON_START=false`: do not give the runtime Bot role
+Production keeps `RUN_MIGRATIONS_ON_START=false`; the Bot runtime role must not receive
 DDL privileges just to make this feature work.
 
-Before deploying the code to an existing database, take/verify a Neon restore point,
-then apply the reviewed migration using the Neon database owner / migration role.
-Do not run it using the restricted `hendy_bot_app` runtime role. The migration adds
-columns and an index, defaults all existing products to pending verification, and
-does not delete orders, wallet entries, user records or product rows. Verify the
-new columns exist and that the app role can SELECT/UPDATE them before enabling the
-new Bot/API version.
-
-After the schema is present, use the Admin product form to record the supplier and
-evidence, then review both permission statuses. A green CI run does not prove that
-a production database migration or external provider account has been applied.
-
-## Apply the additive production migration
-
-Production keeps `RUN_MIGRATIONS_ON_START=false`; the Bot runtime role must not receive DDL privileges.
-Use a separate database-owner connection and apply the one reviewed migration exactly once:
+The target database is the database name in the path portion of the Render Bot service's
+`DATABASE_URL`. Do not assume it is named after the Neon project or repository. First
+identify the actual target from the running Bot service Shell:
 
 ```bash
-psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f telegram-bot/database/migrations/20261113_product_supplier_readiness.sql
+cd /var/www/app
+php bin/database-doctor.php
 ```
 
-Do not put `MIGRATION_DATABASE_URL` in the repository or paste its value into ChatGPT.
-After the migration, open Admin → **Nguồn & tình trạng dịch vụ**. The migration row should report ready,
-and product creation/editing can save the source and supplier record. Until then, customer catalogs
-and checkout remain locked for these products. Fresh database installs also receive the fields from
-`telegram-bot/database/schema.sql` when the owner runs the normal schema bootstrap.
+This read-only command prints the current database name, role, hostname, direct/pooled
+status and pending migration inventory, without exposing any username, password or
+connection string. Confirm the reported database name before continuing.
+
+Before applying a migration, take/verify a Neon restore point. Use a one-off
+`MIGRATION_DATABASE_URL` that targets that exact database using a direct (non-pooled)
+Neon endpoint and a database-owner/dedicated migration role. Keep it in the Render
+Shell session only; never put the owner URL in the repository or browser UI.
+
+Run the dry-run first:
+
+```bash
+php bin/migrate.php
+```
+
+Check the target database, role and pending migrations. The dry-run does not modify
+schema or data. Only after confirming the exact target name, run:
+
+```bash
+php bin/migrate.php --apply --expect-database='<exact database name from doctor>'
+```
+
+The versioned runner rejects database-name mismatches, pooled Neon URLs, the restricted
+`hendy_bot_app` runtime role, partial base schemas and migration checksum drift. It
+applies each additive migration in its own transaction and records its checksum in
+`schema_migrations`. The Bot does not run DDL during its ordinary Render startup.
+
+After applying, run `php bin/database-doctor.php` again and verify there are no pending
+migrations or checksum mismatches. Verify the ten Supplier Readiness columns and four
+CHECK constraints exist, and that `hendy_bot_app` has SELECT/UPDATE permissions on
+`products`. Existing product rows are retained and default to pending verification;
+existing orders, wallet ledgers and user records are not deleted or rewritten.
+
+After the schema is present, use the Admin product form to record the supplier and
+evidence, then review both permission statuses. A green CI run does not prove that a
+production database migration or external provider account has been applied.
 
 ## Vietsub worker
 

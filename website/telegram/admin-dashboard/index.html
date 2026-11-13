@@ -1378,10 +1378,17 @@
   function adminUsers() {
     const users = state.adminData.users || [];
     return '<form class="form" id="admin-user-search"><div class="field"><label>Tìm theo Telegram ID, tên hoặc username</label><input name="search" placeholder="Nhập từ khóa"></div><button class="secondary">Tìm thành viên</button></form>' +
-      (users.length ? users.map(user =>
-        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(user.name || user.username || user.user_id) + '</b><small class="muted">ID ' + escapeHtml(user.user_id) + ' · VIP ' + user.vip_level + '</small></div><b class="price">' + money(user.balance) + '</b></div>' +
-        '<form class="form" data-adjust-form="' + escapeHtml(user.user_id) + '"><div class="two-col"><div class="field"><label>Loại</label><select name="direction"><option value="credit">Cộng tiền</option><option value="debit">Trừ tiền</option></select></div><div class="field"><label>Số tiền</label><input name="amount" type="number" min="1" required></div></div><div class="field"><label>Lý do</label><input name="description" maxlength="300"></div><button class="tiny-btn">Xác nhận điều chỉnh</button></form></article>'
-      ).join('') : empty('Không có thành viên phù hợp','Tài khoản đã đăng ký sẽ xuất hiện tại đây.'));
+      (users.length ? users.map(user => {
+        const blocked = Boolean(user.is_blocked);
+        return '<article class="record"><div class="record-top"><div><b>' + escapeHtml(user.name || user.username || user.user_id) + '</b><small class="muted">ID ' + escapeHtml(user.user_id) + ' · VIP ' + user.vip_level + ' · ' + (blocked ? '⛔ Đang khóa' : '✅ Đang hoạt động') + '</small></div><b class="price">' + money(user.balance) + '</b></div>' +
+          '<form class="form" data-user-access-form="' + escapeHtml(user.user_id) + '">' +
+            '<div class="field"><label><input type="checkbox" name="isBlocked" value="true" ' + (blocked ? 'checked' : '') + '> Khóa quyền sử dụng Bot và Website</label></div>' +
+            '<div class="field"><label>Lý do khóa (bắt buộc khi khóa)</label><input name="reason" maxlength="300" value="' + escapeHtml(user.blocked_reason || '') + '" placeholder="Nhập lý do rõ ràng cho thành viên"></div>' +
+            '<button class="' + (blocked ? 'secondary' : 'tiny-btn') + '">' + (blocked ? 'Mở khóa tài khoản' : 'Lưu trạng thái truy cập') + '</button>' +
+            '<small class="muted">Khóa tài khoản không xóa số dư, lịch sử nạp tiền hoặc đơn hàng. Tài khoản Admin trong allowlist không thể bị khóa.</small>' +
+          '</form>' +
+          '<form class="form" data-adjust-form="' + escapeHtml(user.user_id) + '"><div class="two-col"><div class="field"><label>Loại</label><select name="direction"><option value="credit">Cộng tiền</option><option value="debit">Trừ tiền</option></select></div><div class="field"><label>Số tiền</label><input name="amount" type="number" min="1" required></div></div><div class="field"><label>Lý do</label><input name="description" maxlength="300"></div><button class="tiny-btn">Xác nhận điều chỉnh</button></form></article>';
+      }).join('') : empty('Không có thành viên phù hợp','Tài khoản đã đăng ký sẽ xuất hiện tại đây.'));
   }
 
   async function renderAdmin() {

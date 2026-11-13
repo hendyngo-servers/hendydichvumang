@@ -112,6 +112,12 @@ final class ApiController
 
         $userId = (string) $this->user['id'];
 
+        $accountAccess = Database::one('SELECT is_blocked, blocked_reason FROM users WHERE user_id = ?', [$userId]);
+        if ($accountAccess !== null && in_array($accountAccess['is_blocked'], [true, 1, '1', 't', 'true'], true) && !$this->isAdmin()) {
+            $reason = trim((string) ($accountAccess['blocked_reason'] ?? ''));
+            throw new HttpException(403, 'Tài khoản HENDY đang tạm khóa.' . ($reason !== '' ? ' Lý do: ' . $reason : '') . ' Vui lòng liên hệ CSKH.');
+        }
+
         if (WebServiceKernel::handles($path)) {
             try {
                 $result = WebServiceKernel::dispatch($method, $path, $this->body, [
@@ -1058,17 +1064,63 @@ final class ApiController
         if ($method === 'GET' && $path === '/api/admin/users') {
             $search = $this->text($this->query['search'] ?? '', 80);
             $users = Database::all(
-                "SELECT user_id, name, username, balance, total_deposited, vip_level, ref_by, created_at FROM users " .
+                "SELECT user_id, name, username, balance, total_deposited, vip_level, ref_by, is_blocked, blocked_reason, created_at FROM users " .
                 "WHERE (? = '' OR user_id ILIKE ? OR name ILIKE ? OR username ILIKE ?) ORDER BY created_at DESC LIMIT 100",
                 [$search, '%' . $search . '%', '%' . $search . '%', '%' . $search . '%']
             );
             foreach ($users as &$user) {
                 $user['balance'] = (int) $user['balance'];
                 $user['total_deposited'] = (int) $user['total_deposited'];
+                $user['vip_level'] = (int) $user['vip_level'];
+                $user['is_blocked'] = in_array($user['is_blocked'] ?? false, [true, 1, '1', 't', 'true'], true);
             }
             unset($user);
             return self::response(['users' => $users]);
         }
+        if (preg_match('#^/api/admin/users/(\d{5,20})/access$#', $path, $match) && $method === 'PATCH') {
+            $targetId = $match[1];
+            if (TelegramAuth::isAdmin($targetId)) {
+                throw new HttpException(409, 'Không thể khóa tài khoản Admin thuộc allowlist hệ thống.');
+            }
+            $isBlocked = $this->toBool($this->body['isBlocked'] ?? false);
+            $reason = $this->text($this->body['reason'] ?? '', 300);
+            if ($isBlocked && $reason === '') {
+                throw new HttpException(400, 'Cần nhập lý do khi khóa tài khoản.');
+            }
+            $updated = Database::one(
+                'UPDATE users SET is_blocked = ?, blocked_reason = ?, blocked_at = CASE WHEN ? THEN NOW() ELSE NULL END, blocked_by = ? WHERE user_id = ? RETURNING user_id, is_blocked, blocked_reason',
+                [$isBlocked, $isBlocked ? $reason : '', $isBlocked, (string) $this->user['id'], $targetId]
+            );
+            if ($updated === null) throw new HttpException(404, 'Không tìm thấy thành viên.');
+            Database::run('DELETE FROM bot_pending_inputs WHERE user_id = ?', [$targetId]);
+            if ($isBlocked) {
+                Database::run('DELETE FROM legacy_login_tickets WHERE user_id = ?', [$targetId]);
+            }
+            $this->audit('user.access', $targetId, ['isBlocked' => $isBlocked, 'reason' => $reason]);
+            $this->notify($targetId, $isBlocked
+                ? '⛔ Tài khoản HENDY đã tạm khóa quyền sử dụng. Lý do: ' . $reason . '. Liên hệ CSKH để được hỗ trợ.'
+                : '✅ Tài khoản HENDY đã được mở khóa. Bạn có thể sử dụng Bot trở lại.');
+            $updated['is_blocked'] = in_array($updated['is_blocked'] ?? false, [true, 1, '1', 't', 'true'], true);
+            return self::response(['user' => $updated, 'message' => $isBlocked ? 'Đã khóa tài khoản; dữ liệu ví và đơn hàng vẫn được giữ.' : 'Đã mở khóa tài khoản.']);
+        }
+
+        if (preg_match('#^/api/admin/users/(\d{5,20})/vip$#', $path, $match) && $method === 'PATCH') {
+            $targetId = $match[1];
+            $vipLevel = filter_var($this->body['vipLevel'] ?? null, FILTER_VALIDATE_INT);
+            if ($vipLevel === false || $vipLevel < 0 || $vipLevel > 10) {
+                throw new HttpException(400, 'Cấp VIP phải là số nguyên từ 0 đến 10.');
+            }
+            $updated = Database::one(
+                'UPDATE users SET vip_level = ? WHERE user_id = ? RETURNING user_id, vip_level',
+                [$vipLevel, $targetId]
+            );
+            if ($updated === null) throw new HttpException(404, 'Không tìm thấy thành viên.');
+            $this->audit('user.vip', $targetId, ['vipLevel' => $vipLevel]);
+            $this->notify($targetId, '👑 Cấp VIP tài khoản HENDY được cập nhật thành VIP ' . $vipLevel . '.');
+            $updated['vip_level'] = (int) $updated['vip_level'];
+            return self::response(['user' => $updated, 'message' => 'Đã cập nhật cấp VIP thành ' . $vipLevel . '.']);
+        }
+
         if (preg_match('#^/api/admin/users/(\d{5,20})/adjust-balance$#', $path, $match) && $method === 'POST') {
             $amount = $this->parseMoney($this->body['amount'] ?? null, false);
             $direction = $this->text($this->body['direction'] ?? '', 12);
@@ -1377,11 +1429,14 @@ final class ApiController
         }
 
         $user = Database::one(
-            'SELECT user_id, name, username, vip_level, balance FROM users WHERE user_id = ?',
+            'SELECT user_id, name, username, vip_level, balance, is_blocked, blocked_reason FROM users WHERE user_id = ?',
             [$identity['user_id']]
         );
         if ($user === null) {
             throw new HttpException(404, 'Không tìm thấy hồ sơ thành viên. Hãy tạo lại phiên đăng nhập từ HENDY BOT.');
+        }
+        if (in_array($user['is_blocked'] ?? false, [true, 1, '1', 't', 'true'], true) && !TelegramAuth::isAdmin((string) $user['user_id'])) {
+            throw new HttpException(403, 'Tài khoản HENDY đang tạm khóa. Vui lòng liên hệ CSKH.');
         }
         if ($scope === 'admin' && !TelegramAuth::isAdmin((string) $user['user_id'])) {
             throw new HttpException(403, 'Tài khoản này không nằm trong danh sách Admin được phép.');

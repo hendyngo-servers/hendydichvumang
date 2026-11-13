@@ -50,7 +50,7 @@ final class ServiceReadinessService
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name=?)",
                 [$table]
             ), [true, 1, '1', 't', 'true'], true);
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return false;
         }
     }
@@ -60,7 +60,7 @@ final class ServiceReadinessService
         if (!self::tableExists($table)) return 0;
         try {
             return max(0, (int) Database::value('SELECT COUNT(*) FROM ' . $table . ($where !== '' ? ' WHERE ' . $where : '')));
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return 0;
         }
     }
@@ -87,7 +87,7 @@ final class ServiceReadinessService
                         'locked' => max(0, (int) $row['total_count'] - (int) $row['ready_count']),
                     ];
                 }
-            } catch (\\Throwable) {
+            } catch (\Throwable) {
                 $productsTableReady = false;
                 $categories = [];
             }
@@ -101,7 +101,7 @@ final class ServiceReadinessService
             'imageEnabled' => false, 'musicFlag' => false, 'imageFlag' => false,
         ];
         if ($settingsTableReady) {
-            try { $ai = AiMediaService::readiness(); } catch (\\Throwable) {}
+            try { $ai = AiMediaService::readiness(); } catch (\Throwable) {}
         }
         $musicMissing = [];
         if (!$ai['queueConfigured']) $musicMissing[] = 'AI_MEDIA_QUEUE_ENABLED';
@@ -119,7 +119,7 @@ final class ServiceReadinessService
             'callbackSecretConfigured' => false, 'voiceReady' => false, 'ready' => false,
         ];
         if ($coverTablesReady) {
-            try { $cover = AiCoverService::readiness(); } catch (\\Throwable) {}
+            try { $cover = AiCoverService::readiness(); } catch (\Throwable) {}
         }
         $coverMissing = [];
         if (!Env::bool('AI_COVER_ENABLED', false)) $coverMissing[] = 'AI_COVER_ENABLED';
@@ -149,7 +149,7 @@ final class ServiceReadinessService
             'failedToday' => 0, 'recentLogs' => [],
         ];
         if ($proxyTablesReady) {
-            try { $proxy = ProxyService::adminStatus(); } catch (\\Throwable) {}
+            try { $proxy = ProxyService::adminStatus(); } catch (\Throwable) {}
         }
         $proxyMissing = [];
         if (!$proxyTablesReady) $proxyMissing[] = 'Migration HomeProxy: homeproxy_accounts / homeproxy_logs';
@@ -182,7 +182,7 @@ final class ServiceReadinessService
 
         $missingProductColumns = ['products table'];
         if ($productsTableReady) {
-            try { $missingProductColumns = ProductReadinessService::missingSchemaColumns(); } catch (\\Throwable) {}
+            try { $missingProductColumns = ProductReadinessService::missingSchemaColumns(); } catch (\Throwable) {}
         }
         $services = [
             self::service(

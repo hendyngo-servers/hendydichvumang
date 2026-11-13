@@ -30,6 +30,13 @@ use Hendy\WebServiceKernel;
 use Hendy\ProductReadinessService;
 
 $checks = 0;
+$assert = static function (bool $condition, string $message) use (&$checks): void {
+    $checks++;
+    if (!$condition) {
+        throw new RuntimeException('Test thất bại: ' . $message);
+    }
+};
+
 $productReadinessBase = [
     'is_active' => true, 'stock' => 3,
     'supplier_name' => 'HENDY inventory',
@@ -47,13 +54,6 @@ $assert(ProductReadinessService::validateEnvKey('OTP_PROVIDER_API_KEY') === 'OTP
 $invalidEnvRejected = false;
 try { ProductReadinessService::validateEnvKey('real-secret-value'); } catch (RuntimeException) { $invalidEnvRejected = true; }
 $assert($invalidEnvRejected, 'credential field rejects an actual secret value');
-
-$assert = static function (bool $condition, string $message) use (&$checks): void {
-    $checks++;
-    if (!$condition) {
-        throw new RuntimeException('Test thất bại: ' . $message);
-    }
-};
 
 $assert(TelegramAuth::safeEquals('same-secret', 'same-secret'), 'so sánh chuỗi đúng');
 $assert(!TelegramAuth::safeEquals('different', 'same-secret'), 'so sánh chuỗi khác');

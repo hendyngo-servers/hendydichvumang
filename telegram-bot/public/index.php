@@ -32,6 +32,7 @@ require dirname(__DIR__) . '/app/NeonStorage.php';
 require dirname(__DIR__) . '/app/AiCoverService.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/ProductReadinessService.php';
+require dirname(__DIR__) . '/app/ServiceReadinessService.php';
 require dirname(__DIR__) . '/app/WebServiceContract.php';
 require dirname(__DIR__) . '/app/WebServiceKernel.php';
 require dirname(__DIR__) . '/app/SystemWebService.php';

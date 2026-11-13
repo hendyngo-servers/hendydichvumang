@@ -1148,7 +1148,7 @@
     const statusClass = status => status === 'configuration_ready' ? 'completed' : (status === 'disabled' ? 'rejected' : 'pending');
     const providerCard = provider =>
       '<article class="record"><div class="record-top"><div><b>' + escapeHtml(provider.name) + '</b><small>' +
-      escapeHtml(provider.serviceKey) + ' · ' + escapeHtml(provider.providerKey) + ' · ' + escapeHtml(provider.adapterLabel) +
+      escapeHtml(provider.serviceKey) + ' · ' + escapeHtml(provider.providerKey) + ' · Ưu tiên ' + Number(provider.priority || 100) + ' · ' + escapeHtml(provider.adapterLabel) +
       '</small></div><span class="status ' + (provider.enabled ? 'completed' : 'pending') + '">' + (provider.enabled ? 'Đã bật trong Registry' : 'Đang tắt') + '</span></div>' +
       '<p class="small muted">' + escapeHtml(provider.endpointUrl || 'Không khai báo endpoint') + ' · ENV: ' + escapeHtml(provider.credentialEnvKey || 'Không yêu cầu') +
       (provider.credentialEnvKey ? (provider.credentialConfigured ? ' (đã có giá trị)' : ' (chưa có giá trị)') : '') + '</p>' +
@@ -1192,6 +1192,7 @@
         '<div class="field"><label>Adapter</label><select name="adapterKey">' + adapters.map(adapter => '<option value="' + escapeHtml(adapter.key) + '"' + (editingProvider.adapterKey === adapter.key ? ' selected' : '') + '>' + escapeHtml(adapter.label) + (adapter.implemented ? ' · đã có module' : ' · chưa có adapter') + '</option>').join('') + '</select></div>' +
         '<div class="field"><label>Endpoint HTTPS (không bắt buộc với bàn giao thủ công)</label><input name="endpointUrl" type="url" value="' + escapeHtml(editingProvider.endpointUrl || '') + '" placeholder="https://api.provider.example/v1"></div>' +
         '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" pattern="[A-Z][A-Z0-9_]{2,63}" value="' + escapeHtml(editingProvider.credentialEnvKey || '') + '" placeholder="OTP_PROVIDER_API_KEY"></div>' +
+        '<div class="two-col"><div class="field"><label>Độ ưu tiên (số nhỏ đứng trước)</label><input name="priority" type="number" min="0" max="10000" step="1" value="' + Number(editingProvider.priority ?? 100) + '"></div>' +
         '<div class="field"><label>Ghi chú / SLA / điều kiện hợp đồng</label><textarea name="notes" maxlength="1200" rows="3" placeholder="Thông tin vận hành không nhạy cảm">' + escapeHtml(editingProvider.notes || '') + '</textarea></div>' +
         '<div class="field"><label>Trạng thái ban đầu</label><select name="enabled"><option value="false"' + (!editingProvider.enabled ? ' selected' : '') + '>Lưu ở trạng thái tắt</option><option value="true"' + (editingProvider.enabled ? ' selected' : '') + '>Bật trong Registry (không tự bật adapter runtime)</option></select></div>' +
         '<div class="two-col"><button class="primary">' + (editingProvider.id ? 'Cập nhật nhà cung cấp' : 'Lưu nhà cung cấp') + '</button>' +
@@ -1722,7 +1723,7 @@
         await api('/api/admin/provider-registry/providers/' + id,'PATCH',{
           serviceKey:provider.serviceKey, providerKey:provider.providerKey, name:provider.name,
           adapterKey:provider.adapterKey, endpointUrl:provider.endpointUrl,
-          credentialEnvKey:provider.credentialEnvKey, notes:provider.notes, enabled:next
+          credentialEnvKey:provider.credentialEnvKey, priority:Number(provider.priority || 100), notes:provider.notes, enabled:next
         });
         toast(next ? 'Đã bật nhà cung cấp trong Registry.' : 'Đã tắt nhà cung cấp.');
         await renderPage();
@@ -2014,6 +2015,7 @@
           endpointUrl:String(data.endpointUrl || '').trim(),
           credentialEnvKey:String(data.credentialEnvKey || '').trim(),
           enabled:data.enabled === 'true',
+          priority:Number(data.priority || 100),
           notes:String(data.notes || '').trim()
         };
         const providerId = Number(form.dataset.providerId || 0);

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Hendy;
 
-/** Canonical commercial HENDY Inline Keyboard; member layout mirrors the supplied reference. */
+/** Canonical member menu. All creative AI tools are grouped behind one submenu. */
 final class BotMenuDefinition
 {
     public const ITEMS = [
@@ -13,9 +13,7 @@ final class BotMenuDefinition
         ['action' => 'vip', 'label' => '👑 TRUNG TÂM VIP', 'description' => 'Xem cấp VIP, quyền lợi và điểm danh.', 'style' => 'success'],
         ['action' => 'codes', 'label' => '📡 CODE TELEGRAM', 'description' => 'Mở Code Telegram, chọn dịch vụ và gửi tên đăng nhập để nhận mã.', 'style' => 'success'],
         ['action' => 'customer', 'label' => '💠 TRUNG TÂM KHÁCH HÀNG', 'description' => 'Hồ sơ, ví, đơn hàng và hỗ trợ khách hàng.', 'style' => 'primary'],
-        ['action' => 'music-ai', 'label' => '🎵 TẠO ÂM NHẠC AI', 'description' => 'Tạo nhạc từ mô tả bằng AI.', 'style' => 'success'],
-        ['action' => 'image-ai', 'label' => '🖼️ CHỈNH SỬA ẢNH AI', 'description' => 'Gửi ảnh và mô tả cách bạn muốn chỉnh sửa.', 'style' => 'primary'],
-        ['action' => 'ai-cover', 'label' => '🎤 AI COVER', 'description' => 'Tạo bản cover từ audio bạn sở hữu bằng preset giọng đã được cấp phép và đồng ý.', 'style' => 'success'],
+        ['action' => 'ai-features', 'label' => '🤖 TÍNH NĂNG AI', 'description' => 'Mở AI Cover, tạo âm nhạc AI và chỉnh sửa ảnh AI.', 'style' => 'success'],
         ['action' => 'group', 'label' => '🎊 NHÓM CHAT ↗', 'description' => 'Mở liên kết nhóm chat HENDY.', 'style' => 'primary'],
         ['action' => 'news', 'label' => '📢 KÊNH THÔNG BÁO ↗', 'description' => 'Mở kênh thông báo HENDY.', 'style' => 'primary'],
         ['action' => 'vip-coming-soon', 'label' => '👑 DỊCH VỤ SẮP TRIỂN KHAI', 'description' => 'Xem các dịch vụ mới đang được HENDY hoàn thiện.', 'style' => 'danger'],
@@ -26,17 +24,16 @@ final class BotMenuDefinition
         ['wallet'],
         ['vip', 'codes'],
         ['customer'],
-        ['music-ai', 'image-ai'],
-        ['ai-cover'],
+        ['ai-features'],
         ['group'],
         ['news', 'vip-coming-soon'],
         ['admin'],
     ];
 
-    // Keep hidden and legacy actions accepted by the API editor and old callbacks.
+    // Child actions are retained for callback dispatch and nested AI menus.
     public const ACTIONS = [
         'live', 'otp', 'wallet', 'vip', 'codes', 'customer',
-        'music-ai', 'image-ai', 'ai-cover',
+        'ai-features', 'music-ai', 'image-ai', 'ai-cover',
         'group', 'news', 'vip-coming-soon', 'admin',
         'tools', 'viptools', 'miniapp', 'ref', 'vietsub',
         'history', 'jobs', 'abcvip', 'gift', 'support', 'matchmaking',

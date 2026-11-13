@@ -732,15 +732,24 @@ final class AiCoverService
         $modelKey = (string) ($existing['model_key'] ?? '');
         $indexKey = (string) ($existing['index_key'] ?? '');
         $uploadedKeys = [];
+        $totalUploadBytes = 0;
 
         foreach (['model' => 'voice.pth', 'index' => 'voice.index'] as $field => $filename) {
             $file = $files[$field] ?? null;
             if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
+            $fileSize = (int) ($file['size'] ?? 0);
+            $fieldLimit = $field === 'model' ? 200_000_000 : 50_000_000;
             if ((int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
                 || !is_uploaded_file((string) ($file['tmp_name'] ?? ''))
-                || (int) ($file['size'] ?? 0) < 16
-                || (int) ($file['size'] ?? 0) > 300_000_000) {
-                throw new RuntimeException('Tệp model/index không hợp lệ hoặc vượt 300 MB.');
+                || $fileSize < 16
+                || $fileSize > $fieldLimit) {
+                throw new RuntimeException($field === 'model'
+                    ? 'Tệp model .pth phải nằm trong giới hạn 200 MB.'
+                    : 'Tệp index phải nằm trong giới hạn 50 MB.');
+            }
+            $totalUploadBytes += $fileSize;
+            if ($totalUploadBytes > 250_000_000) {
+                throw new RuntimeException('Tổng dung lượng model và index không được vượt 250 MB.');
             }
             $original = (string) ($file['name'] ?? '');
             $expectedExtension = $field === 'model' ? 'pth' : 'index';

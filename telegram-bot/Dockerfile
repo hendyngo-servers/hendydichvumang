@@ -5,6 +5,7 @@ FROM php:8.3-apache
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq-dev libonig-dev libcurl4-openssl-dev unzip ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-vie \
     && docker-php-ext-install -j"$(nproc)" pdo_pgsql mbstring curl \
+    && printf 'upload_max_filesize=205M\\npost_max_size=260M\\nmax_file_uploads=2\\nmax_execution_time=180\\nmax_input_time=180\\nmemory_limit=256M\\n' > /usr/local/etc/php/conf.d/zz-hendy-upload.ini \
     && a2enmod rewrite headers proxy proxy_http proxy_wstunnel \
     && rm -rf /var/lib/apt/lists/*
 

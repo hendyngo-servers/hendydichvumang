@@ -16,6 +16,7 @@ require dirname(__DIR__) . '/app/WebServiceContract.php';
 require dirname(__DIR__) . '/app/WebServiceKernel.php';
 require dirname(__DIR__) . '/app/SystemWebService.php';
 require dirname(__DIR__) . '/app/OperationsService.php';
+require dirname(__DIR__) . '/app/MatchmakingService.php';
 require dirname(__DIR__) . '/app/ProxyService.php';
 
 use Hendy\VideoJobService;

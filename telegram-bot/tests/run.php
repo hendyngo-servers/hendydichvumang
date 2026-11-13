@@ -81,6 +81,9 @@ foreach ($migrationFiles as $migrationFile) {
     $migrationName = basename($migrationFile);
     $destructive = preg_match('/^\\s*(?:DROP\\s+(?:TABLE|COLUMN|SCHEMA|INDEX)|TRUNCATE\\b|DELETE\\s+FROM)\\b/im', $migrationSql) === 1;
     $assert(!$destructive, 'Migration does not delete existing customer/business data: ' . $migrationName);
+    $nonRepeatableCreate = preg_match('/^\\s*CREATE\\s+(?:UNIQUE\\s+)?(?:TABLE|INDEX)\\s+(?!IF\\s+NOT\\s+EXISTS)\\S+/im', $migrationSql) === 1;
+    $nonRepeatableColumn = preg_match('/^\\s*ADD\\s+COLUMN\\s+(?!IF\\s+NOT\\s+EXISTS)\\S+/im', $migrationSql) === 1;
+    $assert(!$nonRepeatableCreate && !$nonRepeatableColumn, 'Migration uses repeatable table/index/column DDL: ' . $migrationName);
 }
 
 

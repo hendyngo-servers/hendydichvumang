@@ -167,6 +167,200 @@ final class ApiController
             return self::response(['user' => $this->userRow(), 'isAdmin' => $this->isAdmin()]);
         }
 
+        // Member-facing CODE TELEGRAM portal: order intake and private request history.
+        if ($method === 'GET' && $path === '/api/code-telegram/portal') {
+            $services = CodeTelegramService::enabled()
+                ? Database::all(
+                    'SELECT id, service_key, brand, display_name, code_type, price_min, price_max, max_accounts, daily_limit ' .
+                    'FROM code_telegram_services WHERE is_active = TRUE ORDER BY sort_order ASC, id ASC'
+                )
+                : [];
+            $services = array_map(static function (array $service): array {
+                foreach (['id', 'price_min', 'price_max', 'max_accounts', 'daily_limit'] as $field) {
+                    $service[$field] = (int) ($service[$field] ?? 0);
+                }
+                return $service;
+            }, $services);
+
+            $requests = Database::all(
+                'SELECT id AS request_id, service_key_snapshot, service_name_snapshot, brand_snapshot, ' .
+                'code_type_snapshot, account_count, status, created_at, updated_at ' .
+                'FROM code_telegram_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+                [$userId]
+            );
+            $requestIds = array_map(static fn (array $row): int => (int) $row['request_id'], $requests);
+            if ($requestIds !== []) {
+                $accounts = Database::all(
+                    'SELECT a.id, a.request_id, a.username, a.status, a.code_value, a.charged_amount, ' .
+                    'a.result_note, a.created_at, a.processed_at ' .
+                    'FROM code_telegram_request_accounts a ' .
+                    'JOIN code_telegram_requests r ON r.id = a.request_id ' .
+                    'WHERE r.user_id = ? AND a.request_id = ANY(SELECT id FROM code_telegram_requests WHERE user_id = ?) ' .
+                    'ORDER BY a.created_at ASC',
+                    [$userId, $userId]
+                );
+                $byRequest = [];
+                foreach ($accounts as $account) {
+                    $account['id'] = (int) $account['id'];
+                    $account['request_id'] = (int) $account['request_id'];
+                    $account['charged_amount'] = (int) $account['charged_amount'];
+                    $byRequest[(int) $account['request_id']][] = $account;
+                }
+                foreach ($requests as &$request) {
+                    $request['request_id'] = (int) $request['request_id'];
+                    $request['account_count'] = (int) $request['account_count'];
+                    $request['accounts'] = $byRequest[$request['request_id']] ?? [];
+                }
+                unset($request);
+            } else {
+                foreach ($requests as &$request) {
+                    $request['request_id'] = (int) $request['request_id'];
+                    $request['account_count'] = (int) $request['account_count'];
+                    $request['accounts'] = [];
+                }
+                unset($request);
+            }
+
+            return self::response([
+                'enabled' => CodeTelegramService::enabled(),
+                'services' => $services,
+                'requests' => $requests,
+                'message' => CodeTelegramService::enabled()
+                    ? 'Danh mục Code Telegram đã sẵn sàng.'
+                    : 'CODE TELEGRAM hiện chưa mở nhận đơn.',
+            ]);
+        }
+
+        if ($method === 'POST' && $path === '/api/code-telegram/requests') {
+            if (!CodeTelegramService::enabled()) {
+                throw new HttpException(503, 'CODE TELEGRAM hiện chưa mở nhận đơn.');
+            }
+            $serviceId = filter_var($this->body['serviceId'] ?? null, FILTER_VALIDATE_INT);
+            $rawUsernames = $this->body['usernames'] ?? null;
+            if ($serviceId === false || $serviceId < 1 || !is_array($rawUsernames)) {
+                throw new HttpException(400, 'Vui lòng chọn dịch vụ và nhập danh sách tên tài khoản.');
+            }
+
+            $usernames = [];
+            foreach ($rawUsernames as $rawUsername) {
+                if (!is_string($rawUsername)) {
+                    throw new HttpException(400, 'Danh sách tên tài khoản không hợp lệ.');
+                }
+                $username = strtolower(trim($rawUsername));
+                if ($username === '') continue;
+                if (strlen($username) < 3 || strlen($username) > 64
+                    || preg_match('/^[a-z0-9][a-z0-9_.-]*$/D', $username) !== 1) {
+                    throw new HttpException(400, 'Tên tài khoản phải dài 3–64 ký tự, chỉ gồm chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.');
+                }
+                $usernames[$username] = true;
+            }
+            $usernames = array_keys($usernames);
+            if ($usernames === [] || count($usernames) > 20) {
+                throw new HttpException(400, 'Vui lòng nhập từ 1 đến 20 tên tài khoản.');
+            }
+
+            try {
+                $created = Database::transaction(function () use ($serviceId, $usernames, $userId): array {
+                    $service = Database::one(
+                        'SELECT id, service_key, brand, display_name, code_type, price_min, price_max, max_accounts ' .
+                        'FROM code_telegram_services WHERE id = ? AND is_active = TRUE FOR UPDATE',
+                        [$serviceId]
+                    );
+                    if ($service === null) {
+                        throw new HttpException(404, 'Dịch vụ không còn mở. Vui lòng tải lại danh mục CODE TELEGRAM.');
+                    }
+                    $maximum = max(1, min(20, (int) $service['max_accounts']));
+                    if (count($usernames) > $maximum) {
+                        throw new HttpException(400, 'Dịch vụ này chỉ nhận tối đa ' . $maximum . ' tài khoản mỗi đơn.');
+                    }
+
+                    $duplicates = [];
+                    foreach ($usernames as $username) {
+                        Database::run(
+                            'SELECT pg_advisory_xact_lock(hashtext(?))',
+                            ['code-telegram:' . $serviceId . ':' . $username]
+                        );
+                        $existing = Database::one(
+                            "SELECT a.id
+                             FROM code_telegram_request_accounts a
+                             JOIN code_telegram_requests r ON r.id = a.request_id
+                             WHERE r.service_id = ? AND a.username_normalized = ?
+                               AND a.created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh')
+                               AND a.status IN ('queued','processing','completed')
+                             LIMIT 1",
+                            [$serviceId, $username]
+                        );
+                        if ($existing !== null) $duplicates[] = $username;
+                    }
+                    if ($duplicates !== []) {
+                        throw new HttpException(
+                            409,
+                            'Các tên tài khoản đã có yêu cầu trong hôm nay: ' .
+                            implode(', ', $duplicates) . '. Mỗi tài khoản chỉ nhận tối đa một yêu cầu/ngày cho cùng dịch vụ.'
+                        );
+                    }
+
+                    $request = Database::one(
+                        "INSERT INTO code_telegram_requests
+                            (user_id, service_id, service_key_snapshot, service_name_snapshot, brand_snapshot,
+                             code_type_snapshot, price_min_snapshot, price_max_snapshot, account_count)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, status, created_at",
+                        [
+                            $userId, (int) $service['id'], (string) $service['service_key'],
+                            (string) $service['display_name'], (string) $service['brand'],
+                            (string) $service['code_type'], (int) $service['price_min'],
+                            (int) $service['price_max'], count($usernames),
+                        ]
+                    );
+                    if ($request === null) {
+                        throw new RuntimeException('Không thể tạo yêu cầu CODE TELEGRAM.');
+                    }
+                    foreach ($usernames as $username) {
+                        Database::run(
+                            'INSERT INTO code_telegram_request_accounts (request_id, username, username_normalized) VALUES (?, ?, ?)',
+                            [(int) $request['id'], $username, $username]
+                        );
+                    }
+                    return ['request' => $request, 'service' => $service];
+                });
+            } catch (HttpException $error) {
+                throw $error;
+            } catch (Throwable $error) {
+                error_log('[code-telegram-order] user=' . $userId . ' ' . $error::class . ': ' . $error->getMessage());
+                throw new HttpException(409, 'Không thể tạo đơn CODE TELEGRAM lúc này. Vui lòng thử lại.');
+            }
+
+            $requestId = (int) $created['request']['id'];
+            Realtime::publish('admin.code_telegram.changed', [
+                'requestId' => $requestId,
+                'accountCount' => count($usernames),
+            ], 'admin');
+            $this->notifyAdmins(
+                '📡 <b>ĐƠN CODE TELEGRAM MỚI</b>' . "\n" .
+                'Mã đơn: <code>CT' . $requestId . '</code>' . "\n" .
+                'Dịch vụ: <b>' . htmlspecialchars((string) $created['service']['display_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</b>' . "\n" .
+                'Thành viên: <code>' . htmlspecialchars($userId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code>' . "\n" .
+                'Số tài khoản: <b>' . count($usernames) . '</b>' . "\n" .
+                'Tên TK: ' . implode(', ', array_map(
+                    static fn (string $name): string => '<code>' . htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code>',
+                    $usernames
+                ))
+            );
+
+            return self::response([
+                'request' => [
+                    'id' => $requestId,
+                    'orderCode' => 'CT' . $requestId,
+                    'status' => (string) $created['request']['status'],
+                    'serviceName' => (string) $created['service']['display_name'],
+                    'accountCount' => count($usernames),
+                    'usernames' => $usernames,
+                    'charged' => false,
+                ],
+                'message' => 'Đã tiếp nhận đơn CODE TELEGRAM. Chưa trừ tiền; phí chỉ được thu khi từng tài khoản được xác nhận xử lý thành công.',
+            ], 201);
+        }
+
         if ($method === 'GET' && $path === '/api/customer-center') {
             $profile = $this->userRow();
             $stats = Database::one(

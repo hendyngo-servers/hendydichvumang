@@ -8,16 +8,19 @@ require dirname(__DIR__) . '/app/TelegramLink.php';
 Hendy\Env::load(dirname(__DIR__) . '/.env');
 
 $errors = [];
+$warnings = [];
 $bot1 = Hendy\TelegramAuth::token('primary');
-$bot2 = Hendy\TelegramAuth::token('secondary');
+$legacyBot2Configured = trim((string) Hendy\Env::get('BOT2_TOKEN', '')) !== '';
+$legacyBot2UrlConfigured = trim((string) Hendy\Env::get('BOT2_PUBLIC_URL', '')) !== '';
 $admin = trim((string) Hendy\Env::get('ADMIN_ID', ''));
 $adminList = trim((string) Hendy\Env::get('ADMIN_IDS', ''));
 
-foreach (['BOT1_PUBLIC_URL', 'BOT2_PUBLIC_URL'] as $publicUrlName) {
-    $publicUrl = trim((string) Hendy\Env::get($publicUrlName, ''));
-    if ($publicUrl !== '' && Hendy\TelegramLink::normalize($publicUrl) === '') {
-        $errors[] = $publicUrlName . ' phải là liên kết HTTPS Telegram hợp lệ dạng https://t.me/<bot_username>.';
-    }
+$bot1PublicUrl = trim((string) Hendy\Env::get('BOT1_PUBLIC_URL', ''));
+if ($bot1PublicUrl !== '' && Hendy\TelegramLink::normalize($bot1PublicUrl) === '') {
+    $errors[] = 'BOT1_PUBLIC_URL phải là liên kết HTTPS Telegram hợp lệ dạng https://t.me/<bot_username>.';
+}
+if ($legacyBot2Configured || $legacyBot2UrlConfigured) {
+    $warnings[] = 'Phát hiện biến BOT2 cũ nhưng bản triển khai chỉ sử dụng BOT1_TOKEN; BOT2 không được khởi chạy.';
 }
 
 $botTokenPattern = '~\\A[0-9]{5,12}:[A-Za-z0-9_-]{30,}\\z~D';
@@ -28,12 +31,6 @@ $secretPattern = '~\A[A-Za-z0-9_-]{32,256}\z~D';
 // ambiguities and the PCRE shorthand escape differences users encountered.
 if (preg_match($botTokenPattern, $bot1) !== 1) {
     $errors[] = 'BOT1_TOKEN chưa có hoặc không đúng định dạng.';
-}
-if ($bot2 !== '' && preg_match($botTokenPattern, $bot2) !== 1) {
-    $errors[] = 'BOT2_TOKEN không đúng định dạng.';
-}
-if ($bot1 !== '' && $bot2 !== '' && hash_equals($bot1, $bot2)) {
-    $errors[] = 'BOT1_TOKEN và BOT2_TOKEN phải là hai token khác nhau.';
 }
 if ($admin !== '' && preg_match($adminPattern, $admin) !== 1) {
     $errors[] = 'ADMIN_ID phải là Telegram user ID dạng số.';
@@ -75,7 +72,6 @@ if (!in_array(strtolower($sslValue), ['true', 'false', '1', '0', 'yes', 'no', 'o
 }
 
 $autoWebhook = Hendy\Env::bool('WEBHOOK_AUTO_REGISTER', true);
-$warnings = [];
 if ($autoWebhook) {
     $appUrl = trim((string) (Hendy\Env::get('APP_URL') ?: Hendy\Env::get('RENDER_EXTERNAL_URL', '')));
     $appParts = $appUrl !== '' ? parse_url($appUrl) : false;
@@ -173,6 +169,6 @@ foreach ($warnings as $warning) {
     fwrite(STDERR, "CẢNH BÁO: " . $warning . "\n");
 }
 
-echo "Cấu hình hợp lệ. BOT2_TOKEN: " . ($bot2 !== '' ? 'đã bật' : 'đang tắt') .
+echo "Cấu hình hợp lệ. Telegram: một bot chính (BOT1_TOKEN)" .
     "; Telegram webhook: " . ($autoWebhook ? 'đã bật kiểm tra' : 'đang tắt') .
     "; bank webhook: " . ($bankEnabled ? 'đã bật' : 'đã khóa an toàn') . ".\n";

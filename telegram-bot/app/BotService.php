@@ -106,20 +106,18 @@ final class BotService
             $this->telegram->sendMessage($chatId, '✅ Đã hủy thao tác đang chờ. Dữ liệu nhập tạm đã được xóa.');
             return;
         }
-        if (preg_match('/^\/(?:ai|aifeatures)(?:@\w+)?$/u', $text)) {
+        if (preg_match('/^\\/status(?:@\\w+)?$/u', $text)) { $this->sendOperationalNotice($chatId); return; }
+        $operation = OperationsService::forBot($this->botKey);
+        if ($operation['active'] && !TelegramAuth::isAdmin($userId)) {
+            $this->sendOperationalNotice($chatId);
+            return;
+        }
+        if (preg_match('/^\\/(?:ai|aifeatures)(?:@\\w+)?$/u', $text)) {
             $this->showAiFeaturesMenu($chatId);
             return;
         }
-        if (preg_match('/^\/code(?:@\w+)?(?:\s+(.+))?$/u', $text, $codeMatch)) {
+        if (preg_match('/^\\/code(?:@\\w+)?(?:\\s+(.+))?$/u', $text, $codeMatch)) {
             $this->showCodeTelegramCodes($chatId, trim((string) ($codeMatch[1] ?? '')));
-            return;
-        }
-        if (preg_match('/^\/status(?:@\w+)?$/u', $text)) { $this->sendOperationalNotice($chatId); return; }
-        $operation=OperationsService::forBot($this->botKey);
-        if ($operation['active'] && !TelegramAuth::isAdmin($userId)) { $this->sendOperationalNotice($chatId); return; }
-
-        if ($audioMessage) {
-            $this->handleAiCoverAudioMessage($chatId, $userId, $updateId, $message);
             return;
         }
 

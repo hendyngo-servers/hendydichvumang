@@ -242,7 +242,7 @@ $assert(str_contains($renderSource, 'name: hendydichvumang-telegram-bot') && str
 $assert(!str_contains($renderSource, 'BOT2_TOKEN') && str_contains($renderSource, 'BOT1_TOKEN') && str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY'), 'production Blueprint documents the single bot and existing private secrets without copying secret values');
 $assert(!str_contains($envManifest, 'BOT2_TOKEN') && !str_contains($envManifest, 'BOT2_PUBLIC_URL') && !str_contains($envManifest, 'TELEGRAM_SECOND_WEBHOOK_SECRET'), 'runtime environment manifest contains no secondary-bot credentials');
 $assert(str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY') && str_contains($envManifest, 'HOMEPROXY_ENCRYPTION_KEY'), 'HomeProxy encryption secret remains documented in Blueprint and env manifest');
-$assert(str_contains($renderSource, 'RUN_MIGRATIONS_ON_START') && str_contains($renderSource, 'value: "true"'), 'Render applies the idempotent database schema before the new provider-readiness queries run');
+$assert(str_contains($renderSource, 'RUN_MIGRATIONS_ON_START') && str_contains($renderSource, 'value: "false"') && str_contains($renderSource, 'VIDEO_WORKER_ENABLED'), 'production keeps DDL outside the Bot runtime while documenting the optional video worker');
 $assert(str_contains($renderSource, 'VIDEO_WORKER_ENABLED') && str_contains($envManifest, 'VIDEO_WORKER_ENABLED') && str_contains($envManifest, 'ELEVENLABS_API_KEY'), 'environment manifest documents the optional video worker and AI music provider credential name');
 
 $assert(str_contains($runtimeWorkflow, 'working-directory: telegram-bot') && str_contains($runtimeWorkflow, 'composer test'), 'monorepo CI runs Bot tests from the isolated application directory');

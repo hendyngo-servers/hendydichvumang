@@ -46,24 +46,62 @@ as production-verified. A custom API provider remains marked as not supported fo
 automatic execution until a provider-specific adapter, auth/signature validation,
 timeouts, idempotency, error mapping, webhook verification and tests are implemented.
 
-## Apply the database migration
+## Apply the database migration safely
 
-Production continues to use `RUN_MIGRATIONS_ON_START=false`. Apply the additive
-migration before deploying the new Bot code:
+The Bot runtime deliberately keeps `RUN_MIGRATIONS_ON_START=false`. Never give
+`hendy_bot_app` DDL privileges and never run migrations from normal production
+container startup.
 
-1. Verify a Neon restore point / backup.
-2. Connect using the Neon database owner or dedicated migration role, not the
-   restricted `hendy_bot_app` runtime role.
-3. Apply `telegram-bot/database/migrations/20261113_provider_service_registry.sql`
-   to the `hendydichvumang` database.
-4. Verify that `service_registry` and `service_providers` exist, the 22 default
-   service rows were inserted, and `hendy_bot_app` has SELECT/INSERT/UPDATE/DELETE
-   on both tables plus sequence usage.
-5. Deploy the Bot service, then open `/admin` → **Provider & Service Registry**.
+The actual database is determined by the database name in the path part of the
+Render Bot service's `DATABASE_URL`. Do not infer it from the Neon project slug,
+repository name, a previous database inspection or an example in this document.
 
-The migration only creates new tables/indexes, seeds missing registry keys and grants
-runtime DML permissions. It does not delete or rewrite users, products, orders,
-transactions, wallet ledgers, deposits or support tickets. It is safe to re-run.
+1. Open the Render Bot service Shell and run the read-only diagnostic:
+
+   ```bash
+   cd /var/www/app
+   php bin/database-doctor.php
+   ```
+
+   Record the reported database name, role, host, direct/pooled status and migration
+   inventory. The command never prints the connection string or credential values.
+2. In Render Environment, use or obtain a one-off `MIGRATION_DATABASE_URL` that
+   points to the exact same database reported by the doctor, using a direct (not
+   `-pooler`) Neon URL and a database-owner/dedicated migration role. Do not put
+   this URL in Git, `.env.example`, a Blueprint or a browser-facing setting.
+3. Take/verify a Neon restore point. Run the dry-run first:
+
+   ```bash
+   cd /var/www/app
+   php bin/migrate.php
+   ```
+
+   Verify the database name, role, host and every pending/checksum status. This
+   command does not change schema or data.
+4. Only after the exact target name is confirmed, apply the migration set in
+   version order:
+
+   ```bash
+   php bin/migrate.php --apply --expect-database='<exact database name from doctor>'
+   ```
+
+   The runner rejects a database-name mismatch, Neon pooled hostnames, the restricted
+   `hendy_bot_app` role, partial base schemas and modified checksums. Each additive
+   migration runs in its own transaction and is written to `schema_migrations`.
+5. Run the doctor again and verify `pending=0`, no checksum mismatches, both registry
+   tables exist, 22 default service rows are present, and `hendy_bot_app` has
+   SELECT/INSERT/UPDATE/DELETE on both tables plus sequence usage. Then deploy the
+   Bot code and open `/admin` → **Provider & Service Registry**.
+
+If the actual Render database name differs from a previously inspected Neon database,
+stop and use the name shown by Render-connected `database-doctor.php`. Never apply
+these changes to an assumed database.
+
+The Provider Registry migration only creates new tables/indexes, seeds missing
+registry keys and grants runtime DML permissions. It does not delete or rewrite users,
+products, orders, transactions, wallet ledgers, deposits or support tickets. The
+Product Supplier Readiness migration adds columns, constraints and an index; existing
+products default to pending verification and existing order/wallet history is retained.
 
 ## Admin API
 

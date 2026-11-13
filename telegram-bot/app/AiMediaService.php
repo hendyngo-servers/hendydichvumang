@@ -152,12 +152,52 @@ final class AiMediaService
         });
     }
 
+    /** Retry one failed AI Studio job after an Admin has reviewed its error. */
+    public static function retryJob(string $jobId): array
+    {
+        if (!preg_match('/\\A[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\z/i', $jobId)) {
+            throw new RuntimeException('Mã AI job không hợp lệ.');
+        }
+        $job = Database::one(
+            "UPDATE ai_media_jobs
+                SET status='queued', attempts=0, claimed_at=NULL, completed_at=NULL,
+                    error_message='', updated_at=NOW()
+              WHERE id=? AND status='failed'
+          RETURNING id,status,job_type,user_id",
+            [$jobId]
+        );
+        if ($job === null) {
+            throw new RuntimeException('Chỉ có thể chạy lại AI job đang ở trạng thái thất bại.');
+        }
+        return $job;
+    }
+
+    /** Recover jobs left in processing when a Render worker/container restarted. */
+    private static function recoverStaleJobs(): void
+    {
+        $staleMinutes = max(10, min(60, Env::int('AI_MEDIA_STALE_MINUTES', 15)));
+        Database::run(
+            "UPDATE ai_media_jobs
+                SET status = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'queued' END,
+                    error_message = CASE
+                        WHEN attempts >= 3 THEN 'Worker stopped unexpectedly after the maximum number of attempts. Admin can retry this job.'
+                        ELSE 'Worker restarted; this job was safely returned to the queue.'
+                    END,
+                    claimed_at=NULL,
+                    completed_at=CASE WHEN attempts >= 3 THEN NOW() ELSE NULL END,
+                    updated_at=NOW()
+              WHERE status='processing'
+                AND COALESCE(claimed_at, updated_at) < NOW() - make_interval(mins => ?)",
+            [$staleMinutes]
+        );
+    }
     /**
      * Claim and process exactly one job. The queue uses SKIP LOCKED so multiple
      * workers can safely coexist. A failed job is recorded and notified once.
      */
     public static function runOnce(): bool
     {
+        self::recoverStaleJobs();
         $job = Database::transaction(function (): ?array {
             $next = Database::one(
                 "SELECT id,user_id,bot_key,job_type,prompt,source_file_id FROM ai_media_jobs " .
@@ -199,12 +239,12 @@ final class AiMediaService
                 throw new RuntimeException('Loại tác vụ AI không được hỗ trợ.');
             }
             Database::run(
-                "UPDATE ai_media_jobs SET status='completed',completed_at=NOW(),updated_at=NOW(),error_message='' WHERE id=?",
+                "UPDATE ai_media_jobs SET status='completed',claimed_at=NULL,completed_at=NOW(),updated_at=NOW(),error_message='' WHERE id=?",
                 [$job['id']]
             );
         } catch (Throwable $error) {
             Database::run(
-                "UPDATE ai_media_jobs SET status='failed',completed_at=NOW(),updated_at=NOW(),error_message=? WHERE id=?",
+                "UPDATE ai_media_jobs SET status='failed',claimed_at=NULL,completed_at=NOW(),updated_at=NOW(),error_message=? WHERE id=?",
                 [mb_substr($error->getMessage(),0,500),(string)$job['id']]
             );
             if ($telegram !== null) {

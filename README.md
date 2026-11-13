@@ -8,7 +8,7 @@ Production monorepo for one Telegram Bot backend and one public Static Website.
 - **Current working Static Site URL:** `https://hendydichvumang-szad.onrender.com`.
 - **Telegram Bot:** Render service `hendydichvumang-telegram-bot`, built from `telegram-bot/Dockerfile`.
 - **Admin:** Browser-based Admin Dashboard is served from the authenticated Bot backend at `https://hendydichvumang-telegram-bot.onrender.com/admin`. Admin and customer UI files are stored in `website/telegram/`, outside the Static Site publish directory.
-- **PostgreSQL:** Neon database `hendydichvumang` is used by the Bot. The legacy `hendydichvumang_website` database is not required by the public Static Site.
+- **PostgreSQL:** The Bot connects to the database selected by the path component of its Render `DATABASE_URL`. Do not infer the database name from the Neon project slug or repository name. Run `php bin/database-doctor.php` in the Bot Shell to print the active database name, role, host and migration status without revealing credentials.
 
 The clean hostname `https://hendydichvumang.onrender.com` currently resolves to the Bot API, not the Static Site. The Static Site therefore uses its verified Render subdomain with the `-szad` suffix until Render releases the old hostname. Do not point Website links or canonical metadata at the Bot API hostname.
 
@@ -57,7 +57,7 @@ On 2026-11-13, records were cleared from the `public` schema of both `hendydichv
 Recovery branch retained in Neon:
 `backup-before-full-reset-2026-11-13`.
 
-The Bot schema remains in `telegram-bot/database/schema.sql`. Runtime uses `RUN_MIGRATIONS_ON_START=false`; reviewed schema changes and seed configuration are applied with the database owner role, while the Bot runtime role performs DML only.
+The Bot base schema remains in `telegram-bot/database/schema.sql`; additive changes are versioned under `telegram-bot/database/migrations/`. Runtime uses `RUN_MIGRATIONS_ON_START=false`; the Bot runtime role performs DML only, while a separate direct database-owner/migration URL is used for reviewed schema changes.
 
 ## Product and provider activation
 
@@ -87,10 +87,36 @@ Set secrets only in Render Environment. Never commit live credentials.
 Required Bot values:
 - `BOT1_TOKEN`
 - `ADMIN_ID` or `ADMIN_IDS`
-- `DATABASE_URL` pointing to Neon database `hendydichvumang`
+- `DATABASE_URL` pointing to the explicitly selected PostgreSQL database for this Bot service (verify with `php bin/database-doctor.php`)
 - `DATABASE_SSL=true`
 
 Set `WEBSITE_PUBLIC_URL=https://hendydichvumang-szad.onrender.com`. Render injects `RENDER_EXTERNAL_URL` for the Bot; webhook registration uses that service-owned URL. Optional bank, AI, OCR and WebSocket integrations stay disabled until provider credentials and migrations are verified.
+
+## Database diagnostics and migrations
+
+Use the Render Bot service Shell to identify the database actually referenced by its environment:
+
+```bash
+cd /var/www/app
+php bin/database-doctor.php
+```
+
+The doctor is read-only. It prints only the database name, role, host, connection-pool status and migration inventory; it never prints connection strings or secret values.
+
+Before a migration, make a Neon restore point and obtain the direct/unpooled owner URL for the confirmed database. Set it only in the one-off Shell process as `MIGRATION_DATABASE_URL`, then run the dry-run:
+
+```bash
+export MIGRATION_DATABASE_URL='[direct owner URL supplied privately by the operator]'
+php bin/migrate.php
+```
+
+Review the printed database name, role, host and pending migrations. Only after the target is confirmed, apply using its exact database name:
+
+```bash
+php bin/migrate.php --apply --expect-database='[confirmed database name]'
+```
+
+The migration runner rejects pooled Neon URLs, the restricted `hendy_bot_app` role, database-name mismatches, partial base schemas and migration checksum drift. Each additive migration runs in its own transaction and is recorded in `schema_migrations`. The command defaults to dry-run and does not print the URL.
 
 ## Local development
 

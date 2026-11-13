@@ -241,6 +241,127 @@ final class AiCoverService
         }
     }
 
+    /** Validate the configured worker URL; only HTTPS endpoints are accepted. */
+    private static function workerBaseUrl(): string
+    {
+        $url = rtrim(trim((string) Env::get('AI_COVER_WORKER_URL', '')), '/');
+        if ($url === '') return '';
+        $parts = parse_url($url);
+        if (!is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host'])
+            || isset($parts['user']) || isset($parts['pass'])
+            || isset($parts['query']) || isset($parts['fragment'])) {
+            return '';
+        }
+        return $url;
+    }
+
+    /** Signed JSON request to the private RVC worker. */
+    private static function workerRequest(string $path, array $payload): array
+    {
+        $base = self::workerBaseUrl();
+        $secret = trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''));
+        if ($base === '' || strlen($secret) < 32) {
+            throw new RuntimeException('AI Cover worker chưa được cấu hình.');
+        }
+        if (!in_array($path, ['jobs', 'voices/verify'], true)) {
+            throw new RuntimeException('Đường dẫn worker không hợp lệ.');
+        }
+        $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $signature = 'sha256=' . hash_hmac('sha256', $body, $secret);
+        $curl = curl_init($base . '/' . $path);
+        if ($curl === false) throw new RuntimeException('Không khởi tạo được kết nối AI Cover worker.');
+        try {
+            curl_setopt_array($curl, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $body,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Accept: application/json',
+                    'X-Hendy-AI-Cover-Signature: ' . $signature,
+                ],
+                CURLOPT_CONNECTTIMEOUT => 8,
+                CURLOPT_TIMEOUT => max(10, min(300, Env::int('AI_COVER_WORKER_TIMEOUT_SECONDS', 60))),
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_FOLLOWLOCATION => false,
+            ]);
+            $response = curl_exec($curl);
+            $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+            $error = curl_error($curl);
+            if ($response === false || $status < 200 || $status >= 300
+                || !is_string($response) || strlen($response) > 262144) {
+                throw new RuntimeException(
+                    'AI Cover worker không phản hồi hợp lệ (HTTP ' . $status . ')' .
+                    ($error !== '' ? ': ' . $error : '.')
+                );
+            }
+            $decoded = json_decode($response, true, 32, JSON_THROW_ON_ERROR);
+            if (!is_array($decoded)) throw new RuntimeException('AI Cover worker trả về JSON không hợp lệ.');
+            return $decoded;
+        } catch (\JsonException $error) {
+            throw new RuntimeException('AI Cover worker trả về JSON không hợp lệ.', 0, $error);
+        } finally {
+            curl_close($curl);
+        }
+    }
+
+    /** Verify that the RVC worker can load a licensed preset and its private model files. */
+    public static function verifyVoice(string $voiceId): array
+    {
+        self::assertStorageReady();
+        if (!preg_match('/\A[a-z0-9][a-z0-9_-]{1,47}\z/', $voiceId)) {
+            throw new RuntimeException('Preset ID không hợp lệ.');
+        }
+        $voice = Database::one(
+            'SELECT id,name,model_key,index_key,speaker_id,pitch,index_rate,f0_method,voice_owner_consent,rights_holder,license_name,authorization_reference FROM ai_cover_voices WHERE id=?',
+            [$voiceId]
+        );
+        if ($voice === null) throw new RuntimeException('Không tìm thấy preset AI Cover.');
+        if (empty($voice['voice_owner_consent']) || trim((string) $voice['rights_holder']) === ''
+            || trim((string) $voice['license_name']) === '' || trim((string) $voice['authorization_reference']) === '') {
+            throw new RuntimeException('Preset chưa có hồ sơ đồng ý/cấp phép hợp lệ.');
+        }
+
+        try {
+            $result = self::workerRequest('voices/verify', [
+                'voiceId' => $voiceId,
+                'name' => (string) $voice['name'],
+                'modelUrl' => NeonStorage::presignedDownloadUrl((string) $voice['model_key'], 300),
+                'indexUrl' => !empty($voice['index_key'])
+                    ? NeonStorage::presignedDownloadUrl((string) $voice['index_key'], 300)
+                    : null,
+                'config' => [
+                    'speakerId' => (int) $voice['speaker_id'],
+                    'pitch' => (int) $voice['pitch'],
+                    'indexRate' => (float) $voice['index_rate'],
+                    'f0Method' => (string) $voice['f0_method'],
+                ],
+            ]);
+            $available = filter_var($result['available'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $message = mb_substr(trim((string) ($result['message'] ?? '')), 0, 500);
+            if (!$available && $message === '') $message = 'Worker chưa xác nhận được model/index.';
+            Database::run(
+                'UPDATE ai_cover_voices SET available=?,checked_at=NOW(),last_error=?,updated_at=NOW() WHERE id=?',
+                [$available, $available ? '' : $message, $voiceId]
+            );
+            return [
+                'id' => $voiceId,
+                'available' => $available,
+                'message' => $message !== '' ? $message : ($available ? 'Worker đã tải được model và preset sẵn sàng.' : 'Preset chưa sẵn sàng.'),
+            ];
+        } catch (Throwable $error) {
+            $message = mb_substr($error->getMessage(), 0, 500);
+            Database::run(
+                'UPDATE ai_cover_voices SET available=FALSE,checked_at=NOW(),last_error=?,updated_at=NOW() WHERE id=?',
+                [$message, $voiceId]
+            );
+            throw new RuntimeException('Không thể xác minh preset AI Cover: ' . $message, 0, $error);
+        }
+    }
+
     public static function history(string $userId, int $limit = 10): array
     {
         return Database::all(

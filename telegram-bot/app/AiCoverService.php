@@ -16,13 +16,30 @@ final class AiCoverService
 
     public static function enabled(): bool
     {
-        if (!Env::bool('AI_COVER_ENABLED', false)) return false;
+        if (!Env::bool('AI_COVER_ENABLED', false) || !Env::bool('AI_COVER_WORKER_ENABLED', false)) return false;
         try {
             return NeonStorage::configured()
+                && self::workerBaseUrl() !== ''
                 && strlen(trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''))) >= 32;
         } catch (Throwable) {
             return false;
         }
+    }
+
+    public static function readiness(): array
+    {
+        $storage = false;
+        try { $storage = NeonStorage::configured(); } catch (Throwable) {}
+        $secretConfigured = strlen(trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''))) >= 32;
+        $workerUrl = self::workerBaseUrl();
+        return [
+            'enabled' => self::enabled(),
+            'workerEnabled' => Env::bool('AI_COVER_WORKER_ENABLED', false),
+            'workerConfigured' => $workerUrl !== '',
+            'storageConfigured' => $storage,
+            'callbackSecretConfigured' => $secretConfigured,
+            'ready' => self::enabled(),
+        ];
     }
 
     public static function session(string $userId): ?array
@@ -45,7 +62,7 @@ final class AiCoverService
              VALUES(?,?,?,NOW(),NOW())
              ON CONFLICT(telegram_user_id) DO UPDATE SET
                chat_id=EXCLUDED.chat_id, terms_version=EXCLUDED.terms_version,
-               terms_accepted_at=COALESCE(ai_cover_sessions.terms_accepted_at, NOW()),
+               terms_accepted_at=CASE WHEN ai_cover_sessions.terms_version=EXCLUDED.terms_version THEN COALESCE(ai_cover_sessions.terms_accepted_at,NOW()) ELSE NOW() END,
                last_seen_at=NOW(), updated_at=NOW()",
             [$userId, $chatId, self::TERMS_VERSION]
         );
@@ -302,9 +319,9 @@ final class AiCoverService
     public static function adminSnapshot(): array
     {
         return [
-            'enabled' => self::enabled(),
+            ...self::readiness(),
             'voices' => Database::all(
-                "SELECT id,name,description,enabled,model_key,index_key,speaker_id,pitch,index_rate,f0_method,
+                "SELECT id,name,description,enabled,speaker_id,pitch,index_rate,f0_method,
                         rights_holder,license_name,authorization_reference,voice_owner_consent,commercial_use_allowed,
                         available,checked_at,last_error,created_at,updated_at
                  FROM ai_cover_voices ORDER BY created_at DESC LIMIT 100"
@@ -328,7 +345,7 @@ final class AiCoverService
     /** Save one licensed preset and optionally upload a replacement model/index. */
     public static function saveVoice(array $input, array $files, string $adminId): array
     {
-        self::assertEnabled();
+        self::assertStorageReady();
         $id = strtolower(trim((string) ($input['id'] ?? '')));
         $name = trim((string) ($input['name'] ?? ''));
         $description = trim((string) ($input['description'] ?? ''));
@@ -376,7 +393,8 @@ final class AiCoverService
             if (strtolower(pathinfo($original, PATHINFO_EXTENSION)) !== $expectedExtension) {
                 throw new RuntimeException('Tệp ' . $field . ' phải có phần mở rộng .' . $expectedExtension . '.');
             }
-            $objectKey = 'ai-cover/models/' . $id . '/' . $filename;
+            $extension = $field === 'model' ? 'pth' : 'index';
+            $objectKey = 'ai-cover/models/' . $id . '/voice-' . bin2hex(random_bytes(8)) . '.' . $extension;
             NeonStorage::uploadFile((string) $file['tmp_name'], $objectKey, 'application/octet-stream');
             $uploadedKeys[] = $objectKey;
             if ($field === 'model') $modelKey = $objectKey;
@@ -493,10 +511,17 @@ final class AiCoverService
         return $ext;
     }
 
+    private static function assertStorageReady(): void
+    {
+        if (!NeonStorage::configured()) {
+            throw new RuntimeException('Neon Object Storage chưa được cấu hình để lưu model/audio AI Cover.');
+        }
+    }
+
     private static function assertEnabled(): void
     {
         if (!self::enabled()) {
-            throw new RuntimeException('AI Cover đang tạm đóng. Quản trị viên cần bật tính năng và cấu hình worker/storage trước.');
+            throw new RuntimeException('AI Cover đang tạm đóng. Admin cần bật worker, cấu hình Neon Storage và endpoint RVC trước.');
         }
     }
 

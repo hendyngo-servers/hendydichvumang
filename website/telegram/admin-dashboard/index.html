@@ -972,6 +972,7 @@
     }
     if (tab === 'code-telegram') state.adminData.codeTelegram = await api('/api/admin/code-telegram');
     if (tab === 'ai-cover') state.adminData.aiCover = await api('/api/admin/ai-cover');
+    if (tab === 'ai-cover') state.adminData.aiCover = await api('/api/admin/ai-cover');
   }
 
   function adminTabs() {
@@ -1357,6 +1358,7 @@
     if (state.adminTab === 'vouchers') body = adminVouchers();
     if (state.adminTab === 'video-jobs') body = adminVideoJobs();
     if (state.adminTab === 'code-telegram') body = adminCodeTelegram();
+    if (state.adminTab === 'ai-cover') body = adminAiCover();
     if (state.adminTab === 'runtime') body = adminRuntime();
     if (state.adminTab === 'operations') body = adminOperations();
     if (state.adminTab === 'proxy') body = adminProxy();
@@ -1553,6 +1555,38 @@
       } catch (error) { toast(error.message); paymentAction.disabled = false; }
       return;
     }
+    const aiCoverVerify = event.target.closest('[data-ai-cover-verify]');
+    if (aiCoverVerify) {
+      aiCoverVerify.disabled = true;
+      try {
+        const result = await api('/api/admin/ai-cover/voices/' + encodeURIComponent(aiCoverVerify.dataset.aiCoverVerify) + '/verify','POST',{});
+        toast(result.message || 'Đã kiểm tra preset.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); aiCoverVerify.disabled = false; }
+      return;
+    }
+    const aiCoverToggle = event.target.closest('[data-ai-cover-toggle]');
+    if (aiCoverToggle) {
+      const enabled = aiCoverToggle.dataset.next === 'true';
+      if (enabled && !window.confirm('Bật preset cho thành viên? Chỉ bật khi bạn đã xác minh giấy phép và kiểm tra worker.')) return;
+      try {
+        const result = await api('/api/admin/ai-cover/voices/' + encodeURIComponent(aiCoverToggle.dataset.aiCoverToggle),'PATCH',{enabled});
+        toast(result.message || 'Đã cập nhật preset.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
+      return;
+    }
+    const aiCoverRetry = event.target.closest('[data-ai-cover-retry]');
+    if (aiCoverRetry) {
+      if (!window.confirm('Đưa job AI Cover này trở lại hàng chờ xử lý?')) return;
+      aiCoverRetry.disabled = true;
+      try {
+        const result = await api('/api/admin/ai-cover/jobs/' + encodeURIComponent(aiCoverRetry.dataset.aiCoverRetry) + '/retry','POST',{});
+        toast(result.message || 'Đã đưa job vào hàng chờ.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); aiCoverRetry.disabled = false; }
+      return;
+    }
     const codeSourceSetting = event.target.closest('[data-code-source-setting]');
     if (codeSourceSetting) {
       const id = Number(codeSourceSetting.dataset.id);
@@ -1730,6 +1764,21 @@
           autoPublish:data.autoPublish === 'true'
         });
         toast(result.message || 'Đã kết nối kênh nguồn.');
+        await renderPage();
+      } else if (form.id === 'admin-ai-cover-voice-form') {
+        const payload = new FormData(form);
+        const response = await fetch('/api/admin/ai-cover/voices',{
+          method:'POST',
+          headers:{'x-telegram-bot-key':botKey},
+          credentials:'same-origin',
+          body:payload,
+          cache:'no-store'
+        });
+        let result={};
+        try { result=await response.json(); } catch (_) {}
+        if (!response.ok) throw new Error(result.error || 'Không thể lưu preset AI Cover.');
+        toast(result.message || 'Đã lưu preset AI Cover.');
+        form.reset();
         await renderPage();
       } else if (form.id === 'admin-module-upload') {
         const file = form.elements.file.files[0];

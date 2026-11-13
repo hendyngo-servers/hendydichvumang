@@ -14,7 +14,7 @@ function allowedKey(key){
  || /^website\/screenshots\/[a-f0-9]{32}\.(jpg|png|webp|gif)$/.test(key)
  || new RegExp('^ai-cover/sources/'+uuid+'/source\\.(mp3|wav|flac|m4a|aac|ogg|opus)$','i').test(key)
  || new RegExp('^ai-cover/results/'+uuid+'/cover\\.mp3$','i').test(key)
- || /^ai-cover\/models\/[a-z0-9][a-z0-9_-]{1,47}\/voice\.(pth|index)$/.test(key);
+ || /^ai-cover\/models\/[a-z0-9][a-z0-9_-]{1,47}\/voice(-[a-f0-9]{16})?\.(pth|index)$/.test(key);
 }
 export function buildPresignedUrl({method,key,contentType='',expiresIn=300,env=process.env,now=new Date()}){
  if(!['GET','PUT','DELETE'].includes(method))throw new Error('Unsupported operation');

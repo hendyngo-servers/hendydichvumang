@@ -42,27 +42,67 @@ final class ServiceReadinessService
         ];
     }
 
+    private static function tableExists(string $table): bool
+    {
+        if (!preg_match('/\\A[a-z_][a-z0-9_]*\\z/', $table)) return false;
+        try {
+            return in_array(Database::value(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name=?)",
+                [$table]
+            ), [true, 1, '1', 't', 'true'], true);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private static function safeCount(string $table, string $where = ''): int
+    {
+        if (!self::tableExists($table)) return 0;
+        try {
+            return max(0, (int) Database::value('SELECT COUNT(*) FROM ' . $table . ($where !== '' ? ' WHERE ' . $where : '')));
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
     public static function snapshot(): array
     {
         $predicate = ProductReadinessService::sqlPredicate('p');
-        $rows = Database::all(
-            "SELECT p.category,
-                    COUNT(*) AS total_count,
-                    COUNT(*) FILTER (WHERE " . $predicate . " AND (p.stock IS NULL OR p.stock > 0)) AS ready_count
-             FROM products p
-             GROUP BY p.category
-             ORDER BY p.category"
-        );
         $categories = [];
-        foreach ($rows as $row) {
-            $categories[(string) $row['category']] = [
-                'total' => (int) $row['total_count'],
-                'ready' => (int) $row['ready_count'],
-                'locked' => max(0, (int) $row['total_count'] - (int) $row['ready_count']),
-            ];
+        $productsTableReady = self::tableExists('products');
+        if ($productsTableReady) {
+            try {
+                $rows = Database::all(
+                    "SELECT p.category,
+                            COUNT(*) AS total_count,
+                            COUNT(*) FILTER (WHERE " . $predicate . " AND (p.stock IS NULL OR p.stock > 0)) AS ready_count
+                     FROM products p
+                     GROUP BY p.category
+                     ORDER BY p.category"
+                );
+                foreach ($rows as $row) {
+                    $categories[(string) $row['category']] = [
+                        'total' => (int) $row['total_count'],
+                        'ready' => (int) $row['ready_count'],
+                        'locked' => max(0, (int) $row['total_count'] - (int) $row['ready_count']),
+                    ];
+                }
+            } catch (\Throwable) {
+                $productsTableReady = false;
+                $categories = [];
+            }
         }
 
-        $ai = AiMediaService::readiness();
+        $settingsTableReady = self::tableExists('app_settings');
+        $ai = [
+            'queueConfigured' => Env::bool('AI_MEDIA_QUEUE_ENABLED', false),
+            'adminEnabled' => false, 'musicKeyConfigured' => false,
+            'imageKeyConfigured' => false, 'musicEnabled' => false,
+            'imageEnabled' => false, 'musicFlag' => false, 'imageFlag' => false,
+        ];
+        if ($settingsTableReady) {
+            try { $ai = AiMediaService::readiness(); } catch (\Throwable) {}
+        }
         $musicMissing = [];
         if (!$ai['queueConfigured']) $musicMissing[] = 'AI_MEDIA_QUEUE_ENABLED';
         if (!$ai['musicKeyConfigured']) $musicMissing[] = 'ELEVENLABS_API_KEY';
@@ -72,7 +112,15 @@ final class ServiceReadinessService
         if (!$ai['imageKeyConfigured']) $imageMissing[] = 'OPENAI_API_KEY';
         if (!$ai['adminEnabled'] || !$ai['imageFlag']) $imageMissing[] = 'Admin AI Studio / Image toggle';
 
-        $cover = AiCoverService::readiness();
+        $coverTablesReady = $settingsTableReady && self::tableExists('ai_cover_voices');
+        $cover = [
+            'enabled' => false, 'runtimeEnabled' => false, 'workerEnabled' => false,
+            'workerConfigured' => false, 'storageConfigured' => false,
+            'callbackSecretConfigured' => false, 'voiceReady' => false, 'ready' => false,
+        ];
+        if ($coverTablesReady) {
+            try { $cover = AiCoverService::readiness(); } catch (\Throwable) {}
+        }
         $coverMissing = [];
         if (!Env::bool('AI_COVER_ENABLED', false)) $coverMissing[] = 'AI_COVER_ENABLED';
         if (!$cover['workerEnabled']) $coverMissing[] = 'AI_COVER_WORKER_ENABLED';
@@ -94,29 +142,61 @@ final class ServiceReadinessService
         if (!$videoSecretReady) $videoMissing[] = 'VIDEO_PROCESSOR_SECRET (>= 32 chars)';
         if (!$appUrlReady) $videoMissing[] = 'APP_URL hoặc RENDER_EXTERNAL_URL (HTTPS)';
 
-        $proxy = ProxyService::adminStatus();
+        $proxyTablesReady = self::tableExists('homeproxy_accounts') && self::tableExists('homeproxy_logs');
+        $proxy = [
+            'enabled' => false, 'encryptionConfigured' => false,
+            'connectedMembers' => 0, 'requestsToday' => 0, 'successToday' => 0,
+            'failedToday' => 0, 'recentLogs' => [],
+        ];
+        if ($proxyTablesReady) {
+            try { $proxy = ProxyService::adminStatus(); } catch (\Throwable) {}
+        }
         $proxyMissing = [];
+        if (!$proxyTablesReady) $proxyMissing[] = 'Migration HomeProxy: homeproxy_accounts / homeproxy_logs';
         if (!$proxy['encryptionConfigured']) $proxyMissing[] = 'HOMEPROXY_ENCRYPTION_KEY (>= 32 chars)';
         if (!$proxy['enabled']) $proxyMissing[] = 'Admin HomeProxy toggle';
-        $proxyReady = (bool) $proxy['enabled'] && (bool) $proxy['encryptionConfigured'];
+        $proxyReady = $proxyTablesReady && (bool) $proxy['enabled'] && (bool) $proxy['encryptionConfigured'];
 
         $codeEnabled = CodeTelegramService::enabled();
         $codeWorkerEnabled = Env::bool('CODE_TELEGRAM_WORKER_ENABLED', false);
-        $sourceCount = (int) (Database::value('SELECT COUNT(*) FROM code_telegram_sources WHERE is_active = TRUE') ?? 0);
-        $serviceCount = (int) (Database::value('SELECT COUNT(*) FROM code_telegram_services WHERE is_active = TRUE') ?? 0);
-        $pendingCodes = (int) (Database::value("SELECT COUNT(*) FROM code_telegram_codes WHERE status='pending_review'") ?? 0);
+        $codeSourcesTableReady = self::tableExists('code_telegram_sources');
+        $codeServicesTableReady = self::tableExists('code_telegram_services');
+        $codeRowsTableReady = self::tableExists('code_telegram_codes');
+        $sourceCount = $codeSourcesTableReady ? self::safeCount('code_telegram_sources', 'is_active = TRUE') : 0;
+        $serviceCount = $codeServicesTableReady ? self::safeCount('code_telegram_services', 'is_active = TRUE') : 0;
+        $pendingCodes = $codeRowsTableReady ? self::safeCount('code_telegram_codes', "status='pending_review'") : 0;
         $codeMissing = [];
         if (!$codeEnabled) $codeMissing[] = 'CODE_TELEGRAM_ENABLED=true';
+        if (!$codeSourcesTableReady) $codeMissing[] = 'Migration bảng code_telegram_sources';
+        if (!$codeServicesTableReady) $codeMissing[] = 'Migration bảng code_telegram_services';
+        if (!$codeRowsTableReady) $codeMissing[] = 'Migration bảng code_telegram_codes';
         if ($sourceCount < 1) $codeMissing[] = 'Ít nhất một kênh nguồn được Admin duyệt';
         if ($serviceCount < 1) $codeMissing[] = 'Ít nhất một dịch vụ Code Telegram đang hoạt động';
         $ocrMissing = [];
         if (!$codeEnabled) $ocrMissing[] = 'CODE_TELEGRAM_ENABLED=true';
         if (!$codeWorkerEnabled) $ocrMissing[] = 'CODE_TELEGRAM_WORKER_ENABLED=true';
-        if ($sourceCount < 1) $ocrMissing[] = 'Kênh nguồn được Admin duyệt';
+        if (!$codeSourcesTableReady) $ocrMissing[] = 'Migration bảng code_telegram_sources';
+        if (!$sourceCount) $ocrMissing[] = 'Kênh nguồn được Admin duyệt';
         $otpProducts = (int) (($categories['otp']['ready'] ?? 0));
         $proxyProducts = (int) (($categories['proxy']['ready'] ?? 0));
 
+        $missingProductColumns = ['products table'];
+        if ($productsTableReady) {
+            try { $missingProductColumns = ProductReadinessService::missingSchemaColumns(); } catch (\Throwable) {}
+        }
         $services = [
+            self::service(
+                'product_readiness_migration',
+                'Database · migration quyền nguồn / nhà cung cấp',
+                $missingProductColumns === [],
+                $missingProductColumns === [],
+                $missingProductColumns === []
+                    ? []
+                    : ['Chạy telegram-bot/database/migrations/20261113_product_supplier_readiness.sql bằng database owner', 'Cột còn thiếu: ' . implode(', ', $missingProductColumns)],
+                $missingProductColumns === []
+                    ? 'Schema đã có đủ cột readiness.'
+                    : 'Migration chưa áp dụng. Kho sản phẩm được khóa fail-closed; runtime Bot không tự chạy DDL.'
+            ),
             self::service(
                 'products',
                 'Kho sản phẩm / quyền nguồn',

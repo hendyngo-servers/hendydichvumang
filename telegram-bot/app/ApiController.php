@@ -1122,6 +1122,9 @@ final class ApiController
             return self::response(['products' => $this->listProducts($category !== '' ? $category : null, true)]);
         }
         if ($method === 'POST' && $path === '/api/admin/products') {
+            if (!ProductReadinessService::schemaReady()) {
+                throw new HttpException(409, 'Database chưa áp migration nhà cung cấp/quyền nguồn. Hãy chạy telegram-bot/database/migrations/20261113_product_supplier_readiness.sql bằng database owner trước khi tạo hoặc chỉnh sửa sản phẩm.');
+            }
             $name = $this->text($this->body['name'] ?? '', 120);
             $category = $this->text($this->body['category'] ?? '', 32);
             $description = $this->text($this->body['description'] ?? '', 1500);
@@ -1163,6 +1166,9 @@ final class ApiController
         if (preg_match('#^/api/admin/products/(\d{1,18})$#', $path, $match)) {
             $id = $match[1];
             if ($method === 'PATCH') {
+                if (!ProductReadinessService::schemaReady()) {
+                    throw new HttpException(409, 'Database chưa áp migration nhà cung cấp/quyền nguồn. Hãy chạy telegram-bot/database/migrations/20261113_product_supplier_readiness.sql bằng database owner trước khi tạo hoặc chỉnh sửa sản phẩm.');
+                }
                 $current = Database::one('SELECT * FROM products WHERE id = ?', [$id]);
                 if ($current === null) {
                     throw new HttpException(404, 'Không tìm thấy sản phẩm.');

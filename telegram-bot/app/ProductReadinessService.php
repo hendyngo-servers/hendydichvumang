@@ -13,13 +13,38 @@ final class ProductReadinessService
         if ($alias !== '' && !preg_match('/\\A[a-z][a-z0-9_]*\\z/i', $alias)) {
             throw new RuntimeException('SQL alias sản phẩm không hợp lệ.');
         }
-        $p = $alias === '' ? '' : $alias . '.';
-        return $p . "source_permission_status = 'authorized' AND "
-            . $p . "supplier_access_status = 'verified' AND "
-            . $p . "fulfillment_mode = 'manual' AND "
-            . "NULLIF(BTRIM(" . $p . "supplier_name), '') IS NOT NULL AND "
-            . "NULLIF(BTRIM(" . $p . "supplier_url), '') IS NOT NULL AND "
-            . "NULLIF(BTRIM(" . $p . "source_url), '') IS NOT NULL";
+        $row = $alias !== '' ? 'to_jsonb(' . $alias . ')' : 'to_jsonb(products)';
+        // to_jsonb keeps the catalog safely locked even before an operator applies
+        // the additive migration: missing keys become NULL rather than SQL errors.
+        return "COALESCE(" . $row . "->>'source_permission_status','pending') = 'authorized' AND "
+            . "COALESCE(" . $row . "->>'supplier_access_status','pending') = 'verified' AND "
+            . "COALESCE(" . $row . "->>'fulfillment_mode','manual') = 'manual' AND "
+            . "NULLIF(BTRIM(COALESCE(" . $row . "->>'supplier_name','')), '') IS NOT NULL AND "
+            . "NULLIF(BTRIM(COALESCE(" . $row . "->>'supplier_url','')), '') IS NOT NULL AND "
+            . "NULLIF(BTRIM(COALESCE(" . $row . "->>'source_url','')), '') IS NOT NULL";
+    }
+
+    public static function missingSchemaColumns(): array
+    {
+        $required = [
+            'supplier_name','supplier_url','supplier_product_ref','source_url',
+            'source_permission_status','supplier_access_status','fulfillment_mode',
+            'credential_env_key','verified_by','verified_at',
+        ];
+        $placeholders = implode(',', array_fill(0, count($required), '?'));
+        $rows = Database::all(
+            "SELECT column_name FROM information_schema.columns
+             WHERE table_schema = current_schema() AND table_name = 'products'
+               AND column_name IN (" . $placeholders . ")",
+            $required
+        );
+        $present = array_map(static fn(array $row): string => (string) $row['column_name'], $rows);
+        return array_values(array_diff($required, $present));
+    }
+
+    public static function schemaReady(): bool
+    {
+        return self::missingSchemaColumns() === [];
     }
 
     public static function isSellable(array $product): bool

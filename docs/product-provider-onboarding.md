@@ -60,3 +60,27 @@ new Bot/API version.
 After the schema is present, use the Admin product form to record the supplier and
 evidence, then review both permission statuses. A green CI run does not prove that
 a production database migration or external provider account has been applied.
+
+## Apply the additive production migration
+
+Production keeps `RUN_MIGRATIONS_ON_START=false`; the Bot runtime role must not receive DDL privileges.
+Use a separate database-owner connection and apply the one reviewed migration exactly once:
+
+```bash
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f telegram-bot/database/migrations/20261113_product_supplier_readiness.sql
+```
+
+Do not put `MIGRATION_DATABASE_URL` in the repository or paste its value into ChatGPT.
+After the migration, open Admin → **Nguồn & tình trạng dịch vụ**. The migration row should report ready,
+and product creation/editing can save the source and supplier record. Until then, customer catalogs
+and checkout remain locked for these products. Fresh database installs also receive the fields from
+`telegram-bot/database/schema.sql` when the owner runs the normal schema bootstrap.
+
+## Vietsub worker
+
+The Telegram Bot can accept a valid video link and create a queued job without starting a processor.
+To actually dispatch it, configure `VIDEO_PROCESSOR_URL` (HTTPS), `VIDEO_PROCESSOR_SECRET` (at least
+32 random characters), and set `VIDEO_WORKER_ENABLED=true` in Render Environment. Set
+`APP_URL` or allow Render's `RENDER_EXTERNAL_URL` to provide the HTTPS callback origin. The worker
+fails closed when any requirement is absent. Never paste the processor secret into the Admin UI.

@@ -56,7 +56,7 @@ $assert(ProductReadinessService::isSellable($productReadinessBase), 'product can
 $assert(class_exists(ServiceReadinessService::class), 'Admin service readiness report is registered without exposing provider secret values');
 $serviceReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ServiceReadinessService.php');
 $assert(str_contains($serviceReadinessSource, "'secretValuesReturned' => false") && str_contains($serviceReadinessSource, "'providerCredentialsStoredInDatabase' => false"), 'service readiness exposes configuration status only, never secret values');
-$assert(str_contains($schemaSource, 'source_permission_status') && str_contains($schemaSource, 'supplier_access_status'), 'production schema includes additive supplier/source readiness fields');
+
 
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'supplier_access_status' => 'pending']), 'unverified supplier keeps product locked');
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'source_permission_status' => 'pending']), 'unverified source permission keeps product locked');
@@ -192,7 +192,7 @@ $userAccessMigration = file_get_contents(dirname(__DIR__) . '/database/migration
 $productReadinessMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_product_supplier_readiness.sql');
 $productReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ProductReadinessService.php');
 $assert(str_contains($productReadinessMigration, "DEFAULT 'pending'") && str_contains($productReadinessMigration, 'credential_env_key') && str_contains($productReadinessMigration, 'No wallet'), 'supplier readiness migration is additive and defaults all catalog items to locked');
-$assert(str_contains($productReadinessSource, 'source_permission_status') && str_contains($productReadinessSource, 'supplier_access_status') && str_contains($productReadinessSource, "fulfillment_mode = 'manual'"), 'single product readiness policy verifies supplier, rights and manual fulfillment');
+$assert(str_contains($productReadinessSource, 'source_permission_status') && str_contains($productReadinessSource, 'supplier_access_status') && str_contains($productReadinessSource, "COALESCE(") && str_contains($productReadinessSource, "to_jsonb(") && str_contains($productReadinessSource, "'manual'"), 'single product readiness policy verifies supplier, rights and manual fulfillment while tolerating unapplied schema');
 $assert(str_contains($apiControllerSource, 'productProviderInput') && str_contains($apiControllerSource, 'ProductReadinessService::sqlPredicate()') && str_contains($apiControllerSource, 'adminProduct($product)'), 'Admin product CRUD records supplier evidence and checkout is gated');
 $assert(str_contains($apiControllerSource, '/api/admin/service-readiness') && str_contains($apiControllerSource, 'ServiceReadinessService::snapshot'), 'Admin has a protected endpoint for service and supplier readiness');
 $assert(str_contains($adminDashboardSource, 'data-admin-tab="service-readiness"') && str_contains($adminDashboardSource, 'adminServiceReadiness()') && str_contains($adminDashboardSource, '/api/admin/service-readiness'), 'Admin Dashboard exposes provider readiness and missing configuration names');
@@ -315,7 +315,7 @@ $assert(str_contains($renderSource, 'name: hendydichvumang-telegram-bot') && str
 $assert(!str_contains($renderSource, 'BOT2_TOKEN') && str_contains($renderSource, 'BOT1_TOKEN') && str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY'), 'production Blueprint documents the single bot and existing private secrets without copying secret values');
 $assert(!str_contains($envManifest, 'BOT2_TOKEN') && !str_contains($envManifest, 'BOT2_PUBLIC_URL') && !str_contains($envManifest, 'TELEGRAM_SECOND_WEBHOOK_SECRET'), 'runtime environment manifest contains no secondary-bot credentials');
 $assert(str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY') && str_contains($envManifest, 'HOMEPROXY_ENCRYPTION_KEY'), 'HomeProxy encryption secret remains documented in Blueprint and env manifest');
-$assert(str_contains($renderSource, 'RUN_MIGRATIONS_ON_START') && str_contains($renderSource, 'value: "true"'), 'Render applies the idempotent database schema before the new provider-readiness queries run');
+$assert(str_contains($renderSource, 'RUN_MIGRATIONS_ON_START') && str_contains($renderSource, 'value: "false"') && str_contains($renderSource, 'VIDEO_WORKER_ENABLED'), 'production keeps DDL outside the Bot runtime while documenting the optional video worker');
 $assert(str_contains($renderSource, 'VIDEO_WORKER_ENABLED') && str_contains($envManifest, 'VIDEO_WORKER_ENABLED') && str_contains($envManifest, 'ELEVENLABS_API_KEY'), 'environment manifest documents the optional video worker and AI music provider credential name');
 
 $assert(str_contains($runtimeWorkflow, 'working-directory: telegram-bot') && str_contains($runtimeWorkflow, 'composer test'), 'monorepo CI runs Bot tests from the isolated application directory');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/app/Env.php';
 require dirname(__DIR__) . '/app/NeonStorage.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
+require dirname(__DIR__) . '/app/ProductReadinessService.php';
 require dirname(__DIR__) . '/app/TelegramAuth.php';
 require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/BotMenuDefinition.php';
@@ -26,8 +27,27 @@ use Hendy\TelegramLink;
 use Hendy\BotMenuDefinition;
 use Hendy\WebhookSecurity;
 use Hendy\WebServiceKernel;
+use Hendy\ProductReadinessService;
 
 $checks = 0;
+$productReadinessBase = [
+    'is_active' => true, 'stock' => 3,
+    'supplier_name' => 'HENDY inventory',
+    'supplier_url' => 'https://supplier.example',
+    'source_url' => 'https://supplier.example/terms',
+    'source_permission_status' => 'authorized',
+    'supplier_access_status' => 'verified',
+    'fulfillment_mode' => 'manual',
+];
+$assert(ProductReadinessService::isSellable($productReadinessBase), 'product can sell only after source permission and supplier access verification');
+$assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'supplier_access_status' => 'pending']), 'unverified supplier keeps product locked');
+$assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'source_permission_status' => 'pending']), 'unverified source permission keeps product locked');
+$assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'fulfillment_mode' => 'api']), 'generic API fulfillment stays locked without a provider adapter');
+$assert(ProductReadinessService::validateEnvKey('OTP_PROVIDER_API_KEY') === 'OTP_PROVIDER_API_KEY', 'credential field accepts an Environment variable name only');
+$invalidEnvRejected = false;
+try { ProductReadinessService::validateEnvKey('real-secret-value'); } catch (RuntimeException) { $invalidEnvRejected = true; }
+$assert($invalidEnvRejected, 'credential field rejects an actual secret value');
+
 $assert = static function (bool $condition, string $message) use (&$checks): void {
     $checks++;
     if (!$condition) {
@@ -81,6 +101,9 @@ $parsedCodeTelegram = CodeTelegramService::extractCandidates("Mã khuyến mãi:
 $assert(in_array('HENDY2026', $parsedCodeTelegram, true) && in_array('TELE2026', $parsedCodeTelegram, true) && in_array('FREE999', $parsedCodeTelegram, true), 'Code Telegram extracts Vietnamese promo, Telegram and English promo codes');
 $assert(count($parsedCodeTelegram) === count(array_unique($parsedCodeTelegram)), 'Code Telegram parser removes duplicate candidates from the same message');
 $assert(str_contains($botServiceSource, 'code-telegram:recent') && str_contains($botServiceSource, 'case \'code_telegram_search\':' ) && str_contains($botServiceSource, 'CodeTelegramService::ingestChannelPost'), 'Bot menu supports Code Telegram browse, search and channel ingestion');
+$assert(str_contains($botServiceSource, 'showMatchmakingMenu') && str_contains($botServiceSource, 'matchmaking-join-ranked') && str_contains($botServiceSource, 'matchmaking_result'), 'Telegram menu connects matchmaking queue, accept/decline, score confirmation and ranking');
+$assert(str_contains($botServiceSource, 'showUpcomingServices') && str_contains($botServiceSource, 'member:matchmaking') && str_contains($botServiceSource, 'member:vietsub') && str_contains($botServiceSource, 'member:history'), 'upcoming services hub exposes functional actions instead of a dead-end notice');
+$assert(str_contains($botServiceSource, 'ProductReadinessService::sqlPredicate()'), 'Telegram product list and order paths require supplier/source readiness');
 $assert(str_contains($botServiceSource, 'private function showMinigameProduct') && str_contains($botServiceSource, 'live-buy:') && str_contains($botServiceSource, 'MINIGAME LIVE'), 'MiniGame service list opens a payment confirmation flow');
 $assert(str_contains($botServiceSource, 'FOR UPDATE') && str_contains($botServiceSource, "category = 'minigame'") && str_contains($botServiceSource, 'Ví Chính'), 'MiniGame checkout validates and locks a catalog product before paying from the Main wallet');
 
@@ -88,6 +111,12 @@ $codeTelegramServicesSchema = file_get_contents(dirname(__DIR__) . '/database/mi
 $apiControllerSource = file_get_contents(dirname(__DIR__) . '/app/ApiController.php');
 $adminDashboardSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/index.html');
 $userAccessMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_user_access_controls.sql');
+$productReadinessMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_product_supplier_readiness.sql');
+$productReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ProductReadinessService.php');
+$assert(str_contains($productReadinessMigration, "DEFAULT 'pending'") && str_contains($productReadinessMigration, 'credential_env_key') && str_contains($productReadinessMigration, 'No wallet'), 'supplier readiness migration is additive and defaults all catalog items to locked');
+$assert(str_contains($productReadinessSource, 'source_permission_status') && str_contains($productReadinessSource, 'supplier_access_status') && str_contains($productReadinessSource, "fulfillment_mode = 'manual'"), 'single product readiness policy verifies supplier, rights and manual fulfillment');
+$assert(str_contains($apiControllerSource, 'productProviderInput') && str_contains($apiControllerSource, 'ProductReadinessService::sqlPredicate()') && str_contains($apiControllerSource, 'adminProduct($product)'), 'Admin product CRUD records supplier evidence and checkout is gated');
+
 $assert(str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS is_blocked') && str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS blocked_reason') && str_contains($schemaSource, 'blocked_by TEXT'), 'member access controls have an additive database migration and complete schema');
 $assert(str_contains($apiControllerSource, 'blocked_reason') && str_contains($apiControllerSource, 'user.access') && str_contains($apiControllerSource, 'DELETE FROM legacy_login_tickets WHERE user_id = ?'), 'blocking a member revokes pending login tickets and records an Admin audit event without deleting wallet data');
 $assert(str_contains($adminDashboardSource, 'data-user-access-form') && str_contains($adminDashboardSource, '/access') && str_contains($adminDashboardSource, 'Khóa quyền sử dụng Bot và Website'), 'Admin Dashboard can block and restore a member account with a required reason');
@@ -170,6 +199,7 @@ $assert(str_contains($landingUiSource, 'HENDY DIGITAL') && str_contains($landing
 $assert(!str_contains($landingUiSource, 'Trung tâm khách hàng'), 'trang chủ đã bỏ hoàn toàn khối Features Tags Grid');
 $publicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
 $assert(str_contains($publicRouterSource, "header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');"), 'trang chủ không giữ HTML cũ trong cache');
+$assert(str_contains($publicRouterSource, 'ProductReadinessService::sqlPredicate'), 'public Website catalog never lists unverified supplier products');
 $assert(str_contains($publicRouterSource, "'/api/v1/public/catalog'") && str_contains($publicRouterSource, 'WHERE is_active = TRUE') && str_contains($publicRouterSource, "category IN ('minigame','tools','codes','otp','proxy','vip')"), 'Static Site catalog API returns only active public product fields');
 $assert(str_contains($landingUiSource, "API_BASE+'/api/v1/public/catalog'") && str_contains($landingUiSource, 'createElement(\'article\')') && str_contains($landingUiSource, 'replaceChildren'), 'Static Website renders live catalog entries using safe DOM text nodes and keeps static fallback cards');
 $productionHost = 'https://hendydichvumang-telegram-bot.onrender.com';

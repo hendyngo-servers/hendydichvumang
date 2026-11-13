@@ -49,17 +49,17 @@ final class AiMediaService
         $enabled = filter_var($input['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $music = filter_var($input['musicEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $image = filter_var($input['imageEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
-        if (($enabled || $music || $image) && !Env::bool('AI_MEDIA_QUEUE_ENABLED', false)) {
+        $queueConfigured = Env::bool('AI_MEDIA_QUEUE_ENABLED', false);
+        $musicKeyConfigured = trim((string) Env::get('ELEVENLABS_API_KEY', '')) !== '';
+        $imageKeyConfigured = trim((string) Env::get('OPENAI_API_KEY', '')) !== '';
+        if ($enabled && !$queueConfigured) {
             throw new RuntimeException('AI_MEDIA_QUEUE_ENABLED chưa bật trong Render Environment; chưa thể khởi chạy AI Worker.');
         }
-        if ($music && trim((string) Env::get('ELEVENLABS_API_KEY', '')) === '') {
-            throw new RuntimeException('Chưa cấu hình ELEVENLABS_API_KEY trong Render Environment.');
+        if ($music && (!$enabled || !$queueConfigured || !$musicKeyConfigured)) {
+            throw new RuntimeException('Không thể bật Tạo âm nhạc AI: cần AI Studio tổng, AI worker và ELEVENLABS_API_KEY.');
         }
-        if ($image && trim((string) Env::get('OPENAI_API_KEY', '')) === '') {
-            throw new RuntimeException('Chưa cấu hình OPENAI_API_KEY trong Render Environment.');
-        }
-        if (($music || $image) && !$enabled) {
-            throw new RuntimeException('Bật trạng thái AI Studio tổng trước khi bật từng công cụ AI.');
+        if ($image && (!$enabled || !$queueConfigured || !$imageKeyConfigured)) {
+            throw new RuntimeException('Không thể bật Chỉnh sửa ảnh AI: cần AI Studio tổng, AI worker và OPENAI_API_KEY.');
         }
         Database::transaction(static function () use ($enabled, $music, $image): void {
             foreach ([

@@ -1272,8 +1272,8 @@
     const stats = d.stats || {};
     const tag = ok => '<span class="status ' + (ok ? 'completed' : 'pending') + '">' + (ok ? 'Sẵn sàng' : 'Chưa sẵn sàng') + '</span>';
     const selected = value => value ? ' selected' : '';
-    const switchField = (name,label,value,disabled) =>
-      '<div class="field"><label>' + label + '</label><select name="' + name + '"' + (disabled ? ' disabled' : '') + '>' +
+    const switchField = (name,label,value) =>
+      '<div class="field"><label>' + label + '</label><select name="' + name + '">' +
       '<option value="false"' + selected(!value) + '>Tắt</option><option value="true"' + selected(Boolean(value)) + '>Bật</option></select></div>';
     return '<div class="app-banner"><div><b>🤖 HENDY AI STUDIO</b><small>Điều khiển tập trung công cụ tạo nhạc AI và chỉnh sửa ảnh AI. API key chỉ được đọc từ Render Environment, không hiển thị trên Dashboard.</small></div><span class="banner-icon">🤖</span></div>' +
       '<div class="stat-grid">' +
@@ -1292,8 +1292,8 @@
         '<b>⚙️ Quyền sử dụng AI cho thành viên</b>' +
         '<div class="field"><label>AI Studio tổng</label><select name="enabled"><option value="false"' + selected(!d.adminEnabled) + '>Tắt toàn bộ AI</option><option value="true"' + selected(d.adminEnabled) + '>Cho phép AI Studio</option></select></div>' +
         '<div class="two-col">' +
-          switchField('musicEnabled','🎵 Tạo âm nhạc AI',Boolean(d.musicFlag),!d.musicKeyConfigured || !d.queueConfigured) +
-          switchField('imageEnabled','🖼️ Chỉnh sửa ảnh AI',Boolean(d.imageFlag),!d.imageKeyConfigured || !d.queueConfigured) +
+          switchField('musicEnabled','🎵 Tạo âm nhạc AI',Boolean(d.musicFlag)) +
+          switchField('imageEnabled','🖼️ Chỉnh sửa ảnh AI',Boolean(d.imageFlag)) +
         '</div>' +
         '<button class="primary">Lưu cấu hình AI Studio</button>' +
       '</form>' +
@@ -1598,6 +1598,18 @@
       } catch (error) { toast(error.message); paymentAction.disabled = false; }
       return;
     }
+    const aiCoverService = event.target.closest('[data-ai-cover-service]');
+    if (aiCoverService) {
+      const enabled = aiCoverService.dataset.next === 'true';
+      if (enabled && !window.confirm('Bật AI Cover cho thành viên? Chỉ bật khi RVC worker, Neon Storage và callback HMAC đã được cấu hình, đồng thời đã có preset được cấp phép.')) return;
+      aiCoverService.disabled = true;
+      try {
+        const result = await api('/api/admin/ai-cover/settings','PATCH',{enabled});
+        toast(result.message || 'Đã cập nhật trạng thái AI Cover.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); aiCoverService.disabled = false; }
+      return;
+    }
     const aiCoverVerify = event.target.closest('[data-ai-cover-verify]');
     if (aiCoverVerify) {
       aiCoverVerify.disabled = true;
@@ -1800,7 +1812,16 @@
       submitButton.disabled = true;
     }
     try {
-      if (form.id === 'admin-code-telegram-source-form') {
+      if (form.id === 'admin-ai-media-form') {
+        const payload = {
+          enabled: data.enabled === 'true',
+          musicEnabled: data.musicEnabled === 'true',
+          imageEnabled: data.imageEnabled === 'true'
+        };
+        const result = await api('/api/admin/ai-media','PATCH',payload);
+        toast(result.message || 'Đã cập nhật AI Studio.');
+        await renderPage();
+      } else if (form.id === 'admin-code-telegram-source-form') {
         const result = await api('/api/admin/code-telegram/sources','POST',{
           chat:String(data.chat||'').trim(),
           title:String(data.title||'').trim(),

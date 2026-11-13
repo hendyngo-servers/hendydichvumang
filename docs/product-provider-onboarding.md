@@ -40,3 +40,23 @@ can be listed or purchased.
 OTP, AI, video, Proxy and Code Telegram providers may have their own distinct
 access controls. A supplier URL alone does not prove ownership, authorization or
 working API access. Keep each feature locked until its own readiness checks pass.
+
+
+## Apply the database change safely
+
+The additive columns and constraints are included in `telegram-bot/database/schema.sql`
+and tracked in `telegram-bot/database/migrations/20261113_product_supplier_readiness.sql`.
+Production keeps `RUN_MIGRATIONS_ON_START=false`: do not give the runtime Bot role
+DDL privileges just to make this feature work.
+
+Before deploying the code to an existing database, take/verify a Neon restore point,
+then apply the reviewed migration using the Neon database owner / migration role.
+Do not run it using the restricted `hendy_bot_app` runtime role. The migration adds
+columns and an index, defaults all existing products to pending verification, and
+does not delete orders, wallet entries, user records or product rows. Verify the
+new columns exist and that the app role can SELECT/UPDATE them before enabling the
+new Bot/API version.
+
+After the schema is present, use the Admin product form to record the supplier and
+evidence, then review both permission statuses. A green CI run does not prove that
+a production database migration or external provider account has been applied.

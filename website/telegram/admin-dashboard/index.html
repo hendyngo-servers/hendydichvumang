@@ -323,6 +323,7 @@
       <button class="menu-item" type="button" data-admin-tab="orders"><span class="menu-icon">🧾</span>Duyệt & xử lý đơn hàng</button>
       <button class="menu-item" type="button" data-admin-tab="payments"><span class="menu-icon">💳</span>Duyệt nạp tiền</button>
       <button class="menu-item" type="button" data-admin-tab="products"><span class="menu-icon">📦</span>Dịch vụ & sản phẩm</button>
+      <button class="menu-item" type="button" data-admin-tab="service-readiness"><span class="menu-icon">🧭</span>Nguồn & tình trạng dịch vụ</button>
       <button class="menu-item" type="button" data-admin-tab="tickets"><span class="menu-icon">🎧</span>Ticket khách hàng</button>
       <button class="menu-item" type="button" data-admin-tab="vouchers"><span class="menu-icon">🎟️</span>Voucher 72H</button>
       <button class="menu-item" type="button" data-admin-tab="giftcodes"><span class="menu-icon">🎁</span>Giftcode</button>
@@ -954,6 +955,7 @@
     if (tab === 'overview') state.adminData.overview = await api('/api/admin/overview');
     if (tab === 'modules') state.adminData.modules = (await api('/api/admin/modules')).artifacts || [];
     if (tab === 'products') state.adminData.products = (await api('/api/admin/products')).products;
+    if (tab === 'service-readiness') state.adminData.serviceReadiness = await api('/api/admin/service-readiness');
     if (tab === 'orders') state.adminData.orders = (await api('/api/admin/orders')).orders;
     if (tab === 'tickets') state.adminData.tickets = (await api('/api/admin/tickets')).tickets;
     if (tab === 'settings') state.adminData.settings = (await api('/api/admin/settings')).settings;
@@ -1095,6 +1097,38 @@
         '<div class="two-col"><button class="tiny-btn" data-edit-product="' + escapeHtml(product.id) + '">Chỉnh sửa hồ sơ</button>' +
         '<button class="tiny-btn" data-toggle-product="' + escapeHtml(product.id) + '" data-active="' + String(Boolean(product.isActive)) + '">' + (product.isActive ? 'Ẩn sản phẩm' : 'Bật cờ hiển thị') + '</button></div></article>';
       }).join('') : empty('Chưa có sản phẩm','Tạo hồ sơ thật, ghi nhận quyền nguồn/nhà cung cấp và xác minh trước khi mở bán.'));
+  }
+
+  function adminServiceReadiness() {
+    const data = state.adminData.serviceReadiness || {};
+    const summary = data.summary || {};
+    const services = data.services || [];
+    const categories = data.categories || {};
+    const statusTag = ready => '<span class="status ' + (ready ? 'completed' : 'pending') + '">' + (ready ? 'Sẵn sàng' : 'Đang khóa / chờ cấu hình') + '</span>';
+    const categoryNames = {minigame:'Mini Game Live',tools:'Thuê Tool',codes:'Code',otp:'OTP SMS',proxy:'Proxy',vip:'VIP'};
+    return '<div class="app-banner"><div><b>🧭 HENDY · SERVICE READINESS</b><small>Rà soát quyền nguồn, dữ liệu sản phẩm, nhà cung cấp và kết nối bên ngoài. Màn hình chỉ hiển thị tên biến cần cấu hình, tuyệt đối không hiển thị giá trị secret.</small></div><span class="banner-icon">🧭</span></div>' +
+      '<div class="stat-grid">' +
+        '<div class="stat"><small>Dịch vụ sẵn sàng</small><b>' + Number(summary.readyServices || 0) + '/' + Number(summary.serviceCount || 0) + '</b></div>' +
+        '<div class="stat"><small>Dịch vụ đang khóa</small><b>' + Number(summary.lockedServices || 0) + '</b></div>' +
+        '<div class="stat"><small>Sản phẩm đủ hồ sơ</small><b>' + Number(summary.readyProducts || 0) + '</b></div>' +
+        '<div class="stat"><small>Sản phẩm chờ xác minh</small><b>' + Number(summary.lockedProducts || 0) + '</b></div>' +
+      '</div>' +
+      '<div class="notice warn">Không nhập API Key, mật khẩu, cookie, OTP hoặc hợp đồng bí mật tại trang này. Cấu hình giá trị secret trực tiếp trong Render Environment. Sau khi thay nhà cung cấp hoặc hồ sơ nguồn, hãy xác minh lại sản phẩm trước khi mở bán.</div>' +
+      '<div class="section-head"><h3>Trạng thái từng dịch vụ</h3><span>Kiểm tra ' + escapeHtml(data.checkedAt || '—') + '</span></div>' +
+      (services.length ? services.map(item =>
+        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(item.label || item.key) + '</b><small class="muted">' + escapeHtml(item.note || '') + '</small></div>' + statusTag(Boolean(item.ready)) + '</div>' +
+        (item.missing && item.missing.length ? '<div class="notice warn"><b>Cần hoàn thiện:</b><br>' + item.missing.map(escapeHtml).join('<br>') + '</div>' : '<p class="small muted">Không còn thiếu điều kiện readiness được kiểm tra tự động.</p>') +
+        '</article>'
+      ).join('') : empty('Chưa đọc được trạng thái','Hãy kiểm tra kết nối PostgreSQL và endpoint quản trị.')) +
+      '<div class="section-head"><h3>Kho sản phẩm theo danh mục</h3><span>Chỉ tính mặt hàng đủ điều kiện bán</span></div>' +
+      '<div class="card">' +
+        Object.keys(categoryNames).map(key => {
+          const item = categories[key] || {total:0,ready:0,locked:0};
+          return '<div class="list-row"><div><b>' + categoryNames[key] + '</b><small>Tổng: ' + Number(item.total || 0) + ' · Đủ điều kiện: ' + Number(item.ready || 0) + ' · Chờ xác minh: ' + Number(item.locked || 0) + '</small></div>' + statusTag(Number(item.ready || 0) > 0) + '</div>';
+        }).join('') +
+      '</div>' +
+      '<div class="notice">OTP hiện chỉ hỗ trợ bàn giao thủ công khi có sản phẩm và hồ sơ hợp lệ; chưa có adapter API nhà cung cấp. Vietsub cần VIDEO_WORKER_ENABLED, VIDEO_PROCESSOR_URL và VIDEO_PROCESSOR_SECRET. AI / Code Telegram chỉ khởi động worker sau khi các biến tương ứng đã được cấu hình.</div>' +
+      '<div class="notice good">Báo cáo được tạo lúc ' + escapeHtml(data.checkedAt || '—') + '. Không có secret value nào được trả về trình duyệt.</div>';
   }
 
   function adminOrders() {
@@ -1414,6 +1448,7 @@
     if (state.adminTab === 'overview') body = adminOverview();
     if (state.adminTab === 'modules') body = adminModules();
     if (state.adminTab === 'products') body = adminProducts();
+    if (state.adminTab === 'service-readiness') body = adminServiceReadiness();
     if (state.adminTab === 'orders') body = adminOrders();
     if (state.adminTab === 'tickets') body = adminTickets();
     if (state.adminTab === 'settings') body = adminSettings();

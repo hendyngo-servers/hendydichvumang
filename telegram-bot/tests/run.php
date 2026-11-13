@@ -48,6 +48,7 @@ $databaseDoctorSource = file_get_contents(dirname(__DIR__) . '/bin/database-doct
 $startupScriptSource = file_get_contents(dirname(__DIR__) . '/docker/start.sh');
 $configValidatorSource = file_get_contents(dirname(__DIR__) . '/bin/validate-config.php');
 $providerRegistryUiSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/index.html');
+$providerRegistrySource = file_get_contents(dirname(__DIR__) . '/app/ProviderRegistryService.php');
 
 $productReadinessBase = [
     'is_active' => true, 'stock' => 3,

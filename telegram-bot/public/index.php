@@ -362,8 +362,18 @@ try {
         exit;
     }
     if ($method === 'GET' && in_array($path, ['/health', '/healthz', '/api/health'], true)) {
-        Database::check();
-        respond(['status' => 'ok', 'service' => 'hendy-bot-cybertech']);
+        $databaseReady = false;
+        try {
+            $databaseReady = Database::check();
+        } catch (Throwable $error) {
+            error_log('[health-check] PostgreSQL unavailable: ' . $error::class);
+        }
+        respond([
+            'status' => $databaseReady ? 'ok' : 'degraded',
+            'service' => 'hendy-bot-cybertech',
+            'database' => $databaseReady ? 'ok' : 'unavailable',
+            'timestamp' => gmdate(DATE_ATOM),
+        ], $databaseReady ? 200 : 503);
     }
 
     // --- ROUTE TÙY CHỈNH MỞ RỘNG ---

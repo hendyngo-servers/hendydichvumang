@@ -324,6 +324,7 @@
       <button class="menu-item" type="button" data-admin-tab="payments"><span class="menu-icon">💳</span>Duyệt nạp tiền</button>
       <button class="menu-item" type="button" data-admin-tab="products"><span class="menu-icon">📦</span>Dịch vụ & sản phẩm</button>
       <button class="menu-item" type="button" data-admin-tab="service-readiness"><span class="menu-icon">🧭</span>Nguồn & tình trạng dịch vụ</button>
+      <button class="menu-item" type="button" data-admin-tab="provider-registry"><span class="menu-icon">🔌</span>Provider & Service Registry</button>
       <button class="menu-item" type="button" data-admin-tab="tickets"><span class="menu-icon">🎧</span>Ticket khách hàng</button>
       <button class="menu-item" type="button" data-admin-tab="vouchers"><span class="menu-icon">🎟️</span>Voucher 72H</button>
       <button class="menu-item" type="button" data-admin-tab="giftcodes"><span class="menu-icon">🎁</span>Giftcode</button>
@@ -956,6 +957,7 @@
     if (tab === 'modules') state.adminData.modules = (await api('/api/admin/modules')).artifacts || [];
     if (tab === 'products') state.adminData.products = (await api('/api/admin/products')).products;
     if (tab === 'service-readiness') state.adminData.serviceReadiness = await api('/api/admin/service-readiness');
+    if (tab === 'provider-registry') state.adminData.providerRegistry = await api('/api/admin/provider-registry');
     if (tab === 'orders') state.adminData.orders = (await api('/api/admin/orders')).orders;
     if (tab === 'tickets') state.adminData.tickets = (await api('/api/admin/tickets')).tickets;
     if (tab === 'settings') state.adminData.settings = (await api('/api/admin/settings')).settings;
@@ -1129,6 +1131,75 @@
       '</div>' +
       '<div class="notice">OTP hiện chỉ hỗ trợ bàn giao thủ công khi có sản phẩm và hồ sơ hợp lệ; chưa có adapter API nhà cung cấp. Vietsub cần VIDEO_WORKER_ENABLED, VIDEO_PROCESSOR_URL và VIDEO_PROCESSOR_SECRET. AI / Code Telegram chỉ khởi động worker sau khi các biến tương ứng đã được cấu hình.</div>' +
       '<div class="notice good">Báo cáo được tạo lúc ' + escapeHtml(data.checkedAt || '—') + '. Không có secret value nào được trả về trình duyệt.</div>';
+  }
+
+  function adminProviderRegistry() {
+    const data = state.adminData.providerRegistry || {};
+    const services = data.services || [];
+    const providers = data.providers || [];
+    const adapters = data.adapters || [];
+    const summary = data.summary || {};
+    const editingProvider = state.adminData.editingProvider || {};
+    const statusLabel = {
+      not_checked:'Chưa kiểm tra', configuration_ready:'Cấu hình đủ · chưa test API',
+      missing_environment:'Thiếu Environment', missing_endpoint:'Thiếu Endpoint',
+      adapter_unavailable:'Chưa có adapter', disabled:'Đang tắt'
+    };
+    const statusClass = status => status === 'configuration_ready' ? 'completed' : (status === 'disabled' ? 'rejected' : 'pending');
+    const providerCard = provider =>
+      '<article class="record"><div class="record-top"><div><b>' + escapeHtml(provider.name) + '</b><small>' +
+      escapeHtml(provider.serviceKey) + ' · ' + escapeHtml(provider.providerKey) + ' · Ưu tiên ' + Number(provider.priority || 100) + ' · ' + escapeHtml(provider.adapterLabel) +
+      '</small></div><span class="status ' + (provider.enabled ? 'completed' : 'pending') + '">' + (provider.enabled ? 'Đã bật trong Registry' : 'Đang tắt') + '</span></div>' +
+      '<p class="small muted">' + escapeHtml(provider.endpointUrl || 'Không khai báo endpoint') + ' · ENV: ' + escapeHtml(provider.credentialEnvKey || 'Không yêu cầu') +
+      (provider.credentialEnvKey ? (provider.credentialConfigured ? ' (đã có giá trị)' : ' (chưa có giá trị)') : '') + '</p>' +
+      '<div class="notice ' + statusClass(provider.lastCheckStatus) + '">' + escapeHtml(statusLabel[provider.lastCheckStatus] || provider.lastCheckStatus || 'Chưa kiểm tra') +
+      (provider.lastCheckMessage ? ' · ' + escapeHtml(provider.lastCheckMessage) : '') + '</div>' +
+      '<div class="two-col"><button type="button" class="tiny-btn" data-provider-edit="' + provider.id + '">Sửa</button><button type="button" class="tiny-btn" data-provider-check="' + provider.id + '">Kiểm tra cấu hình</button></div>' +
+      '<button type="button" class="tiny-btn" data-provider-toggle="' + provider.id + '">' + (provider.enabled ? 'Tắt nhà cung cấp' : 'Bật trong Registry') + '</button>' +
+      '<button type="button" class="tiny-btn danger" data-provider-delete="' + provider.id + '">Xóa cấu hình</button></article>';
+    const serviceCards = services.map(service => {
+      const serviceProviders = providers.filter(provider => provider.serviceKey === service.key);
+      const readiness = service.readinessKnown
+        ? '<span class="status ' + (service.ready ? 'completed' : 'pending') + '">' + (service.ready ? 'Readiness đạt' : 'Chưa đủ điều kiện') + '</span>'
+        : '<span class="status pending">Chưa có probe tự động</span>';
+      return '<article class="record"><div class="record-top"><div><b>' + escapeHtml(service.label) + '</b><small>' +
+        escapeHtml(service.group) + ' · ' + escapeHtml(service.key) + '</small></div>' + readiness + '</div>' +
+        '<p class="small muted">' + escapeHtml(service.description) + '</p>' +
+        (service.readinessKnown ? '<div class="notice ' + (service.ready ? 'good' : 'warn') + '">' + escapeHtml(service.readinessNote || '') +
+          (service.missing && service.missing.length ? '<br><b>Còn thiếu:</b> ' + service.missing.map(escapeHtml).join(' · ') : '') + '</div>' : '<div class="notice">Tình trạng vận hành được quản lý tại module chuyên trách. Chưa có phép đo readiness tự động riêng.</div>') +
+        '<form class="card form" data-registry-service-form="' + escapeHtml(service.key) + '">' +
+          '<div class="two-col"><div class="field"><label>Trạng thái dịch vụ</label><select name="enabled"><option value="true"' + (service.enabled ? ' selected' : '') + '>Cho phép hoạt động</option><option value="false"' + (!service.enabled ? ' selected' : '') + '>Khóa API dịch vụ</option></select></div>' +
+          '<div class="field"><label>Chế độ bảo trì</label><select name="maintenanceMode"><option value="false"' + (!service.maintenanceMode ? ' selected' : '') + '>Không bảo trì</option><option value="true"' + (service.maintenanceMode ? ' selected' : '') + '>Bật bảo trì</option></select></div></div>' +
+          '<div class="field"><label>Thông báo bảo trì</label><input name="maintenanceMessage" maxlength="500" value="' + escapeHtml(service.maintenanceMessage || '') + '" placeholder="Dịch vụ sẽ sớm hoạt động trở lại."></div>' +
+          '<button class="tiny-btn">Lưu trạng thái dịch vụ</button></form>' +
+        '<div class="section-head"><h4>Nhà cung cấp (' + serviceProviders.length + ')</h4></div>' +
+        (serviceProviders.length ? serviceProviders.map(providerCard).join('') : '<p class="small muted">Chưa đăng ký nhà cung cấp.</p>') +
+        (service.apiAccessControl ? '<p class="small muted">Khóa/bảo trì ở đây sẽ chặn API Website/Mini App tương ứng. Menu Bot và worker riêng tiếp tục dùng công tắc vận hành chuyên trách.</p>' : '<p class="small muted">Dịch vụ này vẫn dùng cài đặt chuyên trách ở tab ' + escapeHtml(service.adminTab) + ' cho luồng Bot/worker.</p>') +
+        '</article>';
+    }).join('');
+    return '<div class="app-banner"><div><b>🔌 HENDY · PROVIDER & SERVICE REGISTRY</b><small>Quản lý nhà cung cấp, adapter, Environment variable name, trạng thái dịch vụ và chế độ bảo trì tập trung.</small></div><span class="banner-icon">🔌</span></div>' +
+      '<div class="stat-grid">' +
+        '<div class="stat"><small>Dịch vụ đăng ký</small><b>' + Number(summary.serviceCount || 0) + '</b></div>' +
+        '<div class="stat"><small>Dịch vụ bị khóa</small><b>' + Number(summary.disabledServices || 0) + '</b></div>' +
+        '<div class="stat"><small>Đang bảo trì</small><b>' + Number(summary.maintenanceServices || 0) + '</b></div>' +
+        '<div class="stat"><small>Nhà cung cấp</small><b>' + Number(summary.providerCount || 0) + '</b></div>' +
+      '</div>' +
+      '<div class="notice warn"><b>Bảo mật và kiểm tra:</b> Chỉ nhập tên biến Environment (ví dụ OTP_PROVIDER_API_KEY), không nhập giá trị secret. Nút kiểm tra chỉ xác nhận cấu hình cục bộ và sự hiện diện của ENV, không gọi API ngoài và không xác minh hợp đồng/nguồn hàng. API riêng chưa có adapter vẫn bị đánh dấu không hỗ trợ tự động.</div>' +
+      '<form class="card form" id="admin-provider-form" data-provider-id="' + escapeHtml(editingProvider.id || '') + '"><b>' + (editingProvider.id ? '✎ Sửa nhà cung cấp' : '＋ Đăng ký nhà cung cấp mới') + '</b>' +
+        '<div class="field"><label>Dịch vụ</label><select name="serviceKey" required>' + services.map(service => '<option value="' + escapeHtml(service.key) + '"' + (editingProvider.serviceKey === service.key ? ' selected' : '') + '>' + escapeHtml(service.label) + '</option>').join('') + '</select></div>' +
+        '<div class="two-col"><div class="field"><label>Mã nhà cung cấp</label><input name="providerKey" required maxlength="48" pattern="[a-z][a-z0-9_-]{1,47}" value="' + escapeHtml(editingProvider.providerKey || '') + '" placeholder="otp-provider-a"></div>' +
+        '<div class="field"><label>Tên hiển thị</label><input name="name" required minlength="2" maxlength="120" value="' + escapeHtml(editingProvider.name || '') + '" placeholder="Tên nhà cung cấp"></div></div>' +
+        '<div class="field"><label>Adapter</label><select name="adapterKey">' + adapters.map(adapter => '<option value="' + escapeHtml(adapter.key) + '"' + (editingProvider.adapterKey === adapter.key ? ' selected' : '') + '>' + escapeHtml(adapter.label) + (adapter.implemented ? ' · đã có module' : ' · chưa có adapter') + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Endpoint HTTPS (không bắt buộc với bàn giao thủ công)</label><input name="endpointUrl" type="url" value="' + escapeHtml(editingProvider.endpointUrl || '') + '" placeholder="https://api.provider.example/v1"></div>' +
+        '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" pattern="[A-Z][A-Z0-9_]{2,63}" value="' + escapeHtml(editingProvider.credentialEnvKey || '') + '" placeholder="OTP_PROVIDER_API_KEY"></div>' +
+        '<div class="field"><label>Độ ưu tiên (số nhỏ đứng trước)</label><input name="priority" type="number" min="0" max="10000" step="1" value="' + Number(editingProvider.priority ?? 100) + '"></div>' +
+        '<div class="field"><label>Ghi chú / SLA / điều kiện hợp đồng</label><textarea name="notes" maxlength="1200" rows="3" placeholder="Thông tin vận hành không nhạy cảm">' + escapeHtml(editingProvider.notes || '') + '</textarea></div>' +
+        '<div class="field"><label>Trạng thái ban đầu</label><select name="enabled"><option value="false"' + (!editingProvider.enabled ? ' selected' : '') + '>Lưu ở trạng thái tắt</option><option value="true"' + (editingProvider.enabled ? ' selected' : '') + '>Bật trong Registry (không tự bật adapter runtime)</option></select></div>' +
+        '<div class="two-col"><button class="primary">' + (editingProvider.id ? 'Cập nhật nhà cung cấp' : 'Lưu nhà cung cấp') + '</button>' +
+        (editingProvider.id ? '<button type="button" class="tiny-btn" data-provider-edit-cancel>Hủy chỉnh sửa</button>' : '') + '</div></form>' +
+      '<div class="section-head"><h3>Danh mục dịch vụ (' + services.length + ')</h3><span>Kiểm tra ' + escapeHtml(data.checkedAt || '—') + '</span></div>' +
+      (serviceCards || empty('Chưa có dịch vụ','Kiểm tra migration Provider Registry.')) +
+      '<div class="notice">Lưu ý: quyền bật/tắt API ở Registry là lớp khóa API trung tâm cho các route đã liên kết. Các luồng Bot/worker có công tắc riêng như AI Studio, AI Cover, HomeProxy, Video Worker và Code Telegram vẫn cần bật tại đúng module chuyên trách sau khi kiểm thử adapter thật.</div>';
   }
 
   function adminOrders() {
@@ -1449,6 +1520,7 @@
     if (state.adminTab === 'modules') body = adminModules();
     if (state.adminTab === 'products') body = adminProducts();
     if (state.adminTab === 'service-readiness') body = adminServiceReadiness();
+    if (state.adminTab === 'provider-registry') body = adminProviderRegistry();
     if (state.adminTab === 'orders') body = adminOrders();
     if (state.adminTab === 'tickets') body = adminTickets();
     if (state.adminTab === 'settings') body = adminSettings();
@@ -1614,6 +1686,58 @@
       state.adminTab=adminTab.dataset.adminTab;
       document.body.classList.remove('sidebar-open');
       await renderPage();
+      return;
+    }
+    const providerEditCancel = event.target.closest('[data-provider-edit-cancel]');
+    if (providerEditCancel) {
+      state.adminData.editingProvider = null;
+      await renderPage();
+      return;
+    }
+    const providerEdit = event.target.closest('[data-provider-edit]');
+    if (providerEdit) {
+      const id = Number(providerEdit.dataset.providerEdit);
+      state.adminData.editingProvider = (state.adminData.providerRegistry?.providers || []).find(item => Number(item.id) === id) || null;
+      await renderPage();
+      document.getElementById('admin-provider-form')?.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+    const providerCheck = event.target.closest('[data-provider-check]');
+    if (providerCheck) {
+      providerCheck.disabled = true;
+      try {
+        const result = await api('/api/admin/provider-registry/providers/' + encodeURIComponent(providerCheck.dataset.providerCheck) + '/check','POST',{});
+        toast(result.message || 'Đã kiểm tra cấu hình cục bộ.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); providerCheck.disabled = false; }
+      return;
+    }
+    const providerToggle = event.target.closest('[data-provider-toggle]');
+    if (providerToggle) {
+      const id = Number(providerToggle.dataset.providerToggle);
+      const provider = (state.adminData.providerRegistry?.providers || []).find(item => Number(item.id) === id);
+      if (!provider) return;
+      const next = !provider.enabled;
+      if (next && !window.confirm('Bật cấu hình nhà cung cấp trong Registry? Việc này không tự triển khai hoặc xác minh adapter API.')) return;
+      try {
+        await api('/api/admin/provider-registry/providers/' + id,'PATCH',{
+          serviceKey:provider.serviceKey, providerKey:provider.providerKey, name:provider.name,
+          adapterKey:provider.adapterKey, endpointUrl:provider.endpointUrl,
+          credentialEnvKey:provider.credentialEnvKey, priority:Number(provider.priority || 100), notes:provider.notes, enabled:next
+        });
+        toast(next ? 'Đã bật nhà cung cấp trong Registry.' : 'Đã tắt nhà cung cấp.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
+      return;
+    }
+    const providerDelete = event.target.closest('[data-provider-delete]');
+    if (providerDelete) {
+      if (!window.confirm('Xóa cấu hình nhà cung cấp này khỏi Registry? Dữ liệu giao dịch và sản phẩm không bị xóa.')) return;
+      try {
+        await api('/api/admin/provider-registry/providers/' + encodeURIComponent(providerDelete.dataset.providerDelete),'DELETE');
+        toast('Đã xóa cấu hình nhà cung cấp.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
       return;
     }
     const homeProxyAction=event.target.closest('[data-homeproxy-action]');
@@ -1882,7 +2006,36 @@
       submitButton.disabled = true;
     }
     try {
-      if (form.id === 'admin-ai-media-form') {
+      if (form.id === 'admin-provider-form') {
+        const payload = {
+          serviceKey:String(data.serviceKey || ''),
+          providerKey:String(data.providerKey || '').trim().toLowerCase(),
+          name:String(data.name || '').trim(),
+          adapterKey:String(data.adapterKey || 'manual'),
+          endpointUrl:String(data.endpointUrl || '').trim(),
+          credentialEnvKey:String(data.credentialEnvKey || '').trim(),
+          enabled:data.enabled === 'true',
+          priority:Number(data.priority || 100),
+          notes:String(data.notes || '').trim()
+        };
+        const providerId = Number(form.dataset.providerId || 0);
+        const result = providerId
+          ? await api('/api/admin/provider-registry/providers/' + providerId,'PATCH',payload)
+          : await api('/api/admin/provider-registry/providers','POST',payload);
+        state.adminData.editingProvider = null;
+        toast(result.message || (providerId ? 'Đã cập nhật nhà cung cấp.' : 'Đã thêm nhà cung cấp.'));
+        form.reset();
+        await renderPage();
+      } else if (form.dataset.registryServiceForm) {
+        const key = form.dataset.registryServiceForm;
+        const result = await api('/api/admin/provider-registry/services/' + encodeURIComponent(key),'PATCH',{
+          enabled:data.enabled === 'true',
+          maintenanceMode:data.maintenanceMode === 'true',
+          maintenanceMessage:String(data.maintenanceMessage || '').trim()
+        });
+        toast(result.message || 'Đã cập nhật dịch vụ.');
+        await renderPage();
+      } else if (form.id === 'admin-ai-media-form') {
         const payload = {
           enabled: data.enabled === 'true',
           musicEnabled: data.musicEnabled === 'true',

@@ -123,6 +123,10 @@ final class ApiController
             $modeLabel = $operation['mode'] === 'upgrade' ? 'nâng cấp' : 'bảo trì';
             throw new HttpException(503, 'HENDY đang ' . $modeLabel . '. ' . $operation['message']);
         }
+        $serviceBlock = ProviderRegistryService::blockMessageForPath($path, $this->isAdmin());
+        if ($serviceBlock !== null) {
+            throw new HttpException(503, $serviceBlock);
+        }
         if (WebServiceKernel::handles($path)) {
             try {
                 $result = WebServiceKernel::dispatch($method, $path, $this->body, [
@@ -594,6 +598,75 @@ final class ApiController
     {
         if ($method === 'GET' && $path === '/api/admin/service-readiness') {
             return self::response(ServiceReadinessService::snapshot());
+        }
+        if ($method === 'GET' && $path === '/api/admin/provider-registry') {
+            return self::response(ProviderRegistryService::snapshot());
+        }
+        if ($method === 'POST' && $path === '/api/admin/provider-registry/providers') {
+            try {
+                $provider = ProviderRegistryService::saveProvider($this->body, (string) $this->user['id']);
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            } catch (Throwable $error) {
+                throw new HttpException(409, 'Không thể lưu nhà cung cấp. Hãy kiểm tra mã nhà cung cấp có bị trùng không.');
+            }
+            $this->audit('provider_registry.provider.create', (string) $provider['id'], [
+                'serviceKey' => $provider['serviceKey'],
+                'providerKey' => $provider['providerKey'],
+                'adapterKey' => $provider['adapterKey'],
+                'enabled' => $provider['enabled'],
+            ]);
+            return self::response(['provider' => $provider, 'message' => 'Đã lưu thông tin nhà cung cấp. Cấu hình chưa đồng nghĩa với API đã xác minh.'], 201);
+        }
+        if (preg_match('#^/api/admin/provider-registry/providers/(\\d+)/check$#', $path, $providerMatch) && $method === 'POST') {
+            try {
+                $provider = ProviderRegistryService::checkProvider((int) $providerMatch[1]);
+            } catch (RuntimeException $error) {
+                throw new HttpException(404, $error->getMessage());
+            }
+            $this->audit('provider_registry.provider.check', (string) $provider['id'], [
+                'status' => $provider['lastCheckStatus'],
+                'serviceKey' => $provider['serviceKey'],
+                'providerKey' => $provider['providerKey'],
+            ]);
+            return self::response(['provider' => $provider, 'message' => $provider['lastCheckMessage'], 'isLiveApiTest' => false]);
+        }
+        if (preg_match('#^/api/admin/provider-registry/providers/(\\d+)$#', $path, $providerMatch) && $method === 'PATCH') {
+            try {
+                $provider = ProviderRegistryService::saveProvider($this->body, (string) $this->user['id'], (int) $providerMatch[1]);
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            } catch (Throwable $error) {
+                throw new HttpException(409, 'Không thể cập nhật nhà cung cấp. Hãy kiểm tra mã nhà cung cấp có bị trùng không.');
+            }
+            $this->audit('provider_registry.provider.update', (string) $provider['id'], [
+                'serviceKey' => $provider['serviceKey'],
+                'providerKey' => $provider['providerKey'],
+                'adapterKey' => $provider['adapterKey'],
+                'enabled' => $provider['enabled'],
+            ]);
+            return self::response(['provider' => $provider, 'message' => 'Đã cập nhật nhà cung cấp.']);
+        }
+        if (preg_match('#^/api/admin/provider-registry/providers/(\\d+)$#', $path, $providerMatch) && $method === 'DELETE') {
+            try {
+                ProviderRegistryService::deleteProvider((int) $providerMatch[1]);
+            } catch (RuntimeException $error) {
+                throw new HttpException(404, $error->getMessage());
+            }
+            $this->audit('provider_registry.provider.delete', $providerMatch[1], []);
+            return self::response(['success' => true, 'message' => 'Đã xóa cấu hình nhà cung cấp khỏi Registry.']);
+        }
+        if (preg_match('#^/api/admin/provider-registry/services/([a-z][a-z0-9_]{1,63})$#', $path, $serviceMatch) && $method === 'PATCH') {
+            try {
+                $service = ProviderRegistryService::saveService($serviceMatch[1], $this->body, (string) $this->user['id']);
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            }
+            $this->audit('provider_registry.service.update', $serviceMatch[1], [
+                'enabled' => $service['enabled'],
+                'maintenanceMode' => $service['maintenanceMode'],
+            ]);
+            return self::response(['service' => $service, 'message' => 'Đã cập nhật cờ quản lý dịch vụ.']);
         }
         if ($method === 'GET' && $path === '/api/admin/ai-media') {
             return self::response(AiMediaService::adminSnapshot());

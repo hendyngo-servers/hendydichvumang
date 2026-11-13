@@ -6,6 +6,7 @@ require dirname(__DIR__) . '/app/NeonStorage.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/ProductReadinessService.php';
 require dirname(__DIR__) . '/app/ServiceReadinessService.php';
+require dirname(__DIR__) . '/app/ProviderRegistryService.php';
 require dirname(__DIR__) . '/app/TelegramAuth.php';
 require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/BotMenuDefinition.php';
@@ -30,6 +31,7 @@ use Hendy\WebhookSecurity;
 use Hendy\WebServiceKernel;
 use Hendy\ProductReadinessService;
 use Hendy\ServiceReadinessService;
+use Hendy\ProviderRegistryService;
 
 $checks = 0;
 $assert = static function (bool $condition, string $message) use (&$checks): void {
@@ -38,6 +40,8 @@ $assert = static function (bool $condition, string $message) use (&$checks): voi
         throw new RuntimeException('Test thất bại: ' . $message);
     }
 };
+
+$schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
 
 $productReadinessBase = [
     'is_active' => true, 'stock' => 3,
@@ -62,12 +66,75 @@ $invalidEnvRejected = false;
 try { ProductReadinessService::validateEnvKey('real-secret-value'); } catch (RuntimeException) { $invalidEnvRejected = true; }
 $assert($invalidEnvRejected, 'credential field rejects an actual secret value');
 
+$assert(count(ProviderRegistryService::serviceKeys()) >= 20, 'Provider Registry chứa danh mục quản lý cho toàn bộ nhóm dịch vụ HENDY');
+$assert(in_array('custom_api_pending', ProviderRegistryService::adapterKeys(), true), 'API tùy chỉnh không có adapter được giữ ở trạng thái chưa hỗ trợ');
+$validProvider = ProviderRegistryService::validateProviderInput([
+    'serviceKey' => 'otp',
+    'providerKey' => 'example-otp',
+    'name' => 'Nhà cung cấp OTP thử nghiệm',
+    'adapterKey' => 'custom_api_pending',
+    'endpointUrl' => 'https://provider.example/api',
+    'credentialEnvKey' => 'OTP_PROVIDER_API_KEY',
+    'enabled' => true,
+    'priority' => 25,
+]);
+$assert($validProvider['credential_env_key'] === 'OTP_PROVIDER_API_KEY' && $validProvider['enabled'] && $validProvider['priority'] === 25, 'Provider Registry chỉ ghi tên Environment và xác thực input hợp lệ');
+$builtInProvider = ProviderRegistryService::validateProviderInput([
+    'serviceKey' => 'proxy', 'providerKey' => 'homeproxy-main', 'name' => 'HomeProxy tích hợp',
+    'adapterKey' => 'homeproxy', 'credentialEnvKey' => 'HOMEPROXY_ENCRYPTION_KEY',
+]);
+$assert($builtInProvider['endpoint_url'] === '' && $builtInProvider['priority'] === 100, 'Adapter tích hợp sẵn có thể dùng endpoint được quản lý qua Environment hoặc cấu hình nội bộ');
+$assert($builtInProvider['credential_env_key'] === 'HOMEPROXY_ENCRYPTION_KEY', 'Adapter HomeProxy tự ràng buộc đúng tên biến khóa mã hóa máy chủ');
+$invalidAdapterPairRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'wrong-adapter', 'name' => 'OTP dùng nhầm adapter',
+        'adapterKey' => 'homeproxy', 'credentialEnvKey' => 'HOMEPROXY_ENCRYPTION_KEY',
+    ]);
+} catch (RuntimeException) { $invalidAdapterPairRejected = true; }
+$assert($invalidAdapterPairRejected, 'Provider Registry không cho ghép adapter HomeProxy vào dịch vụ OTP');
+$invalidPriorityRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'priority-provider', 'name' => 'Provider sai ưu tiên',
+        'adapterKey' => 'manual', 'priority' => 10001,
+    ]);
+} catch (RuntimeException) { $invalidPriorityRejected = true; }
+$assert($invalidPriorityRejected, 'Provider Registry giới hạn độ ưu tiên trong khoảng 0–10.000');
+$providerSource = file_get_contents(dirname(__DIR__) . '/app/ProviderRegistryService.php');
+$assert(str_contains($providerSource, 'AI_COVER_WORKER_URL') && str_contains($providerSource, 'VIDEO_PROCESSOR_URL') && str_contains($providerSource, 'validHttpsEndpoint'), 'Worker endpoint được kiểm tra qua HTTPS URL và Environment theo adapter');
+$invalidProviderUrlRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'bad-provider', 'name' => 'Provider không an toàn',
+        'adapterKey' => 'custom_api_pending', 'endpointUrl' => 'http://127.0.0.1/admin',
+    ]);
+} catch (RuntimeException) { $invalidProviderUrlRejected = true; }
+$assert($invalidProviderUrlRejected, 'Provider Registry từ chối endpoint HTTP và IP nội bộ');
+$providerQueryRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'query-provider', 'name' => 'Provider chứa query',
+        'adapterKey' => 'custom_api_pending', 'endpointUrl' => 'https://provider.example/api?api_key=do-not-store',
+    ]);
+} catch (RuntimeException) { $providerQueryRejected = true; }
+$assert($providerQueryRejected, 'Provider Registry từ chối query string để tránh lưu token trong URL');
+$invalidProviderSecretRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'secret-provider', 'name' => 'Provider secret',
+        'adapterKey' => 'manual', 'credentialEnvKey' => 'actual-secret-value',
+    ]);
+} catch (RuntimeException) { $invalidProviderSecretRejected = true; }
+$assert($invalidProviderSecretRejected, 'Provider Registry không chấp nhận giá trị secret thay cho tên biến Environment');
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/app/ProviderRegistryService.php'), "'configurationCheckIsLiveApiTest' => false"), 'Kiểm tra cấu hình không giả mạo kết quả kết nối API thật');
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/app/ApiController.php'), 'ProviderRegistryService::blockMessageForPath'), 'Cờ tạm khóa dịch vụ được áp dụng lên các API path đã đăng ký');
+$assert(str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS service_registry') && str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS service_providers'), 'Fresh schema tạo bảng quản lý dịch vụ và nhà cung cấp');
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_provider_service_registry.sql'), 'GRANT SELECT, INSERT, UPDATE, DELETE ON service_registry, service_providers TO hendy_bot_app'), 'Migration cấp đúng quyền DML cho runtime role');
 $assert(TelegramAuth::safeEquals('same-secret', 'same-secret'), 'so sánh chuỗi đúng');
 $assert(!TelegramAuth::safeEquals('different', 'same-secret'), 'so sánh chuỗi khác');
 $assert(!TelegramAuth::safeEquals('', ''), 'secret rỗng bị từ chối');
 $telegramAuthSource = file_get_contents(dirname(__DIR__) . '/app/TelegramAuth.php');
-$schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
-$assert(str_contains($schemaSource, 'source_permission_status') && str_contains($schemaSource, 'supplier_access_status'), 'production schema includes additive supplier/source readiness fields');
 $dockerfileSource = file_get_contents(dirname(__DIR__) . '/Dockerfile');
 $assert(str_contains($dockerfileSource, "printf '%s\\n'") && str_contains($dockerfileSource, "'upload_max_filesize=205M'") && str_contains($dockerfileSource, "'post_max_size=260M'"), 'Docker writes PHP upload limits as separate real INI lines, not literal backslash-n text');
 $assert(str_contains($telegramAuthSource, 'ON CONFLICT (bot_key) DO UPDATE SET') && str_contains($telegramAuthSource, 'RETURNING secret_value'), 'webhook/session secrets persist using atomic PostgreSQL upserts');
@@ -129,6 +196,10 @@ $assert(str_contains($productReadinessSource, 'source_permission_status') && str
 $assert(str_contains($apiControllerSource, 'productProviderInput') && str_contains($apiControllerSource, 'ProductReadinessService::sqlPredicate()') && str_contains($apiControllerSource, 'adminProduct($product)'), 'Admin product CRUD records supplier evidence and checkout is gated');
 $assert(str_contains($apiControllerSource, '/api/admin/service-readiness') && str_contains($apiControllerSource, 'ServiceReadinessService::snapshot'), 'Admin has a protected endpoint for service and supplier readiness');
 $assert(str_contains($adminDashboardSource, 'data-admin-tab="service-readiness"') && str_contains($adminDashboardSource, 'adminServiceReadiness()') && str_contains($adminDashboardSource, '/api/admin/service-readiness'), 'Admin Dashboard exposes provider readiness and missing configuration names');
+$assert(str_contains($adminDashboardSource, 'data-admin-tab="provider-registry"') && str_contains($adminDashboardSource, 'adminProviderRegistry()') && str_contains($adminDashboardSource, '/api/admin/provider-registry'), 'Existing Admin Dashboard includes the Provider & Service Registry tab');
+$assert(str_contains($adminDashboardSource, 'data-provider-edit') && str_contains($adminDashboardSource, 'data-provider-check') && str_contains($adminDashboardSource, 'data-provider-delete') && str_contains($adminDashboardSource, 'data-registry-service-form'), 'Provider Registry UI supports edit, configuration check, delete and service maintenance controls');
+$assert(str_contains($apiControllerSource, '/api/admin/provider-registry/providers') && str_contains($apiControllerSource, '/api/admin/provider-registry/services/') && str_contains($apiControllerSource, 'ProviderRegistryService::saveProvider'), 'Admin API exposes protected provider CRUD and service-state endpoints');
+
 
 
 $assert(str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS is_blocked') && str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS blocked_reason') && str_contains($schemaSource, 'blocked_by TEXT'), 'member access controls have an additive database migration and complete schema');

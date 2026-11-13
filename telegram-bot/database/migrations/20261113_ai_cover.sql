@@ -104,3 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_cover_events_job_created
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ai_cover_sessions, ai_cover_voices, ai_cover_jobs, ai_cover_events TO hendy_bot_app;
 GRANT USAGE, SELECT ON SEQUENCE ai_cover_events_id_seq TO hendy_bot_app;
+
+
+-- External inference worker id for dispatch idempotency and callback matching.
+ALTER TABLE ai_cover_jobs ADD COLUMN IF NOT EXISTS provider_job_id VARCHAR(160) NOT NULL DEFAULT '';

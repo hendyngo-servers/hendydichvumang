@@ -107,6 +107,13 @@ final class ProviderRegistryService
             throw new RuntimeException('Adapter tự động cần có Endpoint HTTPS.');
         }
         $credentialEnvKey = $envKey === '' ? '' : ProductReadinessService::validateEnvKey($envKey);
+        $requiredEnvKey = self::requiredEnvKey($serviceKey, $adapterKey);
+        if ($requiredEnvKey !== '') {
+            if ($credentialEnvKey !== '' && $credentialEnvKey !== $requiredEnvKey) {
+                throw new RuntimeException('Adapter này chỉ nhận tên biến Environment ' . $requiredEnvKey . '.');
+            }
+            $credentialEnvKey = $requiredEnvKey;
+        }
         if (mb_strlen($notes) > 1200) {
             throw new RuntimeException('Ghi chú nhà cung cấp không được vượt quá 1.200 ký tự.');
         }
@@ -258,6 +265,29 @@ final class ProviderRegistryService
         };
     }
 
+    private static function requiredEndpointEnvKey(string $serviceKey, string $adapterKey): string
+    {
+        return match ([$serviceKey, $adapterKey]) {
+            ['ai_cover', 'ai_cover_worker'] => 'AI_COVER_WORKER_URL',
+            ['vietsub', 'video_worker'] => 'VIDEO_PROCESSOR_URL',
+            default => '',
+        };
+    }
+
+    private static function validHttpsEndpoint(string $value): bool
+    {
+        $parts = $value !== '' ? parse_url($value) : false;
+        if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host']) || isset($parts['user']) || isset($parts['pass'])
+            || isset($parts['query']) || isset($parts['fragment'])
+            || filter_var((string) $parts['host'], FILTER_VALIDATE_IP)
+            || in_array(strtolower((string) $parts['host']), ['localhost'], true)
+            || str_ends_with(strtolower((string) $parts['host']), '.local')) {
+            return false;
+        }
+        return filter_var($value, FILTER_VALIDATE_URL) !== false;
+    }
+
     public static function checkProvider(int $id): array
     {
         $row = Database::one(
@@ -270,7 +300,12 @@ final class ProviderRegistryService
         $requiredEnvKey = self::requiredEnvKey((string) $row['service_key'], (string) $row['adapter_key']);
         $checkedEnvKey = $requiredEnvKey !== '' ? $requiredEnvKey : $envKey;
         $secretConfigured = $checkedEnvKey !== '' && trim((string) Env::get($checkedEnvKey, '')) !== '';
-        $endpointConfigured = trim((string) $row['endpoint_url']) !== '';
+        $requiredEndpointEnvKey = self::requiredEndpointEnvKey((string) $row['service_key'], (string) $row['adapter_key']);
+        $endpointValue = trim((string) $row['endpoint_url']);
+        if ($endpointValue === '' && $requiredEndpointEnvKey !== '') {
+            $endpointValue = trim((string) Env::get($requiredEndpointEnvKey, ''));
+        }
+        $endpointConfigured = self::validHttpsEndpoint($endpointValue);
         if (!self::dbBool($row['enabled'])) {
             $status = 'disabled';
             $message = 'Nhà cung cấp đang tắt trong Registry.';
@@ -283,9 +318,12 @@ final class ProviderRegistryService
         } elseif ($checkedEnvKey !== '' && !$secretConfigured) {
             $status = 'missing_environment';
             $message = 'Chưa tìm thấy giá trị của biến ' . $checkedEnvKey . ' trong Environment máy chủ.';
+        } elseif ($requiredEndpointEnvKey !== '' && !$endpointConfigured) {
+            $status = 'missing_endpoint';
+            $message = 'Chưa khai báo URL HTTPS hợp lệ trong biến ' . $requiredEndpointEnvKey . ' hoặc Endpoint của nhà cung cấp.';
         } elseif ($row['adapter_key'] === 'custom_api_pending' && !$endpointConfigured) {
             $status = 'missing_endpoint';
-            $message = 'Chưa khai báo Endpoint HTTPS.';
+            $message = 'Chưa khai báo Endpoint HTTPS hợp lệ.';
         } else {
             $status = 'configuration_ready';
             $message = 'Cấu hình cục bộ hợp lệ. Đây chưa phải kết quả gọi thử API hoặc xác minh tài khoản nhà cung cấp.';

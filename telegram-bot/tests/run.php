@@ -43,6 +43,8 @@ $assert(str_contains($telegramAuthSource, 'ON CONFLICT (bot_key) DO UPDATE SET')
 $assert(!str_contains($telegramAuthSource, 'pg_advisory_xact_lock'), 'webhook/session secret startup does not rely on multi-statement advisory-lock transactions');
 $assert(str_contains($telegramAuthSource, 'char_length(telegram_webhook_secrets.secret_value) BETWEEN 32 AND 256') && str_contains($telegramAuthSource, 'secret_value !~'), 'PostgreSQL-safe secret validation combines character allowlist and length bounds');
 $assert(str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS website_session_secrets'), 'database schema creates the website session secret table used by authentication');
+$aiCoverSource = file_get_contents(dirname(__DIR__) . '/app/AiCoverService.php');
+$assert(str_contains($aiCoverSource, 'public static function runtimeEnabled()') && str_contains($aiCoverSource, 'public static function setServiceEnabled') && str_contains($adminDashboardSource ?? '', 'data-ai-cover-service'), 'AI Cover member access has an Admin runtime toggle behind infrastructure readiness');
 $assert(TelegramLink::normalize('https://t.me/HendySupportGroup') === 'https://t.me/HendySupportGroup', 'chấp nhận liên kết Telegram HTTPS hợp lệ');
 $assert(TelegramLink::normalize('https://t.me/+Invite_Code-123') === 'https://t.me/+Invite_Code-123', 'chấp nhận liên kết mời Telegram');
 $assert(TelegramLink::normalize('http://t.me/HendySupportGroup') === '', 'từ chối liên kết Telegram không HTTPS');
@@ -51,8 +53,8 @@ $assert(TelegramLink::normalize('https://user@t.me/HendySupportGroup') === '', '
 $assert(TelegramLink::normalize('https://t.me/hendy_cyber_bot?start=old') === 'https://t.me/hendy_cyber_bot', 'chuẩn hóa public URL bot và loại query có sẵn');
 $assert(TelegramLink::normalize('https://example.com/hendy_cyber_bot') === '', 'từ chối URL public bot ngoài Telegram');
 
-$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','otp','wallet','vip','codes','customer','music-ai','image-ai','ai-cover','group','news','vip-coming-soon'], 'menu chính có AI music và AI image theo yêu cầu');
-$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet'],['vip','codes'],['customer'],['music-ai','image-ai'],['ai-cover'],['group'],['news','vip-coming-soon'],['admin']], 'layout Inline Menu dùng nhịp so le hai nút - một nút và có hai nút AI');
+$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','otp','wallet','vip','codes','customer','ai-features','group','news','vip-coming-soon'], 'menu chính nhóm các công cụ AI dưới một nút TÍNH NĂNG AI');
+$assert(BotMenuDefinition::LAYOUT === [['live','otp'],['wallet'],['vip','codes'],['customer'],['ai-features'],['group'],['news','vip-coming-soon'],['admin']], 'layout Inline Menu nhóm AI thành một mục chính');
 $styles = array_column(BotMenuDefinition::ITEMS, 'style');
 $assert(count($styles) === count(BotMenuDefinition::ITEMS) && count(array_diff($styles, ['primary','success','danger'])) === 0, 'mọi nút menu chính đều có màu Telegram hợp lệ');
 $botServiceSource = file_get_contents(dirname(__DIR__) . '/app/BotService.php');
@@ -89,8 +91,12 @@ $assert(str_contains($apiControllerSource, '/api/admin/code-telegram/accounts/')
 $assert(str_contains($adminDashboardSource, 'Yêu cầu tài khoản Code Telegram') && str_contains($adminDashboardSource, 'data-code-account-success'), 'Admin Dashboard displays and processes Code Telegram account requests');
 $assert(str_contains($telegramApiSource, 'BOT_HOME_PHOTO_ALLOWED_HOSTS') && str_contains($telegramApiSource, 'sendPhotoFile') && str_contains($telegramApiSource, 'CURLOPT_SSL_VERIFYPEER'), 'banner download validates HTTPS host, MIME and uploads bytes securely');
 $aiServiceSource = file_get_contents(dirname(__DIR__) . '/app/AiMediaService.php');
+$assert(str_contains($aiServiceSource, 'public static function readiness()') && str_contains($aiServiceSource, 'public static function setFeatures') && str_contains($aiServiceSource, 'ai_media_music_enabled') && str_contains($aiServiceSource, 'ai_media_image_enabled'), 'AI Studio has readiness checks and separate Music/Image runtime flags');
+$assert(str_contains($aiServiceSource, "WHERE status='queued' AND ((job_type='music'") && str_contains($aiServiceSource, 'featureEnabled'), 'AI worker only claims jobs for features enabled by both runtime settings and provider secrets');
+$assert(str_contains($apiControllerSource, '/api/admin/ai-media') && str_contains($apiControllerSource, '/api/admin/ai-cover/settings') && str_contains($adminDashboardSource, 'data-admin-tab="ai-media"') && str_contains($adminDashboardSource, 'adminAiMedia()'), 'Admin Dashboard can manage AI Studio and AI Cover service access');
 $assert(str_contains($aiServiceSource, 'AI_MEDIA_QUEUE_ENABLED') && str_contains($aiServiceSource, 'ELEVENLABS_API_KEY') && str_contains($aiServiceSource, 'OPENAI_API_KEY'), 'AI generation uses server-side secrets and an explicit queue toggle');
-$assert(str_contains($botServiceSource, "case 'music-ai':") && str_contains($botServiceSource, "case 'image-ai':") && str_contains($botServiceSource, '$this->sendUnavailableNotice($chatId);') && !str_contains($botServiceSource, "case 'image-ai':\n                if ("), 'AI buttons remain visible but only show the short unavailable notice until released');
+$assert(str_contains($botServiceSource, "case 'ai-features':") && str_contains($botServiceSource, 'private function showAiFeaturesMenu') && str_contains($botServiceSource, "'member:music-ai'") && str_contains($botServiceSource, "'member:image-ai'") && str_contains($botServiceSource, "'member:ai-cover'"), 'menu TÍNH NĂNG AI mở đủ ba công cụ AI');
+$assert(str_contains($botServiceSource, 'private function startAiMusic') && str_contains($botServiceSource, 'private function startAiImage') && str_contains($botServiceSource, 'private function handleAiImagePhoto') && str_contains($botServiceSource, "case 'ai_music_prompt':") && str_contains($botServiceSource, "case 'ai_image_prompt':"), 'AI Music and Image prompts connect to real job queue handlers');
 $welcomeStart = strpos($botServiceSource, '$lines = [', strpos($botServiceSource, 'private function sendHome'));
 $welcomeEnd = $welcomeStart === false ? false : strpos($botServiceSource, '];', $welcomeStart);
 $welcomeBlock = ($welcomeStart !== false && $welcomeEnd !== false) ? substr($botServiceSource, $welcomeStart, $welcomeEnd - $welcomeStart) : '';

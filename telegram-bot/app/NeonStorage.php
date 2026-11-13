@@ -176,7 +176,8 @@ final class NeonStorage
         $baseUrl=rtrim((string)Env::get('NEON_STORAGE_FUNCTION_URL'),'/');
         $apiKey=(string)Env::get('NEON_STORAGE_FUNCTION_KEY');
         $payload=json_encode(['action'=>$action,'key'=>$objectKey,'contentType'=>$contentType,'expiresIn'=>max(1,min(900,$expiresIn))],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-        $curl=curl_init($baseUrl.'/presign');
+        $presignPath = str_starts_with($objectKey, 'ai-cover/') ? '/ai-cover/presign' : '/presign';
+        $curl=curl_init($baseUrl.$presignPath);
         if($curl===false) throw new RuntimeException('Không khởi tạo được yêu cầu tới Neon Function.');
         try{
             curl_setopt_array($curl,[

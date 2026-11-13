@@ -535,6 +535,15 @@ final class ApiController
         if ($method === 'GET' && $path === '/api/admin/ai-media') {
             return self::response(AiMediaService::adminSnapshot());
         }
+        if (preg_match('#^/api/admin/ai-media/jobs/([0-9a-f-]{36})/retry$#i', $path, $jobMatch) && $method === 'POST') {
+            try {
+                $job = AiMediaService::retryJob($jobMatch[1]);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            $this->audit('ai_media.job.retry', (string) $job['id'], ['jobType' => $job['job_type'], 'userId' => $job['user_id']]);
+            return self::response(['job' => $job, 'message' => 'Đã đưa tác vụ AI trở lại hàng chờ.']);
+        }
         if ($method === 'PATCH' && $path === '/api/admin/ai-media') {
             try {
                 $result = AiMediaService::setFeatures($this->body);

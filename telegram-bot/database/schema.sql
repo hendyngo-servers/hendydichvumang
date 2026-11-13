@@ -194,6 +194,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_media_jobs_queue
     ON ai_media_jobs(status, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_ai_media_jobs_user_created
     ON ai_media_jobs(user_id, created_at DESC);
+GRANT SELECT, INSERT, UPDATE, DELETE ON ai_media_jobs TO hendy_bot_app;
 
 CREATE TABLE IF NOT EXISTS giftcodes (
     code TEXT PRIMARY KEY,

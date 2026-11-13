@@ -1139,6 +1139,7 @@
     const providers = data.providers || [];
     const adapters = data.adapters || [];
     const summary = data.summary || {};
+    const editingProvider = state.adminData.editingProvider || {};
     const statusLabel = {
       not_checked:'Chưa kiểm tra', configuration_ready:'Cấu hình đủ · chưa test API',
       missing_environment:'Thiếu Environment', missing_endpoint:'Thiếu Endpoint',
@@ -1153,8 +1154,8 @@
       (provider.credentialEnvKey ? (provider.credentialConfigured ? ' (đã có giá trị)' : ' (chưa có giá trị)') : '') + '</p>' +
       '<div class="notice ' + statusClass(provider.lastCheckStatus) + '">' + escapeHtml(statusLabel[provider.lastCheckStatus] || provider.lastCheckStatus || 'Chưa kiểm tra') +
       (provider.lastCheckMessage ? ' · ' + escapeHtml(provider.lastCheckMessage) : '') + '</div>' +
-      '<div class="two-col"><button type="button" class="tiny-btn" data-provider-check="' + provider.id + '">Kiểm tra cấu hình</button>' +
-      '<button type="button" class="tiny-btn" data-provider-toggle="' + provider.id + '">' + (provider.enabled ? 'Tắt nhà cung cấp' : 'Bật trong Registry') + '</button></div>' +
+      '<div class="two-col"><button type="button" class="tiny-btn" data-provider-edit="' + provider.id + '">Sửa</button><button type="button" class="tiny-btn" data-provider-check="' + provider.id + '">Kiểm tra cấu hình</button></div>' +
+      '<button type="button" class="tiny-btn" data-provider-toggle="' + provider.id + '">' + (provider.enabled ? 'Tắt nhà cung cấp' : 'Bật trong Registry') + '</button>' +
       '<button type="button" class="tiny-btn danger" data-provider-delete="' + provider.id + '">Xóa cấu hình</button></article>';
     const serviceCards = services.map(service => {
       const serviceProviders = providers.filter(provider => provider.serviceKey === service.key);
@@ -1184,16 +1185,17 @@
         '<div class="stat"><small>Nhà cung cấp</small><b>' + Number(summary.providerCount || 0) + '</b></div>' +
       '</div>' +
       '<div class="notice warn"><b>Bảo mật và kiểm tra:</b> Chỉ nhập tên biến Environment (ví dụ OTP_PROVIDER_API_KEY), không nhập giá trị secret. Nút kiểm tra chỉ xác nhận cấu hình cục bộ và sự hiện diện của ENV, không gọi API ngoài và không xác minh hợp đồng/nguồn hàng. API riêng chưa có adapter vẫn bị đánh dấu không hỗ trợ tự động.</div>' +
-      '<form class="card form" id="admin-provider-form"><b>＋ Đăng ký nhà cung cấp mới</b>' +
-        '<div class="field"><label>Dịch vụ</label><select name="serviceKey" required>' + services.map(service => '<option value="' + escapeHtml(service.key) + '">' + escapeHtml(service.label) + '</option>').join('') + '</select></div>' +
-        '<div class="two-col"><div class="field"><label>Mã nhà cung cấp</label><input name="providerKey" required maxlength="48" pattern="[a-z][a-z0-9_-]{1,47}" placeholder="otp-provider-a"></div>' +
-        '<div class="field"><label>Tên hiển thị</label><input name="name" required minlength="2" maxlength="120" placeholder="Tên nhà cung cấp"></div></div>' +
-        '<div class="field"><label>Adapter</label><select name="adapterKey">' + adapters.map(adapter => '<option value="' + escapeHtml(adapter.key) + '">' + escapeHtml(adapter.label) + (adapter.implemented ? ' · đã có module' : ' · chưa có adapter') + '</option>').join('') + '</select></div>' +
-        '<div class="field"><label>Endpoint HTTPS (không bắt buộc với bàn giao thủ công)</label><input name="endpointUrl" type="url" placeholder="https://api.provider.example/v1"></div>' +
-        '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" pattern="[A-Z][A-Z0-9_]{2,63}" placeholder="OTP_PROVIDER_API_KEY"></div>' +
-        '<div class="field"><label>Ghi chú / SLA / điều kiện hợp đồng</label><textarea name="notes" maxlength="1200" rows="3" placeholder="Thông tin vận hành không nhạy cảm"></textarea></div>' +
-        '<div class="field"><label>Trạng thái ban đầu</label><select name="enabled"><option value="false">Lưu ở trạng thái tắt</option><option value="true">Bật trong Registry (không tự bật adapter runtime)</option></select></div>' +
-        '<button class="primary">Lưu nhà cung cấp</button></form>' +
+      '<form class="card form" id="admin-provider-form" data-provider-id="' + escapeHtml(editingProvider.id || '') + '"><b>' + (editingProvider.id ? '✎ Sửa nhà cung cấp' : '＋ Đăng ký nhà cung cấp mới') + '</b>' +
+        '<div class="field"><label>Dịch vụ</label><select name="serviceKey" required>' + services.map(service => '<option value="' + escapeHtml(service.key) + '"' + (editingProvider.serviceKey === service.key ? ' selected' : '') + '>' + escapeHtml(service.label) + '</option>').join('') + '</select></div>' +
+        '<div class="two-col"><div class="field"><label>Mã nhà cung cấp</label><input name="providerKey" required maxlength="48" pattern="[a-z][a-z0-9_-]{1,47}" value="' + escapeHtml(editingProvider.providerKey || '') + '" placeholder="otp-provider-a"></div>' +
+        '<div class="field"><label>Tên hiển thị</label><input name="name" required minlength="2" maxlength="120" value="' + escapeHtml(editingProvider.name || '') + '" placeholder="Tên nhà cung cấp"></div></div>' +
+        '<div class="field"><label>Adapter</label><select name="adapterKey">' + adapters.map(adapter => '<option value="' + escapeHtml(adapter.key) + '"' + (editingProvider.adapterKey === adapter.key ? ' selected' : '') + '>' + escapeHtml(adapter.label) + (adapter.implemented ? ' · đã có module' : ' · chưa có adapter') + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Endpoint HTTPS (không bắt buộc với bàn giao thủ công)</label><input name="endpointUrl" type="url" value="' + escapeHtml(editingProvider.endpointUrl || '') + '" placeholder="https://api.provider.example/v1"></div>' +
+        '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" pattern="[A-Z][A-Z0-9_]{2,63}" value="' + escapeHtml(editingProvider.credentialEnvKey || '') + '" placeholder="OTP_PROVIDER_API_KEY"></div>' +
+        '<div class="field"><label>Ghi chú / SLA / điều kiện hợp đồng</label><textarea name="notes" maxlength="1200" rows="3" placeholder="Thông tin vận hành không nhạy cảm">' + escapeHtml(editingProvider.notes || '') + '</textarea></div>' +
+        '<div class="field"><label>Trạng thái ban đầu</label><select name="enabled"><option value="false"' + (!editingProvider.enabled ? ' selected' : '') + '>Lưu ở trạng thái tắt</option><option value="true"' + (editingProvider.enabled ? ' selected' : '') + '>Bật trong Registry (không tự bật adapter runtime)</option></select></div>' +
+        '<div class="two-col"><button class="primary">' + (editingProvider.id ? 'Cập nhật nhà cung cấp' : 'Lưu nhà cung cấp') + '</button>' +
+        (editingProvider.id ? '<button type="button" class="tiny-btn" data-provider-edit-cancel>Hủy chỉnh sửa</button>' : '') + '</div></form>' +
       '<div class="section-head"><h3>Danh mục dịch vụ (' + services.length + ')</h3><span>Kiểm tra ' + escapeHtml(data.checkedAt || '—') + '</span></div>' +
       (serviceCards || empty('Chưa có dịch vụ','Kiểm tra migration Provider Registry.')) +
       '<div class="notice">Lưu ý: quyền bật/tắt API ở Registry là lớp khóa API trung tâm cho các route đã liên kết. Các luồng Bot/worker có công tắc riêng như AI Studio, AI Cover, HomeProxy, Video Worker và Code Telegram vẫn cần bật tại đúng module chuyên trách sau khi kiểm thử adapter thật.</div>';
@@ -1685,6 +1687,20 @@
       await renderPage();
       return;
     }
+    const providerEditCancel = event.target.closest('[data-provider-edit-cancel]');
+    if (providerEditCancel) {
+      state.adminData.editingProvider = null;
+      await renderPage();
+      return;
+    }
+    const providerEdit = event.target.closest('[data-provider-edit]');
+    if (providerEdit) {
+      const id = Number(providerEdit.dataset.providerEdit);
+      state.adminData.editingProvider = (state.adminData.providerRegistry?.providers || []).find(item => Number(item.id) === id) || null;
+      await renderPage();
+      document.getElementById('admin-provider-form')?.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
     const providerCheck = event.target.closest('[data-provider-check]');
     if (providerCheck) {
       providerCheck.disabled = true;
@@ -2000,8 +2016,12 @@
           enabled:data.enabled === 'true',
           notes:String(data.notes || '').trim()
         };
-        const result = await api('/api/admin/provider-registry/providers','POST',payload);
-        toast(result.message || 'Đã thêm nhà cung cấp.');
+        const providerId = Number(form.dataset.providerId || 0);
+        const result = providerId
+          ? await api('/api/admin/provider-registry/providers/' + providerId,'PATCH',payload)
+          : await api('/api/admin/provider-registry/providers','POST',payload);
+        state.adminData.editingProvider = null;
+        toast(result.message || (providerId ? 'Đã cập nhật nhà cung cấp.' : 'Đã thêm nhà cung cấp.'));
         form.reset();
         await renderPage();
       } else if (form.dataset.registryServiceForm) {

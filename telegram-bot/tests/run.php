@@ -157,6 +157,8 @@ $assert(str_contains($landingUiSource, 'HENDY DIGITAL') && str_contains($landing
 $assert(!str_contains($landingUiSource, 'Trung tâm khách hàng'), 'trang chủ đã bỏ hoàn toàn khối Features Tags Grid');
 $publicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
 $assert(str_contains($publicRouterSource, "header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');"), 'trang chủ không giữ HTML cũ trong cache');
+$assert(str_contains($publicRouterSource, "'/api/v1/public/catalog'") && str_contains($publicRouterSource, 'WHERE is_active = TRUE') && str_contains($publicRouterSource, "category IN ('minigame','tools','codes','otp','proxy','vip')"), 'Static Site catalog API returns only active public product fields');
+$assert(str_contains($landingUiSource, "API_BASE+'/api/v1/public/catalog'") && str_contains($landingUiSource, 'createElement(\'article\')') && str_contains($landingUiSource, 'replaceChildren'), 'Static Website renders live catalog entries using safe DOM text nodes and keeps static fallback cards');
 $productionHost = 'https://hendydichvumang-telegram-bot.onrender.com';
 $repoRoot = dirname(__DIR__, 2);
 $landingSource = file_get_contents(dirname(__DIR__, 2) . '/website/public/index.html');

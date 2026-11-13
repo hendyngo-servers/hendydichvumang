@@ -82,6 +82,14 @@ try {
     ]);
 } catch (RuntimeException) { $invalidProviderUrlRejected = true; }
 $assert($invalidProviderUrlRejected, 'Provider Registry từ chối endpoint HTTP và IP nội bộ');
+$providerQueryRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'query-provider', 'name' => 'Provider chứa query',
+        'adapterKey' => 'custom_api_pending', 'endpointUrl' => 'https://provider.example/api?api_key=do-not-store',
+    ]);
+} catch (RuntimeException) { $providerQueryRejected = true; }
+$assert($providerQueryRejected, 'Provider Registry từ chối query string để tránh lưu token trong URL');
 $invalidProviderSecretRejected = false;
 try {
     ProviderRegistryService::validateProviderInput([

@@ -188,6 +188,9 @@ $assert(str_contains($botServiceSource, 'FOR UPDATE') && str_contains($botServic
 $codeTelegramServicesSchema = file_get_contents(dirname(__DIR__) . '/database/migrations/20261112_code_telegram_services.sql');
 $apiControllerSource = file_get_contents(dirname(__DIR__) . '/app/ApiController.php');
 $adminDashboardSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/index.html');
+$customerCenterSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegram/customer-center/index.html');
+$publicWebsiteSource = file_get_contents(dirname(__DIR__, 2) . '/website/public/index.html');
+$mainPublicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
 $userAccessMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_user_access_controls.sql');
 $productReadinessMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_product_supplier_readiness.sql');
 $productReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ProductReadinessService.php');
@@ -210,6 +213,12 @@ $assert(str_contains($botServiceSource, 'code_telegram_services') && str_contain
 $assert(str_contains($codeTelegramServicesSchema, 'CREATE TABLE IF NOT EXISTS code_telegram_services') && str_contains($codeTelegramServicesSchema, 'CREATE TABLE IF NOT EXISTS code_telegram_requests') && str_contains($codeTelegramServicesSchema, 'CREATE TABLE IF NOT EXISTS code_telegram_request_accounts'), 'Code Telegram catalog and username request queue use additive PostgreSQL tables');
 $assert(str_contains($apiControllerSource, '/api/admin/code-telegram/accounts/') && str_contains($apiControllerSource, 'code-telegram:account:') && str_contains($apiControllerSource, 'status = \'completed\''), 'Admin charges a Code Telegram username only after a success status is confirmed');
 $assert(str_contains($adminDashboardSource, 'Yêu cầu tài khoản Code Telegram') && str_contains($adminDashboardSource, 'data-code-account-success'), 'Admin Dashboard displays and processes Code Telegram account requests');
+$assert(str_contains($apiControllerSource, '/api/code-telegram/portal') && str_contains($apiControllerSource, '/api/code-telegram/requests') && str_contains($apiControllerSource, 'pg_advisory_xact_lock'), 'Website Code Telegram API validates and serializes member order creation');
+$assert(str_contains($apiControllerSource, 'username_normalized') && str_contains($apiControllerSource, "'charged' => false") && str_contains($apiControllerSource, 'Chưa trừ tiền'), 'Code Telegram web orders prevent same-day duplicate usernames and do not charge on submission');
+$assert(str_contains($customerCenterSource, 'Tên TK CODE TELEGRAM') && str_contains($customerCenterSource, 'code-telegram-order-form') && str_contains($customerCenterSource, '/api/code-telegram/requests') && str_contains($customerCenterSource, 'ĐƠN CODE TELEGRAM CỦA BẠN'), 'Customer Center can create and track Code Telegram orders per username');
+$assert(str_contains($adminDashboardSource, 'Tên TK CODE TELEGRAM') && str_contains($adminDashboardSource, 'CT'), 'Admin request cards clearly label Code Telegram account names and order IDs');
+$assert(str_contains($publicWebsiteSource, 'id="server-status"') && str_contains($publicWebsiteSource, 'updateServerStatus()') && str_contains($publicWebsiteSource, '/api/health'), 'Public Website shows live connectivity to the management API');
+$assert(str_contains($mainPublicRouterSource, "'database' => $databaseReady ? 'ok' : 'unavailable'") && str_contains($mainPublicRouterSource, '$databaseReady ? 200 : 503'), 'Health endpoint reports PostgreSQL failure rather than returning a false healthy status');
 $aiCoverSource = file_get_contents(dirname(__DIR__) . '/app/AiCoverService.php');
 $aiCoverStorageSource = file_get_contents(dirname(__DIR__) . '/app/NeonStorage.php');
 $aiCoverFunctionSource = file_get_contents(dirname(__DIR__, 2) . '/neon-functions/hendystorage/index.mjs');

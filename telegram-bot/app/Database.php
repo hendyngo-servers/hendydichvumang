@@ -248,6 +248,18 @@ final class Database
                 'applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())'
             );
 
+            // Re-read state after acquiring the advisory lock. Another migration
+            // may have finished while this process waited; do not use stale state.
+            $plan = self::migrationPlan();
+            if (!hash_equals($expectedDatabase, (string) $plan['database'])) {
+                throw new RuntimeException('Database đích thay đổi trong lúc chờ khóa migration; đã dừng an toàn.');
+            }
+            if (($plan['pooled'] ?? false) === true
+                || strcasecmp((string) $plan['role'], 'hendy_bot_app') === 0
+                || (int) $plan['checksumMismatchCount'] > 0) {
+                throw new RuntimeException('Kết nối hoặc trạng thái migration không còn an toàn sau khi lấy khóa; đã dừng.');
+            }
+
             $baseReady = (bool) $plan['baseSchema']['ready'];
             $baseEmpty = (bool) $plan['baseSchema']['empty'];
             if (!$baseReady && !$baseEmpty) {

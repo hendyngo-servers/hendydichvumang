@@ -92,7 +92,7 @@ final class ProviderRegistryService
             $parts = parse_url($endpoint);
             if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
                 || empty($parts['host']) || isset($parts['user']) || isset($parts['pass'])
-                || isset($parts['fragment']) || filter_var((string) $parts['host'], FILTER_VALIDATE_IP)
+                || isset($parts['fragment']) || isset($parts['query']) || filter_var((string) $parts['host'], FILTER_VALIDATE_IP)
                 || in_array(strtolower((string) $parts['host']), ['localhost'], true)
                 || str_ends_with(strtolower((string) $parts['host']), '.local')
                 || filter_var($endpoint, FILTER_VALIDATE_URL) === false) {

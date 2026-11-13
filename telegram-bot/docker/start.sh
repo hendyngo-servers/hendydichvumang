@@ -22,11 +22,15 @@ php bin/wait-for-database.php
 if [[ "${RUN_MIGRATIONS_ON_START:-false}" == "true" ]]; then
     # Production never runs DDL migrations during normal service startup.
     # Use a one-off Render Shell with a direct Neon owner/migration URL instead.
-    if [[ "${APP_ENV:-production}" == "production" ]]; then
-        echo "TỪ CHỐI: RUN_MIGRATIONS_ON_START=true không được phép trên Bot production." >&2
-        echo "Dùng php bin/database-doctor.php để xem database đích; sau đó chạy php bin/migrate.php --apply --expect-database=<tên_db_đã_xác_nhận> trong Render Shell với MIGRATION_DATABASE_URL direct/owner." >&2
-        exit 1
-    fi
+    case "${APP_ENV:-production}" in
+        local|development|test)
+            ;;
+        *)
+            echo "TỪ CHỐI: Chỉ cho phép tự động migration trong môi trường local/development/test." >&2
+            echo "Dùng php bin/database-doctor.php để xem database đích; sau đó chạy php bin/migrate.php --apply --expect-database=<tên_db_đã_xác_nhận> trong Render Shell với MIGRATION_DATABASE_URL direct/owner." >&2
+            exit 1
+            ;;
+    esac
     expected_database="${MIGRATION_EXPECTED_DATABASE:-}"
     if [[ -z "$expected_database" ]]; then
         echo "RUN_MIGRATIONS_ON_START=true cần MIGRATION_EXPECTED_DATABASE; không tự đoán database đích." >&2

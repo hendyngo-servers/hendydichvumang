@@ -12,12 +12,12 @@ let checked = 0;
 const failures = [];
 for (const file of files) {
   const html = readFileSync(file, 'utf8');
-  const scripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script\\s*>/gi)];
+  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
   for (let index = 0; index < scripts.length; index += 1) {
     const attributes = scripts[index][1] || '';
     const source = scripts[index][2] || '';
-    if (/\\bsrc\\s*=|type\\s*=\\s*["']application\\/(?:json|ld\\+json)["']/i.test(attributes)) continue;
-    if (/type\\s*=\\s*["']module["']/i.test(attributes)) {
+    if (/\bsrc\s*=|type\s*=\s*["']application\/(?:json|ld\+json)["']/i.test(attributes)) continue;
+    if (/type\s*=\s*["']module["']/i.test(attributes)) {
       failures.push(file + ': inline module script requires a dedicated module parser');
       continue;
     }
@@ -32,7 +32,7 @@ for (const file of files) {
 }
 if (checked === 0) failures.push('No inline browser scripts were checked.');
 if (failures.length) {
-  for (const failure of failures) process.stderr.write('FAIL ' + failure + '\\n');
+  for (const failure of failures) process.stderr.write('FAIL ' + failure + '\n');
   process.exit(1);
 }
-process.stdout.write('Đã kiểm tra cú pháp ' + checked + ' inline browser script(s) trên ' + files.length + ' trang.\\n');
+process.stdout.write('Đã kiểm tra cú pháp ' + checked + ' inline browser script(s) trên ' + files.length + ' trang.\n');

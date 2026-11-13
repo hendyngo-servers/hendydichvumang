@@ -803,6 +803,7 @@ CREATE TABLE IF NOT EXISTS ai_cover_jobs (
     output_size_bytes BIGINT CHECK (output_size_bytes IS NULL OR output_size_bytes > 0),
     last_error VARCHAR(1500),
     worker_id VARCHAR(100),
+    provider_job_id VARCHAR(160) NOT NULL DEFAULT '',
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     delivery_sent_at TIMESTAMPTZ,

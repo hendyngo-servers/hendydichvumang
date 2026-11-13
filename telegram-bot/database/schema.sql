@@ -1743,3 +1743,7 @@ ON CONFLICT (service_key) DO NOTHING;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON service_registry, service_providers TO hendy_bot_app;
 GRANT USAGE, SELECT ON SEQUENCE service_providers_id_seq TO hendy_bot_app;
+
+-- Runtime access for browser login exchange and signed website sessions.
+GRANT SELECT, INSERT, UPDATE, DELETE
+    ON website_session_secrets, legacy_login_tickets TO hendy_bot_app;

@@ -26,6 +26,30 @@ Public tabs: Trang chủ, App Store, Dịch vụ mạng, AI Studio, Code Telegra
 - One-time login tickets are short-lived, stored hashed, consumed atomically, and exchanged for a signed HttpOnly website-session cookie.
 - Admin access requires the user's Telegram numeric ID to be in `ADMIN_ID` or `ADMIN_IDS`.
 
+## Admin Control Center
+
+The Admin Dashboard is a browser-first control plane protected by the Telegram Admin allowlist. It includes:
+- Member accounts and linked accounts, manual wallet adjustments with audit entries, orders, deposit approvals, customer tickets and vouchers.
+- Product/catalog editing, Giftcode, Bot menu labels/descriptions/styles, shared configuration and community links.
+- Bot operations: normal mode, maintenance, upgrade window, scheduled end time and operator message. Admin accounts remain able to enter during maintenance.
+- HomeProxy enable/disable, encrypted member key management, video/Code Telegram job operations, module review, AI Studio controls and AI Cover licensed-preset management.
+- Audit log for administrative changes.
+
+Do not use a manual wallet adjustment as a substitute for payment reconciliation. Deposit requests must be matched to bank evidence before approval.
+
+## AI Features
+
+The Telegram main menu groups creative tools under **🤖 TÍNH NĂNG AI**:
+- **AI Cover:** licensed RVC voice presets, owner consent and license reference, private Neon Object Storage, verified worker and HMAC callback. At least one enabled preset must pass a recent worker check before member access can open.
+- **Tạo âm nhạc AI:** prompt → PostgreSQL job queue → ElevenLabs Music worker → send audio back to the same Telegram user.
+- **Chỉnh sửa ảnh AI:** prompt + private Telegram photo → PostgreSQL job queue → OpenAI image edit → send edited image to the user.
+
+AI provider keys are secrets and must only be configured in Render Environment. The Admin Dashboard never displays these values. AI_MEDIA_QUEUE_ENABLED=false, AI_COVER_ENABLED=false and AI_COVER_WORKER_ENABLED=false are fail-closed defaults. After provider credentials and worker are configured, an Admin must enable AI Studio globally and then enable each tool separately. AI Cover additionally requires a working RVC worker, callback HMAC secret, Neon Object Storage and a verified licensed preset.
+
+AI tools currently have a per-user daily job limit and one active job per user. Automatic AI wallet billing is not enabled; users are not charged for these tasks. Do not advertise paid AI packages until an explicit price/ledger flow has been implemented and tested.
+
+The /ai command opens the AI submenu. The /cancel command clears the current prompt/photo input. Image and audio workflows are restricted to private Bot chats.
+
 ## Database reset and recovery
 
 On 2026-11-13, records were cleared from the `public` schema of both `hendydichvumang` and `hendydichvumang_website`; tables and constraints were retained. Neon Auth database `neondb` was not changed.

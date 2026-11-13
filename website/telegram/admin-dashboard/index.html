@@ -1685,6 +1685,44 @@
       await renderPage();
       return;
     }
+    const providerCheck = event.target.closest('[data-provider-check]');
+    if (providerCheck) {
+      providerCheck.disabled = true;
+      try {
+        const result = await api('/api/admin/provider-registry/providers/' + encodeURIComponent(providerCheck.dataset.providerCheck) + '/check','POST',{});
+        toast(result.message || 'Đã kiểm tra cấu hình cục bộ.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); providerCheck.disabled = false; }
+      return;
+    }
+    const providerToggle = event.target.closest('[data-provider-toggle]');
+    if (providerToggle) {
+      const id = Number(providerToggle.dataset.providerToggle);
+      const provider = (state.adminData.providerRegistry?.providers || []).find(item => Number(item.id) === id);
+      if (!provider) return;
+      const next = !provider.enabled;
+      if (next && !window.confirm('Bật cấu hình nhà cung cấp trong Registry? Việc này không tự triển khai hoặc xác minh adapter API.')) return;
+      try {
+        await api('/api/admin/provider-registry/providers/' + id,'PATCH',{
+          serviceKey:provider.serviceKey, providerKey:provider.providerKey, name:provider.name,
+          adapterKey:provider.adapterKey, endpointUrl:provider.endpointUrl,
+          credentialEnvKey:provider.credentialEnvKey, notes:provider.notes, enabled:next
+        });
+        toast(next ? 'Đã bật nhà cung cấp trong Registry.' : 'Đã tắt nhà cung cấp.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
+      return;
+    }
+    const providerDelete = event.target.closest('[data-provider-delete]');
+    if (providerDelete) {
+      if (!window.confirm('Xóa cấu hình nhà cung cấp này khỏi Registry? Dữ liệu giao dịch và sản phẩm không bị xóa.')) return;
+      try {
+        await api('/api/admin/provider-registry/providers/' + encodeURIComponent(providerDelete.dataset.providerDelete),'DELETE');
+        toast('Đã xóa cấu hình nhà cung cấp.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); }
+      return;
+    }
     const homeProxyAction=event.target.closest('[data-homeproxy-action]');
     if(homeProxyAction){
       const action=homeProxyAction.dataset.homeproxyAction;homeProxyAction.disabled=true;
@@ -1951,7 +1989,31 @@
       submitButton.disabled = true;
     }
     try {
-      if (form.id === 'admin-ai-media-form') {
+      if (form.id === 'admin-provider-form') {
+        const payload = {
+          serviceKey:String(data.serviceKey || ''),
+          providerKey:String(data.providerKey || '').trim().toLowerCase(),
+          name:String(data.name || '').trim(),
+          adapterKey:String(data.adapterKey || 'manual'),
+          endpointUrl:String(data.endpointUrl || '').trim(),
+          credentialEnvKey:String(data.credentialEnvKey || '').trim(),
+          enabled:data.enabled === 'true',
+          notes:String(data.notes || '').trim()
+        };
+        const result = await api('/api/admin/provider-registry/providers','POST',payload);
+        toast(result.message || 'Đã thêm nhà cung cấp.');
+        form.reset();
+        await renderPage();
+      } else if (form.dataset.registryServiceForm) {
+        const key = form.dataset.registryServiceForm;
+        const result = await api('/api/admin/provider-registry/services/' + encodeURIComponent(key),'PATCH',{
+          enabled:data.enabled === 'true',
+          maintenanceMode:data.maintenanceMode === 'true',
+          maintenanceMessage:String(data.maintenanceMessage || '').trim()
+        });
+        toast(result.message || 'Đã cập nhật dịch vụ.');
+        await renderPage();
+      } else if (form.id === 'admin-ai-media-form') {
         const payload = {
           enabled: data.enabled === 'true',
           musicEnabled: data.musicEnabled === 'true',

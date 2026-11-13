@@ -1201,6 +1201,7 @@
         '</article>';
     }).join('');
     return '<div class="app-banner"><div><b>🔌 HENDY · PROVIDER & SERVICE REGISTRY</b><small>Quản lý nhà cung cấp, adapter, Environment variable name, trạng thái dịch vụ và chế độ bảo trì tập trung.</small></div><span class="banner-icon">🔌</span></div>' +
+      (data.schemaReady === false ? '<div class="notice warn"><b>Database chưa sẵn sàng cho Provider Registry.</b> Thiếu bảng: ' + (data.missingTables || []).map(escapeHtml).join(', ') + '. Cần chạy migration <code>20261113_provider_service_registry.sql</code> bằng direct URL và database-owner role. Các nút lưu cấu hình đang chờ migration; dữ liệu thành viên/ví/đơn hàng không bị tác động.</div>' : '') +
       '<div class="stat-grid">' +
         '<div class="stat"><small>Dịch vụ đăng ký</small><b>' + Number(summary.serviceCount || 0) + '</b></div>' +
         '<div class="stat"><small>Dịch vụ bị khóa</small><b>' + Number(summary.disabledServices || 0) + '</b></div>' +

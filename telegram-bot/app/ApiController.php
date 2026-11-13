@@ -57,6 +57,29 @@ final class ApiController
         return self::response(['artifact' => $artifact, 'message' => 'Tệp đã vào vùng chờ kiểm duyệt; chưa được thực thi hoặc phát hành.'], 201);
     }
 
+    public function uploadAiCoverVoice(array $input, array $files): array
+    {
+        try {
+            $this->user = TelegramAuth::authenticateRequest();
+        } catch (Throwable $error) {
+            throw new HttpException(401, 'Yêu cầu xác thực Telegram hoặc phiên Admin hợp lệ.');
+        }
+        $this->requireAdmin();
+        try {
+            $voice = AiCoverService::saveVoice($input, $files, (string) $this->user['id']);
+        } catch (Throwable $error) {
+            throw new HttpException(400, $error->getMessage() ?: 'Không thể lưu preset AI Cover.');
+        }
+        $this->audit('ai_cover.voice.save', (string) ($voice['id'] ?? ''), [
+            'enabled' => (bool) ($voice['enabled'] ?? false),
+            'available' => (bool) ($voice['available'] ?? false),
+        ]);
+        return self::response([
+            'voice' => $voice,
+            'message' => 'Đã lưu preset và hồ sơ cấp phép. Hãy xác minh model bằng worker trước khi bật cho thành viên.',
+        ], 201);
+    }
+
     public function handle(string $method, string $path): array
     {
         if ($method === 'GET' && $path === '/api/health') {
@@ -497,6 +520,41 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && $path === '/api/admin/ai-cover') {
+            return self::response(AiCoverService::adminSnapshot());
+        }
+        if (preg_match('#^/api/admin/ai-cover/voices/([a-z0-9][a-z0-9_-]{1,47})$#', $path, $voiceMatch) && $method === 'PATCH') {
+            $enabled = $this->toBool($this->body['enabled'] ?? false);
+            try {
+                AiCoverService::setVoiceEnabled($voiceMatch[1], $enabled, (string) $this->user['id']);
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            }
+            $this->audit('ai_cover.voice.toggle', $voiceMatch[1], ['enabled' => $enabled]);
+            return self::response([
+                'success' => true,
+                'message' => $enabled ? 'Đã bật trạng thái bán preset. Hệ thống vẫn yêu cầu kiểm tra khả dụng gần đây.' : 'Đã tắt preset AI Cover.',
+            ]);
+        }
+        if (preg_match('#^/api/admin/ai-cover/voices/([a-z0-9][a-z0-9_-]{1,47})/verify$#', $path, $voiceMatch) && $method === 'POST') {
+            try {
+                $result = AiCoverService::verifyVoice($voiceMatch[1]);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            $this->audit('ai_cover.voice.verify', $voiceMatch[1], ['available' => (bool) ($result['available'] ?? false)]);
+            return self::response(['voice' => $result, 'message' => $result['message'] ?? 'Đã kiểm tra preset.']);
+        }
+        if (preg_match('#^/api/admin/ai-cover/jobs/([0-9a-f-]{36})/retry$#i', $path, $jobMatch) && $method === 'POST') {
+            try {
+                $job = AiCoverService::retryJob($jobMatch[1], (string) $this->user['id']);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            $this->notify((string) $job['telegram_user_id'], 'Tác vụ AI Cover ' . substr((string) $job['id'], 0, 8) . ' đã được đưa lại vào hàng chờ.');
+            $this->audit('ai_cover.job.retry', $jobMatch[1], []);
+            return self::response(['job' => $job, 'message' => 'Đã đưa tác vụ AI Cover trở lại hàng chờ.']);
+        }
         if ($method === 'GET' && $path === '/api/admin/code-telegram') {
             $sources = Database::all(
                 "SELECT s.*,

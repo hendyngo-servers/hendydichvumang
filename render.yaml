@@ -46,7 +46,7 @@ services:
       - key: PORT
         value: "10000"
       - key: RUN_MIGRATIONS_ON_START
-        value: "true"
+        value: "false"
       - key: DB_STARTUP_WAIT_SECONDS
         value: "120"
       - key: WEBHOOK_AUTO_REGISTER

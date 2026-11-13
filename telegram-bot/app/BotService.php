@@ -829,6 +829,27 @@ final class BotService
             );
             return;
         }
+        if (preg_match('/^matchmaking-(accept|decline|result):(\\d{1,18})$/', $action, $matches)) {
+            $matchId = (int) $matches[2];
+            if ($matches[1] === 'result') {
+                $this->setPending($userId, 'matchmaking_result', ['match_id' => $matchId]);
+                $this->telegram->sendMessage($chatId, '📊 Gửi kết quả theo góc nhìn của bạn, định dạng <code>2-1</code>. Đối thủ cần xác nhận trước khi tính điểm.');
+                return;
+            }
+            try {
+                $result = $matches[1] === 'accept' ? MatchmakingService::acceptMatch($userId, $matchId) : MatchmakingService::declineMatch($userId, $matchId);
+            } catch (RuntimeException $error) {
+                $this->telegram->sendMessage($chatId, '⚠️ ' . self::escape($error->getMessage()));
+                return;
+            }
+            if (($result['state'] ?? '') === 'active' && !empty($result['match']['opponentId'])) {
+                $this->telegram->sendMessage((string) $result['match']['opponentId'], '✅ Cả hai đã xác nhận trận HENDY #' . $matchId . '. Trận đấu bắt đầu!');
+            } elseif (($result['state'] ?? '') === 'cancelled' && !empty($result['opponentId'])) {
+                $this->telegram->sendMessage((string) $result['opponentId'], 'ℹ️ Đối thủ đã từ chối trận #' . $matchId . '. Bạn có thể vào hàng chờ lại.');
+            }
+            $this->showMatchmakingMenu($chatId, $userId);
+            return;
+        }
         if (preg_match('/^live-group:(group[1-4])$/', $action, $matches)) {
             $this->showMinigameGroupGames($chatId, $userId, $matches[1]);
             return;
@@ -990,13 +1011,25 @@ final class BotService
                 $this->showCodeTelegramMenu($chatId, $userId);
                 return;
             case 'matchmaking':
-                $this->telegram->sendMessage($chatId, '⚔️ <b>HỆ THỐNG GHÉP ĐỐI ĐẤU HENDY</b>' . "\n" .
-                    'Giao diện menu đã sẵn sàng. Hệ thống ghép trận, xác nhận kết quả và xếp hạng đang được hoàn thiện; bot chưa đưa người chơi vào hàng chờ để tránh tạo trận chưa có cơ chế xử lý đầy đủ.',
-                    ['reply_markup' => $this->inlineMenu([
-                        [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home']],
-                        [['text' => '🎧 LIÊN HỆ CSKH', 'callback_data' => 'member:support']],
-                    ])]
-                );
+            case 'matchmaking-status':
+                $this->showMatchmakingMenu($chatId, $userId);
+                return;
+            case 'matchmaking-join-quick':
+                $this->joinMatchmakingQueue($chatId, $userId, 'quick');
+                return;
+            case 'matchmaking-join-ranked':
+                $this->joinMatchmakingQueue($chatId, $userId, 'ranked');
+                return;
+            case 'matchmaking-cancel':
+                $cancelled = MatchmakingService::cancelQueue($userId);
+                $this->telegram->sendMessage($chatId, $cancelled ? '✅ Đã rời hàng chờ ghép trận.' : 'Bạn hiện không ở hàng chờ.');
+                $this->showMatchmakingMenu($chatId, $userId);
+                return;
+            case 'matchmaking-history':
+                $this->showMatchmakingHistory($chatId, $userId);
+                return;
+            case 'matchmaking-leaderboard':
+                $this->showMatchmakingLeaderboard($chatId, $userId);
                 return;
             case 'otp':
                 $this->showOtpCenter($chatId, $userId);
@@ -1076,7 +1109,7 @@ final class BotService
                 $this->showVipInfo($chatId, $userId);
                 return;
             case 'vip-coming-soon':
-                $this->sendUnavailableNotice($chatId);
+                $this->showUpcomingServices($chatId, $userId);
                 return;
             case 'group':
             case 'news':
@@ -1371,6 +1404,158 @@ final class BotService
         ]);
     }
 
+    private function showMatchmakingMenu(string $chatId, string $userId): void
+    {
+        $status = MatchmakingService::status($userId);
+        $stats = $status['stats'] ?? [];
+        $queue = $status['queue'] ?? null;
+        $match = $status['match'] ?? null;
+        $lines = [
+            '⚔️ <b>HENDY MATCHMAKING · 1 VS 1</b>',
+            '━━━━━━━━━━━━━━━━━━━━',
+            '⭐ Elo: <b>' . (int) ($stats['rating'] ?? 1000) . '</b> · Điểm: <b>' . (int) ($stats['points'] ?? 0) . '</b>',
+            '🏁 Trận: ' . (int) ($stats['matches_played'] ?? 0) . ' · Thắng: ' . (int) ($stats['wins'] ?? 0) . ' · Hòa: ' . (int) ($stats['draws'] ?? 0) . ' · Thua: ' . (int) ($stats['losses'] ?? 0),
+        ];
+        $keyboard = [];
+        if (is_array($match)) {
+            $id = (int) ($match['id'] ?? 0);
+            $lines[] = '';
+            $lines[] = '🎮 Trận #' . $id . ' · ' . (($match['mode'] ?? '') === 'ranked' ? 'Xếp hạng' : 'Giao hữu');
+            $lines[] = 'Trạng thái: <b>' . self::escape((string) ($match['status'] ?? '')) . '</b>';
+            if (($match['status'] ?? '') === 'awaiting_acceptance') {
+                $mineAccepted = !empty($match['isPlayerOne']) ? !empty($match['playerOneAccepted']) : !empty($match['playerTwoAccepted']);
+                if (!$mineAccepted) $keyboard[] = [['text' => '✅ CHẤP NHẬN TRẬN', 'callback_data' => 'member:matchmaking-accept:' . $id, 'style' => 'success']];
+                $keyboard[] = [['text' => '❌ TỪ CHỐI', 'callback_data' => 'member:matchmaking-decline:' . $id, 'style' => 'danger']];
+                $lines[] = 'Hai người phải cùng xác nhận trong 3 phút.';
+            } elseif (in_array((string) ($match['status'] ?? ''), ['active', 'result_pending'], true)) {
+                $keyboard[] = [['text' => '📊 GỬI / XÁC NHẬN KẾT QUẢ', 'callback_data' => 'member:matchmaking-result:' . $id, 'style' => 'success']];
+                $lines[] = 'Chỉ cộng điểm sau khi hai bên thống nhất tỷ số.';
+            } elseif (($match['status'] ?? '') === 'disputed') {
+                $lines[] = '⚠️ Hai báo cáo chưa khớp; Admin sẽ kiểm tra, chưa cộng điểm.';
+            }
+        } elseif (is_array($queue) && ($queue['status'] ?? '') === 'waiting') {
+            $lines[] = '🕐 Bạn đang ở hàng chờ (' . self::escape((string) ($queue['mode'] ?? 'quick')) . ').';
+            $keyboard[] = [['text' => '⏹ RỜI HÀNG CHỜ', 'callback_data' => 'member:matchmaking-cancel', 'style' => 'danger']];
+        } else {
+            $lines[] = 'Chọn chế độ tìm đối thủ. Đây là điểm/đấu xếp hạng, không giao dịch tiền.';
+            $keyboard[] = [
+                ['text' => '⚡ GHÉP NHANH', 'callback_data' => 'member:matchmaking-join-quick', 'style' => 'success'],
+                ['text' => '🏆 XẾP HẠNG', 'callback_data' => 'member:matchmaking-join-ranked', 'style' => 'primary'],
+            ];
+        }
+        $keyboard[] = [
+            ['text' => '📜 LỊCH SỬ', 'callback_data' => 'member:matchmaking-history'],
+            ['text' => '🏅 BẢNG XẾP HẠNG', 'callback_data' => 'member:matchmaking-leaderboard'],
+        ];
+        $keyboard[] = [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home']];
+        $this->telegram->sendMessage($chatId, implode(PHP_EOL, $lines), ['reply_markup' => $this->inlineMenu($keyboard)]);
+    }
+
+    private function joinMatchmakingQueue(string $chatId, string $userId, string $mode): void
+    {
+        try {
+            $result = MatchmakingService::joinQueue($userId, $mode);
+            if (($result['state'] ?? '') === 'matched' && !empty($result['match']['opponentId'])) {
+                $this->telegram->sendMessage(
+                    (string) $result['match']['opponentId'],
+                    '⚔️ HENDY đã tìm được đối thủ cho trận #' . (int) $result['match']['id'] . '. Vui lòng xác nhận trong 3 phút.',
+                    ['reply_markup' => $this->inlineMenu([[['text' => '⚔️ MỞ GHÉP ĐÔI', 'callback_data' => 'member:matchmaking']]])]
+                );
+            }
+            $message = (string) ($result['message'] ?? (
+                ($result['state'] ?? '') === 'matched' ? '✅ Đã tìm thấy đối thủ; cả hai phải xác nhận trong 3 phút.' :
+                (($result['state'] ?? '') === 'in_match' ? 'Bạn đã có một trận chưa hoàn tất.' : 'Đã cập nhật hàng chờ.')
+            ));
+            $this->telegram->sendMessage($chatId, $message);
+        } catch (RuntimeException $error) {
+            $this->telegram->sendMessage($chatId, '⚠️ ' . self::escape($error->getMessage()));
+        }
+        $this->showMatchmakingMenu($chatId, $userId);
+    }
+
+    private function showMatchmakingHistory(string $chatId, string $userId): void
+    {
+        $matches = MatchmakingService::history($userId, 15);
+        $lines = ['📜 <b>LỊCH SỬ GHÉP ĐÔI</b>', '━━━━━━━━━━━━━━━━━━━━'];
+        foreach ($matches as $item) {
+            $isOne = ($item['perspective'] ?? '') === 'one';
+            $mine = $isOne ? ($item['score_one'] ?? null) : ($item['score_two'] ?? null);
+            $other = $isOne ? ($item['score_two'] ?? null) : ($item['score_one'] ?? null);
+            $lines[] = '• #' . (int) $item['id'] . ' · ' . self::escape((string) $item['status'])
+                . (isset($mine, $other) ? ' · ' . (int) $mine . '-' . (int) $other : '');
+        }
+        if ($matches === []) $lines[] = 'Bạn chưa có trận đấu nào.';
+        $this->telegram->sendMessage($chatId, implode(PHP_EOL, $lines), ['reply_markup' => $this->inlineMenu([
+            [['text' => '⚔️ GHÉP ĐÔI', 'callback_data' => 'member:matchmaking']],
+            [['text' => '🏠 MENU', 'callback_data' => 'member:home']],
+        ])]);
+    }
+
+    private function showMatchmakingLeaderboard(string $chatId, string $userId): void
+    {
+        $players = MatchmakingService::leaderboard(20);
+        $lines = ['🏅 <b>BẢNG XẾP HẠNG HENDY</b>', '━━━━━━━━━━━━━━━━━━━━'];
+        foreach ($players as $index => $player) {
+            $name = trim((string) ($player['name'] ?? ''));
+            if ($name === '') $name = 'Thành viên ' . substr((string) $player['user_id'], -4);
+            $lines[] = ($index + 1) . '. ' . self::escape($name) . ' · Elo <b>' . (int) $player['rating'] . '</b> · ' . (int) $player['points'] . ' điểm';
+        }
+        if ($players === []) $lines[] = 'Bảng xếp hạng sẽ hiển thị sau các trận đầu tiên.';
+        $this->telegram->sendMessage($chatId, implode(PHP_EOL, $lines), ['reply_markup' => $this->inlineMenu([
+            [['text' => '⚔️ GHÉP ĐÔI', 'callback_data' => 'member:matchmaking']],
+            [['text' => '🏠 MENU', 'callback_data' => 'member:home']],
+        ])]);
+    }
+
+    private function showUpcomingServices(string $chatId, string $userId): void
+    {
+        $predicate = ProductReadinessService::sqlPredicate('p');
+        $rows = Database::all(
+            "SELECT p.category, COUNT(*) AS total_count,
+                    COUNT(*) FILTER (WHERE " . $predicate . " AND (p.stock IS NULL OR p.stock > 0)) AS ready_count
+             FROM products p GROUP BY p.category"
+        );
+        $counts = [];
+        foreach ($rows as $row) $counts[(string) $row['category']] = ['total' => (int) $row['total_count'], 'ready' => (int) $row['ready_count']];
+        $labels = [
+            'minigame' => '🎮 Mini Game Live', 'tools' => '🧰 Thuê Tool',
+            'codes' => '📡 Code / mã dịch vụ', 'otp' => '📱 OTP SMS',
+            'proxy' => '🌐 Proxy', 'vip' => '👑 Sản phẩm VIP',
+        ];
+        $actions = [
+            'minigame' => 'live', 'tools' => 'tools', 'codes' => 'codes',
+            'otp' => 'otp-products', 'proxy' => 'proxy-products', 'vip' => 'viptools',
+        ];
+        $lines = ['🚀 <b>DỊCH VỤ HENDY · TRẠNG THÁI TRIỂN KHAI</b>', '━━━━━━━━━━━━━━━━━━━━'];
+        $keyboard = [];
+        foreach ($labels as $category => $label) {
+            $item = $counts[$category] ?? ['total' => 0, 'ready' => 0];
+            $lines[] = $label . ': ' . ($item['ready'] > 0
+                ? '🟢 <b>' . $item['ready'] . ' sản phẩm đủ điều kiện</b>'
+                : '🟡 <b>Đang chờ dữ liệu / xác minh</b>');
+            $keyboard[] = [['text' => $label, 'callback_data' => 'member:' . $actions[$category]]];
+        }
+        $lines[] = '';
+        $lines[] = '⚔️ Ghép đôi: có ghép nhanh/xếp hạng, xác nhận hai bên và xử lý tranh chấp.';
+        $lines[] = '🎬 Vietsub: nhận link, tạo job; xử lý thực tế phụ thuộc VIDEO Worker.';
+        $lines[] = '🤖 AI: mở riêng từng công cụ khi Worker, nhà cung cấp và quyền sử dụng đạt yêu cầu.';
+        $keyboard[] = [
+            ['text' => '⚔️ GHÉP ĐÔI', 'callback_data' => 'member:matchmaking', 'style' => 'success'],
+            ['text' => '🎬 VIETSUB', 'callback_data' => 'member:vietsub'],
+        ];
+        $keyboard[] = [
+            ['text' => '🎁 GIFTCODE', 'callback_data' => 'member:gift'],
+            ['text' => '🔗 GIỚI THIỆU', 'callback_data' => 'member:ref'],
+        ];
+        $keyboard[] = [
+            ['text' => '🧾 ĐƠN HÀNG', 'callback_data' => 'member:orders'],
+            ['text' => '📜 LỊCH SỬ', 'callback_data' => 'member:history'],
+        ];
+        $keyboard[] = [['text' => '🤖 TÍNH NĂNG AI', 'callback_data' => 'member:ai-features']];
+        $keyboard[] = [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home']];
+        $this->telegram->sendMessage($chatId, implode(PHP_EOL, $lines), ['reply_markup' => $this->inlineMenu($keyboard)]);
+    }
+
     private function sendUnavailableNotice(string $chatId): void
     {
         $this->telegram->sendMessage(
@@ -1395,7 +1580,7 @@ final class BotService
         return Database::all(
             "SELECT id, name, price, description, stock, duration_days, vip_level FROM products " .
             "WHERE category = 'minigame' AND is_active = TRUE " .
-            "AND (stock IS NULL OR stock > 0) " .
+            "AND (stock IS NULL OR stock > 0) AND " . ProductReadinessService::sqlPredicate() . " " .
             "AND (UPPER(COALESCE(metadata->>'brand', '')) = ? OR UPPER(slug) LIKE ? OR UPPER(name) LIKE ?) " .
             'ORDER BY created_at DESC LIMIT 10',
             [$brand, $pattern, $pattern]
@@ -1736,7 +1921,7 @@ final class BotService
         $memberVip = $userId !== null ? (int) (Database::value('SELECT vip_level FROM users WHERE user_id = ?', [$userId]) ?? 0) : 0;
         $products = Database::all(
             "SELECT id, name, price, description, stock, duration_days, vip_level FROM products " .
-            "WHERE category IN ($placeholders) AND is_active = TRUE AND (stock IS NULL OR stock > 0) " .
+            "WHERE category IN ($placeholders) AND is_active = TRUE AND (stock IS NULL OR stock > 0) AND " . ProductReadinessService::sqlPredicate() . " " .
             'ORDER BY created_at DESC LIMIT 30',
             $categories
         );
@@ -1776,13 +1961,13 @@ final class BotService
                 $product = Database::one(
                     "SELECT * FROM products
                      WHERE id = ? AND category = 'minigame' AND is_active = TRUE
-                       AND (stock IS NULL OR stock > 0)
+                       AND (stock IS NULL OR stock > 0) AND " . ProductReadinessService::sqlPredicate() . "
                        AND (UPPER(COALESCE(metadata->>'brand', '')) = ? OR UPPER(slug) LIKE ? OR UPPER(name) LIKE ?)
                      FOR UPDATE",
                     [$productId, strtoupper($expectedBrand), $pattern, $pattern]
                 );
             } else {
-                $product = Database::one('SELECT * FROM products WHERE id = ? AND is_active = TRUE FOR UPDATE', [$productId]);
+                $product = Database::one('SELECT * FROM products WHERE id = ? AND is_active = TRUE AND ' . ProductReadinessService::sqlPredicate() . ' FOR UPDATE', [$productId]);
             }
             if ($product === null) {
                 throw new RuntimeException($expectedBrand !== null
@@ -2085,7 +2270,7 @@ final class BotService
         $products = Database::all(
             "SELECT id, name, description, stock, duration_days, vip_level FROM products
              WHERE category = 'proxy' AND price = 0 AND vip_level BETWEEN 1 AND ?
-               AND is_active = TRUE AND (stock IS NULL OR stock > 0)
+               AND is_active = TRUE AND (stock IS NULL OR stock > 0) AND " . ProductReadinessService::sqlPredicate() . "
              ORDER BY created_at DESC LIMIT 20",
             [$vip]
         );
@@ -2691,6 +2876,34 @@ final class BotService
 
         $payload = self::jsonArray($pending['payload'] ?? []);
         switch ((string) $pending['input_type']) {
+            case 'matchmaking_result':
+                if (!preg_match('/^\\s*(\\d{1,3})\\s*[-:]\\s*(\\d{1,3})\\s*$/D', $text, $scoreMatch)) {
+                    $this->telegram->sendMessage($chatId, 'Định dạng chưa đúng. Gửi tỷ số dạng <code>2-1</code> (mỗi bên từ 0 đến 999).');
+                    return true;
+                }
+                $matchId = (int) ($payload['match_id'] ?? 0);
+                try {
+                    $result = MatchmakingService::submitResult($userId, $matchId, (int) $scoreMatch[1], (int) $scoreMatch[2]);
+                    $this->clearPending($userId);
+                    if (($result['state'] ?? '') === 'pending' && !empty($result['opponentId'])) {
+                        $this->telegram->sendMessage((string) $result['opponentId'], '📊 Đối thủ vừa gửi kết quả trận #' . $matchId . '. Hãy mở Ghép đôi và gửi tỷ số theo góc nhìn của bạn để xác nhận.');
+                        $this->telegram->sendMessage($chatId, '✅ Đã ghi nhận báo cáo. Chờ đối thủ xác nhận tỷ số.');
+                    } elseif (($result['state'] ?? '') === 'disputed') {
+                        $this->telegram->sendMessage((string) $result['opponentId'], '⚠️ Báo cáo kết quả trận #' . $matchId . ' không khớp. Admin sẽ xem xét trước khi tính điểm.');
+                        $this->notifyAdmins('⚠️ <b>TRANH CHẤP KẾT QUẢ MATCHMAKING</b>' . PHP_EOL . 'Trận #' . $matchId . PHP_EOL . 'Hai báo cáo tỷ số không khớp; vui lòng xem tại bảng Admin.');
+                        $this->telegram->sendMessage($chatId, '⚠️ Tỷ số chưa khớp với đối thủ. Admin sẽ kiểm tra; chưa cộng điểm.');
+                    } elseif (($result['state'] ?? '') === 'confirmed') {
+                        $this->telegram->sendMessage((string) $result['playerOne'], '🏁 Trận #' . $matchId . ' đã xác nhận. +' . (int) $result['pointsAwardedOne'] . ' điểm · Elo ' . (int) $result['ratingDeltaOne'] . '.');
+                        $this->telegram->sendMessage((string) $result['playerTwo'], '🏁 Trận #' . $matchId . ' đã xác nhận. +' . (int) $result['pointsAwardedTwo'] . ' điểm · Elo ' . (int) $result['ratingDeltaTwo'] . '.');
+                    }
+                    $this->showMatchmakingMenu($chatId, $userId);
+                } catch (RuntimeException $error) {
+                    $this->clearPending($userId);
+                    $this->telegram->sendMessage($chatId, '⚠️ ' . self::escape($error->getMessage()));
+                    $this->showMatchmakingMenu($chatId, $userId);
+                }
+                return true;
+
             case 'code_telegram_accounts':
                 $serviceId = (int) (($payload['service_id'] ?? 0));
                 $service = Database::one(

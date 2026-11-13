@@ -39,6 +39,8 @@ $assert = static function (bool $condition, string $message) use (&$checks): voi
     }
 };
 
+$schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
+
 $productReadinessBase = [
     'is_active' => true, 'stock' => 3,
     'supplier_name' => 'HENDY inventory',
@@ -106,7 +108,6 @@ $assert(TelegramAuth::safeEquals('same-secret', 'same-secret'), 'so sánh chuỗ
 $assert(!TelegramAuth::safeEquals('different', 'same-secret'), 'so sánh chuỗi khác');
 $assert(!TelegramAuth::safeEquals('', ''), 'secret rỗng bị từ chối');
 $telegramAuthSource = file_get_contents(dirname(__DIR__) . '/app/TelegramAuth.php');
-$schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
 $dockerfileSource = file_get_contents(dirname(__DIR__) . '/Dockerfile');
 $assert(str_contains($dockerfileSource, "printf '%s\\n'") && str_contains($dockerfileSource, "'upload_max_filesize=205M'") && str_contains($dockerfileSource, "'post_max_size=260M'"), 'Docker writes PHP upload limits as separate real INI lines, not literal backslash-n text');
 $assert(str_contains($telegramAuthSource, 'ON CONFLICT (bot_key) DO UPDATE SET') && str_contains($telegramAuthSource, 'RETURNING secret_value'), 'webhook/session secrets persist using atomic PostgreSQL upserts');

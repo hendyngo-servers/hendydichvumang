@@ -191,6 +191,8 @@ $adminDashboardSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegr
 $customerCenterSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegram/customer-center/index.html');
 $publicWebsiteSource = file_get_contents(dirname(__DIR__, 2) . '/website/public/index.html');
 $mainPublicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
+$telegramAuthSource = file_get_contents(dirname(__DIR__) . '/app/TelegramAuth.php');
+$websiteSessionMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_website_session_secrets.sql');
 $userAccessMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_user_access_controls.sql');
 $productReadinessMigration = file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_product_supplier_readiness.sql');
 $productReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ProductReadinessService.php');
@@ -222,6 +224,10 @@ $assert(str_contains($mainPublicRouterSource, "'database' => " . '$databaseReady
 $assert(str_contains($mainPublicRouterSource, "Database::check()") && str_contains($mainPublicRouterSource, "'database' => \$databaseReady ? 'ok' : 'unavailable'") && str_contains($mainPublicRouterSource, "\$databaseReady ? 200 : 503"), 'Public API health verifies PostgreSQL instead of returning an unconditional healthy response');
 $assert(str_contains($mainPublicRouterSource, 'secondary_bot_retired') && str_contains($mainPublicRouterSource, 'if ($method === \'POST\' && $path === \'/webhook/telegram/secondary\')'), 'Retired secondary webhook is acknowledged without executing a secondary bot');
 $assert(str_contains($adminDashboardSource, 'new AbortController()') && str_contains($adminDashboardSource, 'timeoutMs = 20000') && str_contains($adminDashboardSource, 'admin-retry-start') && str_contains($adminDashboardSource, 'showStartupFailure(error)'), 'Admin startup has bounded API timeouts and visible recovery actions');
+$assert(str_contains($websiteSessionMigration, 'CREATE TABLE IF NOT EXISTS website_session_secrets') && str_contains($websiteSessionMigration, 'CREATE TABLE IF NOT EXISTS legacy_login_tickets') && str_contains($websiteSessionMigration, 'GRANT SELECT, INSERT, UPDATE, DELETE'), 'Website session and one-time login ticket migration provisions runtime access');
+$assert(str_contains($schemaSource, 'ON website_session_secrets, legacy_login_tickets TO hendy_bot_app'), 'Fresh database schema grants runtime access to browser login session tables');
+$assert(str_contains($telegramAuthSource, 'SELECT secret_value FROM website_session_secrets WHERE bot_key = ?') && str_contains($telegramAuthSource, 'if (is_string($existing)') && str_contains($telegramAuthSource, 'ON CONFLICT (bot_key) DO UPDATE'), 'Website session signing key is read without a write on every API request and is created atomically when missing');
+
 
 $aiCoverSource = file_get_contents(dirname(__DIR__) . '/app/AiCoverService.php');
 $aiCoverStorageSource = file_get_contents(dirname(__DIR__) . '/app/NeonStorage.php');

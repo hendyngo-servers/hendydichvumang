@@ -143,8 +143,99 @@ final class ProviderRegistryService
         ];
     }
 
+    /**
+     * Schema status is reported instead of allowing a missing migration to turn
+     * the Admin Provider Registry endpoint into an unexplained HTTP 500.
+     */
+    private static function schemaStatus(): array
+    {
+        $required = ['service_registry', 'service_providers'];
+        try {
+            $rows = Database::all(
+                "SELECT table_name FROM information_schema.tables
+                 WHERE table_schema = current_schema() AND table_name IN (?, ?)",
+                $required
+            );
+            $present = array_map(static fn(array $row): string => (string) $row['table_name'], $rows);
+            $missing = array_values(array_diff($required, $present));
+            return ['ready' => $missing === [], 'missingTables' => $missing];
+        } catch (\\Throwable $error) {
+            error_log('[provider-registry-schema] ' . $error::class);
+            return ['ready' => false, 'missingTables' => $required];
+        }
+    }
+
+    private static function requireSchemaReady(): void
+    {
+        $status = self::schemaStatus();
+        if (!$status['ready']) {
+            throw new RuntimeException(
+                'Provider & Service Registry chưa sẵn sàng. Thiếu bảng: ' .
+                implode(', ', $status['missingTables']) .
+                '. Hãy áp dụng telegram-bot/database/migrations/20261113_provider_service_registry.sql bằng migration runner và database-owner role.'
+            );
+        }
+    }
+
     public static function snapshot(): array
     {
+        $schema = self::schemaStatus();
+        if (!$schema['ready']) {
+            $readiness = ServiceReadinessService::snapshot();
+            $readinessByKey = [];
+            foreach (($readiness['services'] ?? []) as $item) {
+                $readinessByKey[(string) ($item['key'] ?? '')] = $item;
+            }
+            $services = [];
+            foreach (self::SERVICES as $key => $definition) {
+                $report = $readinessByKey[$key] ?? null;
+                $services[] = [
+                    'key' => $key,
+                    'label' => $definition['label'],
+                    'group' => $definition['group'],
+                    'description' => $definition['description'],
+                    'adminTab' => $definition['adminTab'],
+                    'readinessKnown' => $report !== null,
+                    'ready' => (bool) ($report['ready'] ?? false),
+                    'readinessNote' => (string) ($report['note'] ?? 'Chưa kiểm tra được readiness.'),
+                    'missing' => array_values($report['missing'] ?? []),
+                    'enabled' => true,
+                    'maintenanceMode' => false,
+                    'maintenanceMessage' => '',
+                    'updatedAt' => null,
+                    'updatedBy' => '',
+                    'providers' => [],
+                    'apiAccessControl' => $definition['paths'] !== [],
+                ];
+            }
+            return [
+                'checkedAt' => gmdate(DATE_ATOM),
+                'schemaReady' => false,
+                'missingTables' => $schema['missingTables'],
+                'message' => 'Chưa áp dụng migration Provider & Service Registry. Chức năng đọc/ghi cấu hình nhà cung cấp đang tạm khóa; API và dữ liệu hiện hữu không bị thay đổi.',
+                'services' => $services,
+                'providers' => [],
+                'adapters' => array_map(
+                    static fn(string $key, array $value): array => ['key' => $key, ...$value],
+                    array_keys(self::ADAPTERS),
+                    array_values(self::ADAPTERS)
+                ),
+                'summary' => [
+                    'serviceCount' => count($services),
+                    'readyServices' => count(array_filter($services, static fn(array $item): bool => $item['ready'])),
+                    'disabledServices' => 0,
+                    'maintenanceServices' => 0,
+                    'providerCount' => 0,
+                    'enabledProviders' => 0,
+                ],
+                'security' => [
+                    'secretValuesReturned' => false,
+                    'secretValuesStored' => false,
+                    'configurationCheckIsLiveApiTest' => false,
+                ],
+            ];
+        }
+
         $readiness = ServiceReadinessService::snapshot();
         $readinessByKey = [];
         foreach (($readiness['services'] ?? []) as $item) {
@@ -214,6 +305,7 @@ final class ProviderRegistryService
 
     public static function saveService(string $key, array $input, string $adminId): array
     {
+        self::requireSchemaReady();
         self::validateServiceKey($key);
         $enabled = filter_var($input['enabled'] ?? true, FILTER_VALIDATE_BOOLEAN);
         $maintenance = filter_var($input['maintenanceMode'] ?? $input['maintenance_mode'] ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -239,6 +331,7 @@ final class ProviderRegistryService
 
     public static function saveProvider(array $input, string $adminId, ?int $id = null): array
     {
+        self::requireSchemaReady();
         $data = self::validateProviderInput($input);
         if ($id !== null) {
             $row = Database::one(
@@ -257,6 +350,7 @@ final class ProviderRegistryService
 
     public static function deleteProvider(int $id): void
     {
+        self::requireSchemaReady();
         $deleted = Database::run('DELETE FROM service_providers WHERE id = ? RETURNING id', [$id]);
         if ($deleted->rowCount() === 0) throw new RuntimeException('Không tìm thấy nhà cung cấp.');
     }
@@ -302,6 +396,7 @@ final class ProviderRegistryService
 
     public static function checkProvider(int $id): array
     {
+        self::requireSchemaReady();
         $row = Database::one(
             'SELECT id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, priority, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at FROM service_providers WHERE id = ?',
             [$id]
@@ -353,10 +448,18 @@ final class ProviderRegistryService
         foreach (self::SERVICES as $key => $definition) {
             foreach ($definition['paths'] as $prefix) {
                 if ($path === $prefix || str_starts_with($path, rtrim($prefix, '/') . '/')) {
-                    $row = Database::one(
-                        'SELECT is_enabled, maintenance_mode, maintenance_message FROM service_registry WHERE service_key = ?',
-                        [$key]
-                    );
+                    try {
+                        $row = Database::one(
+                            'SELECT is_enabled, maintenance_mode, maintenance_message FROM service_registry WHERE service_key = ?',
+                            [$key]
+                        );
+                    } catch (\\Throwable $error) {
+                        // A missing registry migration must not turn normal member
+                        // API requests into HTTP 500 responses. Admin gets an explicit
+                        // schemaReady=false diagnostic through snapshot().
+                        error_log('[provider-registry-access-control] ' . $error::class);
+                        return null;
+                    }
                     if ($row === null) return null;
                     if (!self::dbBool($row['is_enabled'])) return 'Dịch vụ ' . $definition['label'] . ' hiện đang tạm khóa theo cấu hình quản trị.';
                     if (self::dbBool($row['maintenance_mode'])) {

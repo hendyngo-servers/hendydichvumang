@@ -12,10 +12,91 @@ use Throwable;
  */
 final class AiMediaService
 {
+    public static function readiness(): array
+    {
+        $queueEnabled = Env::bool('AI_MEDIA_QUEUE_ENABLED', false);
+        $adminEnabled = (string) (Database::value('SELECT value FROM app_settings WHERE key=?', ['ai_media_enabled']) ?? '0') === '1';
+        $musicFlag = (string) (Database::value('SELECT value FROM app_settings WHERE key=?', ['ai_media_music_enabled']) ?? '0') === '1';
+        $imageFlag = (string) (Database::value('SELECT value FROM app_settings WHERE key=?', ['ai_media_image_enabled']) ?? '0') === '1';
+        $musicKey = trim((string) Env::get('ELEVENLABS_API_KEY', '')) !== '';
+        $imageKey = trim((string) Env::get('OPENAI_API_KEY', '')) !== '';
+        return [
+            'queueConfigured' => $queueEnabled,
+            'workerEnabled' => $queueEnabled,
+            'adminEnabled' => $adminEnabled,
+            'musicKeyConfigured' => $musicKey,
+            'imageKeyConfigured' => $imageKey,
+            'enabled' => $queueEnabled && $adminEnabled,
+            'musicEnabled' => $queueEnabled && $adminEnabled && $musicFlag && $musicKey,
+            'imageEnabled' => $queueEnabled && $adminEnabled && $imageFlag && $imageKey,
+            'musicFlag' => $musicFlag,
+            'imageFlag' => $imageFlag,
+        ];
+    }
+
+    public static function featureEnabled(string $type): bool
+    {
+        $status = self::readiness();
+        return match ($type) {
+            'music' => (bool) $status['musicEnabled'],
+            'image' => (bool) $status['imageEnabled'],
+            default => false,
+        };
+    }
+
+    public static function setFeatures(array $input): array
+    {
+        $enabled = filter_var($input['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $music = filter_var($input['musicEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $image = filter_var($input['imageEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if (($enabled || $music || $image) && !Env::bool('AI_MEDIA_QUEUE_ENABLED', false)) {
+            throw new RuntimeException('AI_MEDIA_QUEUE_ENABLED chưa bật trong Render Environment; chưa thể khởi chạy AI Worker.');
+        }
+        if ($music && trim((string) Env::get('ELEVENLABS_API_KEY', '')) === '') {
+            throw new RuntimeException('Chưa cấu hình ELEVENLABS_API_KEY trong Render Environment.');
+        }
+        if ($image && trim((string) Env::get('OPENAI_API_KEY', '')) === '') {
+            throw new RuntimeException('Chưa cấu hình OPENAI_API_KEY trong Render Environment.');
+        }
+        if (($music || $image) && !$enabled) {
+            throw new RuntimeException('Bật trạng thái AI Studio tổng trước khi bật từng công cụ AI.');
+        }
+        Database::transaction(static function () use ($enabled, $music, $image): void {
+            foreach ([
+                'ai_media_enabled' => $enabled ? '1' : '0',
+                'ai_media_music_enabled' => $music ? '1' : '0',
+                'ai_media_image_enabled' => $image ? '1' : '0',
+            ] as $key => $value) {
+                Database::run(
+                    'INSERT INTO app_settings(key,value,is_public,updated_at) VALUES(?,?,FALSE,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,is_public=FALSE,updated_at=NOW()',
+                    [$key, $value]
+                );
+            }
+        });
+        return self::adminSnapshot();
+    }
+
+    public static function adminSnapshot(): array
+    {
+        return [
+            ...self::readiness(),
+            'stats' => [
+                'queued' => (int) Database::value("SELECT COUNT(*) FROM ai_media_jobs WHERE status='queued'"),
+                'processing' => (int) Database::value("SELECT COUNT(*) FROM ai_media_jobs WHERE status='processing'"),
+                'completed' => (int) Database::value("SELECT COUNT(*) FROM ai_media_jobs WHERE status='completed'"),
+                'failed' => (int) Database::value("SELECT COUNT(*) FROM ai_media_jobs WHERE status='failed'"),
+                'today' => (int) Database::value("SELECT COUNT(*) FROM ai_media_jobs WHERE created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh')"),
+            ],
+            'jobs' => Database::all(
+                'SELECT id,user_id,job_type,status,attempts,error_message,created_at,completed_at FROM ai_media_jobs ORDER BY created_at DESC LIMIT 50'
+            ),
+        ];
+    }
+
     public static function create(string $userId, string $botKey, string $type, string $prompt, string $sourceFileId = ''): array
     {
-        if (!Env::bool('AI_MEDIA_QUEUE_ENABLED', false)) {
-            throw new RuntimeException('Dịch vụ AI chưa được Admin bật. Vui lòng quay lại sau.');
+        if (!in_array($type, ['music', 'image'], true) || !self::featureEnabled($type)) {
+            throw new RuntimeException('Công cụ AI này đang tạm tắt hoặc chưa đủ cấu hình. Vui lòng quay lại sau.');
         }
         if (!preg_match('/\A[0-9]{5,20}\z/', $userId) || $botKey !== 'primary') {
             throw new RuntimeException('Tài khoản hoặc Bot không hợp lệ.');
@@ -28,11 +109,11 @@ final class AiMediaService
         if (mb_strlen($prompt) < 5 || mb_strlen($prompt) > $maxPrompt) {
             throw new RuntimeException('Mô tả tác vụ AI không đúng độ dài cho phép.');
         }
-        if ($type === 'music' && trim((string)Env::get('ELEVENLABS_API_KEY', '')) === '') {
-            throw new RuntimeException('Admin chưa cấu hình ELEVENLABS_API_KEY trong Render Environment.');
+        if ($type === 'music' && !self::featureEnabled('music')) {
+            throw new RuntimeException('Tạo âm nhạc AI chưa được Admin mở hoặc chưa có API key hợp lệ.');
         }
-        if ($type === 'image' && (trim((string)Env::get('OPENAI_API_KEY', '')) === '' || $sourceFileId === '')) {
-            throw new RuntimeException('Chỉnh sửa ảnh AI cần OPENAI_API_KEY và một ảnh đầu vào.');
+        if ($type === 'image' && (!self::featureEnabled('image') || $sourceFileId === '')) {
+            throw new RuntimeException('Chỉnh sửa ảnh AI cần được Admin mở, có OPENAI_API_KEY và ảnh đầu vào.');
         }
 
         $dailyLimit = max(1, min(10, Env::int('AI_MEDIA_MAX_PER_DAY', 3)));
@@ -75,7 +156,9 @@ final class AiMediaService
         $job = Database::transaction(function (): ?array {
             $next = Database::one(
                 "SELECT id,user_id,bot_key,job_type,prompt,source_file_id FROM ai_media_jobs " .
-                "WHERE status='queued' ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED"
+                "WHERE status='queued' AND ((job_type='music' AND ?=TRUE) OR (job_type='image' AND ?=TRUE)) " .
+                "ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED",
+                [self::featureEnabled('music'), self::featureEnabled('image')]
             );
             if ($next === null) return null;
             Database::run(

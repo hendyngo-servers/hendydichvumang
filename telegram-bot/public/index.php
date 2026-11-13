@@ -428,6 +428,43 @@ try {
         respond(['ok' => true]);
     }
 
+    if ($method === 'POST' && preg_match('#^/internal/ai-cover/jobs/([0-9a-f-]{36})/complete$#i', $path, $aiCoverCompleteMatch)) {
+        $rawBody = (string) file_get_contents('php://input');
+        $signature = trim((string) ($_SERVER['HTTP_X_HENDY_AI_COVER_SIGNATURE'] ?? ''));
+        try {
+            $completion = AiCoverService::completeFromWorker($aiCoverCompleteMatch[1], $rawBody, $signature);
+            $token = TelegramAuth::token('primary');
+            if ($token === '') respond(['error' => 'primary_bot_unavailable'], 503);
+            $delivery = AiCoverService::deliverJob(
+                $aiCoverCompleteMatch[1],
+                trim((string) Env::get('AI_COVER_CALLBACK_SECRET', '')),
+                new TelegramApi($token)
+            );
+            respond(['ok' => true, 'job' => $completion, 'delivery' => $delivery]);
+        } catch (Throwable $error) {
+            error_log('[ai-cover-worker-callback] ' . $error::class . ': ' . $error->getMessage());
+            respond(['error' => 'callback_rejected_or_delivery_retry'], 502);
+        }
+    }
+
+    if ($method === 'POST' && $path === '/api/admin/ai-cover/voices') {
+        $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
+        if (empty($_SERVER['HTTP_AUTHORIZATION'])) {
+            foreach ($headers as $name => $value) {
+                if (strcasecmp((string) $name, 'Authorization') === 0) {
+                    $_SERVER['HTTP_AUTHORIZATION'] = (string) $value;
+                    break;
+                }
+            }
+        }
+        if (empty($_SERVER['HTTP_AUTHORIZATION']) && !empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+            $_SERVER['HTTP_AUTHORIZATION'] = (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        }
+        $controller = new ApiController($_GET, [], $headers);
+        $result = $controller->uploadAiCoverVoice($_POST, $_FILES);
+        respond($result['body'] ?? [], (int) ($result['status'] ?? 200));
+    }
+
     if ($method === 'POST' && $path === '/api/admin/modules/upload') {
         $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
         if (empty($_SERVER['HTTP_AUTHORIZATION'])) {

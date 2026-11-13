@@ -62,6 +62,20 @@ if [[ "${AI_MEDIA_QUEUE_ENABLED:-false}" == "true" ]]; then
     echo "HENDY AI media worker đã khởi chạy."
 fi
 
+if [[ "${VIDEO_WORKER_ENABLED:-false}" == "true" ]]; then
+    if [[ -z "${VIDEO_PROCESSOR_URL:-}" || -z "${VIDEO_PROCESSOR_SECRET:-}" ]]; then
+        echo "VIDEO_WORKER_ENABLED=true nhưng VIDEO_PROCESSOR_URL hoặc VIDEO_PROCESSOR_SECRET chưa cấu hình." >&2
+        exit 1
+    fi
+    if [[ -z "${APP_URL:-}" && -z "${RENDER_EXTERNAL_URL:-}" ]]; then
+        echo "VIDEO_WORKER_ENABLED=true nhưng APP_URL/RENDER_EXTERNAL_URL HTTPS chưa sẵn sàng." >&2
+        exit 1
+    fi
+    php bin/video-worker.php &
+    background_pids+=("$!")
+    echo "HENDY Video Worker đã khởi chạy."
+fi
+
 if [[ "${CODE_TELEGRAM_WORKER_ENABLED:-false}" == "true" ]]; then
     if [[ "${CODE_TELEGRAM_ENABLED:-false}" != "true" ]]; then
         echo "CODE_TELEGRAM_WORKER_ENABLED=true nhưng CODE_TELEGRAM_ENABLED=false." >&2

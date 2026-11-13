@@ -1050,36 +1050,51 @@
 
   function adminProducts() {
     const products = state.adminData.products || [];
-    const editing = state.editingProductId
-      ? products.find(item => item.id === state.editingProductId)
-      : null;
+    const editing = state.editingProductId ? products.find(item => item.id === state.editingProductId) : null;
     const value = (key, fallback) => editing && editing[key] != null ? escapeHtml(editing[key]) : fallback;
     const selected = key => editing && editing.category === key ? ' selected' : '';
+    const selectOptions = (items, current, fallback) => items.map(item => '<option value="' + item[0] + '"' + (String(current || fallback) === item[0] ? ' selected' : '') + '>' + item[1] + '</option>').join('');
     const minigameBrands = ['QQ88','HI88','78WIN','RR88','MM88','GG88','ABCVIP','XX8','U888','J88','ABC8','88CLB','AD88','SC88','C168','CM88','F8BET'];
     const selectedBrand = String(editing && editing.metadata ? editing.metadata.brand || '' : '').toUpperCase();
     const brandOptions = '<option value="">— Chọn nhà cái —</option>' + minigameBrands.map(brand => '<option value="' + brand + '"' + (selectedBrand === brand ? ' selected' : '') + '>' + brand + '</option>').join('');
+    const permissionOptions = selectOptions([['pending','Chờ xác minh'],['authorized','Đã xác minh quyền phân phối'],['rejected','Không được phép']],value('sourcePermissionStatus',''), 'pending');
+    const supplierOptions = selectOptions([['pending','Chờ xác minh nhà cung cấp'],['verified','Đã xác minh quyền truy cập'],['revoked','Đã thu hồi quyền truy cập']],value('supplierAccessStatus',''), 'pending');
+    const fulfillmentOptions = selectOptions([['manual','Bàn giao thủ công'],['api','API (đang khóa, chưa có adapter)']],value('fulfillmentMode',''), 'manual');
     return '<form class="card form" id="admin-product-form" data-product-id="' + (editing ? escapeHtml(editing.id) : '') + '"><b>' +
       (editing ? 'Chỉnh sửa sản phẩm #' + escapeHtml(editing.id) : 'Thêm sản phẩm mới') + '</b>' +
       '<div class="field"><label>Tên sản phẩm</label><input name="name" maxlength="120" value="' + value('name','') + '" required></div>' +
       '<div class="two-col"><div class="field"><label>Danh mục</label><select name="category">' +
       Object.keys(labels).map(key => '<option value="' + key + '"' + selected(key) + '>' + escapeHtml(labels[key]) + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>Giá (VNĐ)</label><input name="price" type="number" min="0" step="1" value="' + value('price','') + '" required></div></div>' +
-      '<div class="field"><label>Nhà cái (bắt buộc với MINIGAME LIVE)</label><select name="brand">' + brandOptions + '</select><small class="muted">Chọn chính xác nhà cái để Bot hiển thị đúng gói dịch vụ.</small></div>' +
+      '<div class="field"><label>Nhà cái (bắt buộc với MINIGAME LIVE)</label><select name="brand">' + brandOptions + '</select><small class="muted">Chọn đúng nhà cái để Bot hiển thị đúng gói dịch vụ.</small></div>' +
       '<div class="field"><label>Mô tả</label><textarea name="description" maxlength="1500">' + value('description','') + '</textarea></div>' +
       '<div class="two-col"><div class="field"><label>Thời hạn (ngày)</label><input name="durationDays" type="number" min="0" value="' + value('durationDays',0) + '"></div>' +
       '<div class="field"><label>Tồn kho (để trống = không giới hạn)</label><input name="stock" type="number" min="0" value="' + (editing && editing.stock != null ? escapeHtml(editing.stock) : '') + '"></div></div>' +
       '<div class="two-col"><div class="field"><label>Cấp VIP khi hoàn tất (0-3)</label><input name="vipLevel" type="number" min="0" max="3" value="' + value('vipLevel',0) + '"></div>' +
       '<div class="field"><label>URL ảnh HTTPS</label><input name="imageUrl" type="url" placeholder="https://..." value="' + value('imageUrl','') + '"></div></div>' +
+      '<div class="section-head"><h3>Nhà cung cấp & quyền nguồn</h3><span>Kiểm duyệt trước mở bán</span></div>' +
+      '<div class="field"><label>Tên nhà cung cấp / đơn vị sở hữu kho</label><input name="supplierName" maxlength="120" value="' + value('supplierName','') + '" placeholder="Tên đối tác hoặc kho do HENDY sở hữu"></div>' +
+      '<div class="two-col"><div class="field"><label>Trang nhà cung cấp (HTTPS)</label><input name="supplierUrl" type="url" placeholder="https://..." value="' + value('supplierUrl','') + '"></div>' +
+      '<div class="field"><label>Mã/SKU sản phẩm phía nhà cung cấp</label><input name="supplierProductRef" maxlength="160" value="' + value('supplierProductRef','') + '"></div></div>' +
+      '<div class="field"><label>URL nguồn, hợp đồng hoặc hồ sơ quyền sở hữu/phân phối (HTTPS)</label><input name="sourceUrl" type="url" placeholder="https://..." value="' + value('sourceUrl','') + '"></div>' +
+      '<div class="two-col"><div class="field"><label>Quyền sử dụng nguồn</label><select name="sourcePermissionStatus">' + permissionOptions + '</select></div>' +
+      '<div class="field"><label>Truy cập nhà cung cấp</label><select name="supplierAccessStatus">' + supplierOptions + '</select></div></div>' +
+      '<div class="two-col"><div class="field"><label>Phương thức bàn giao</label><select name="fulfillmentMode">' + fulfillmentOptions + '</select></div>' +
+      '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" value="' + value('credentialEnvKey','') + '" placeholder="OTP_PROVIDER_API_KEY"></div></div>' +
+      '<div class="notice warn">Chỉ nhập URL và thông tin mô tả nhà cung cấp. Không dán API Key, mật khẩu, cookie hay OTP vào đây. Khi thay nhà cung cấp hoặc URL nguồn, hệ thống tự đưa xác minh tương ứng về trạng thái chờ. Chế độ API vẫn khóa đến khi có adapter riêng được kiểm thử.</div>' +
       '<div class="two-col"><button class="primary">' + (editing ? 'Lưu thay đổi' : '＋ Tạo sản phẩm') + '</button>' +
       (editing ? '<button type="button" class="secondary" data-cancel-product-edit>Hủy chỉnh sửa</button>' : '') + '</div></form>' +
       '<div class="section-head"><h3>Danh sách sản phẩm</h3><span>' + products.length + ' sản phẩm</span></div>' +
-      (products.length ? products.map(product =>
-        '<article class="record"><div class="record-top"><div><b>' + escapeHtml(product.name) + '</b><small class="muted">#' + product.id + ' · ' + escapeHtml(labels[product.category] || product.category) + (product.metadata && product.metadata.brand ? ' · ' + escapeHtml(product.metadata.brand) : '') + '</small></div>' +
-        '<span class="status ' + (product.isActive ? 'completed' : 'cancelled') + '">' + (product.isActive ? 'Đang bán' : 'Đã ẩn') + '</span></div>' +
+      (products.length ? products.map(product => {
+        const sellable = Boolean(product.isSellable);
+        const reasons = Array.isArray(product.readinessReasons) ? product.readinessReasons.join(' · ') : '';
+        return '<article class="record"><div class="record-top"><div><b>' + escapeHtml(product.name) + '</b><small class="muted">#' + product.id + ' · ' + escapeHtml(labels[product.category] || product.category) + (product.metadata && product.metadata.brand ? ' · ' + escapeHtml(product.metadata.brand) : '') + '</small></div>' +
+        '<span class="status ' + (sellable ? 'completed' : 'pending') + '">' + (sellable ? 'Đủ điều kiện bán' : (product.isActive ? 'Đang khóa' : 'Đã ẩn')) + '</span></div>' +
         '<p>' + money(product.price) + ' · Kho: ' + (product.stock == null ? 'Không giới hạn' : product.stock) + (product.durationDays ? ' · ' + product.durationDays + ' ngày' : '') + '</p>' +
-        '<div class="two-col"><button class="tiny-btn" data-edit-product="' + escapeHtml(product.id) + '">Chỉnh sửa</button>' +
-        '<button class="tiny-btn" data-toggle-product="' + escapeHtml(product.id) + '" data-active="' + String(Boolean(product.isActive)) + '">' + (product.isActive ? 'Tạm ngừng bán' : 'Mở bán lại') + '</button></div></article>'
-      ).join('') : empty('Chưa có sản phẩm','Hãy tạo sản phẩm thật và nhập giá, tồn kho, thời hạn trước khi mở bán.'));
+        (reasons ? '<p class="small muted">Cần xử lý: ' + escapeHtml(reasons) + '</p>' : '<p class="small muted">Đã có hồ sơ và xác minh bắt buộc.</p>') +
+        '<div class="two-col"><button class="tiny-btn" data-edit-product="' + escapeHtml(product.id) + '">Chỉnh sửa hồ sơ</button>' +
+        '<button class="tiny-btn" data-toggle-product="' + escapeHtml(product.id) + '" data-active="' + String(Boolean(product.isActive)) + '">' + (product.isActive ? 'Ẩn sản phẩm' : 'Bật cờ hiển thị') + '</button></div></article>';
+      }).join('') : empty('Chưa có sản phẩm','Tạo hồ sơ thật, ghi nhận quyền nguồn/nhà cung cấp và xác minh trước khi mở bán.'));
   }
 
   function adminOrders() {

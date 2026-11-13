@@ -466,8 +466,15 @@ try {
         respond(processBankDeposit($body));
     }
 
-    if ($method === 'POST' && in_array($path, ['/webhook/telegram', '/webhook/telegram/secondary'], true)) {
-        $botKey = $path === '/webhook/telegram/secondary' ? 'secondary' : 'primary';
+    // This deployment runs one primary bot. A stale Telegram webhook from an older
+    // secondary-bot deployment is acknowledged and ignored so Telegram stops retrying
+    // an endpoint that is intentionally retired; no secondary token or update is used.
+    if ($method === 'POST' && $path === '/webhook/telegram/secondary') {
+        respond(['ok' => true, 'ignored' => true, 'reason' => 'secondary_bot_retired']);
+    }
+
+    if ($method === 'POST' && $path === '/webhook/telegram') {
+        $botKey = 'primary';
         $token = TelegramAuth::token($botKey);
         if ($token === '') {
             throw new HttpException(404, 'Bot được yêu cầu chưa được bật.');
@@ -540,7 +547,19 @@ try {
     }
 
     if ($method === 'GET' && $path === '/api/health') {
-        respond(['status' => 'ok', 'service' => 'hendy-bot-cybertech', 'apiVersion' => 'v1']);
+        $databaseReady = false;
+        try {
+            $databaseReady = Database::check();
+        } catch (Throwable $error) {
+            error_log('[api-health] PostgreSQL unavailable: ' . $error::class);
+        }
+        respond([
+            'status' => $databaseReady ? 'ok' : 'degraded',
+            'service' => 'hendy-bot-cybertech',
+            'database' => $databaseReady ? 'ok' : 'unavailable',
+            'apiVersion' => 'v1',
+            'timestamp' => gmdate(DATE_ATOM),
+        ], $databaseReady ? 200 : 503);
     }
 
     if (str_starts_with($path, '/api/')) {

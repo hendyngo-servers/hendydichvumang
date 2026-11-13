@@ -49,6 +49,11 @@ final class AiMediaService
         $enabled = filter_var($input['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $music = filter_var($input['musicEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $image = filter_var($input['imageEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        // The global kill-switch always wins and must remain usable if provider keys were revoked.
+        if (!$enabled) {
+            $music = false;
+            $image = false;
+        }
         $queueConfigured = Env::bool('AI_MEDIA_QUEUE_ENABLED', false);
         $musicKeyConfigured = trim((string) Env::get('ELEVENLABS_API_KEY', '')) !== '';
         $imageKeyConfigured = trim((string) Env::get('OPENAI_API_KEY', '')) !== '';

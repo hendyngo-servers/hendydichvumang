@@ -114,16 +114,25 @@ final class BotService
             return;
         }
 
-        // AI image editing is not released yet. Clear any stale request without accepting or queuing media.
         if ($photos !== []) {
             $pendingPhoto = $this->getPending($userId);
-            if ($pendingPhoto !== null && in_array((string)$pendingPhoto['input_type'], ['ai_image_photo', 'ai_image_prompt'], true)) {
-                $this->clearPending($userId);
-                $this->sendUnavailableNotice($chatId);
+            $pendingType = (string) ($pendingPhoto['input_type'] ?? '');
+            if ($pendingType === 'ai_image_photo') {
+                $this->handleAiImagePhoto($chatId, $userId, $message, $pendingPhoto);
+                return;
+            }
+            if ($pendingType === 'ai_image_prompt') {
+                $caption = trim((string) ($message['caption'] ?? ''));
+                if ($caption === '') {
+                    $this->telegram->sendMessage($chatId, '🖼️ Hãy gửi mô tả chỉnh sửa trong phần chú thích ảnh hoặc gửi mô tả bằng tin nhắn trước, sau đó gửi ảnh.');
+                    return;
+                }
+                $this->setPending($userId, 'ai_image_photo', ['prompt' => $caption]);
+                $this->handleAiImagePhoto($chatId, $userId, $message, $this->getPending($userId) ?? ['payload' => ['prompt' => $caption]]);
                 return;
             }
             if ($text === '') {
-                $this->sendUnavailableNotice($chatId);
+                $this->telegram->sendMessage($chatId, '🖼️ Để chỉnh sửa ảnh, mở 🤖 TÍNH NĂNG AI → CHỈNH SỬA ẢNH AI và làm theo hướng dẫn.');
                 return;
             }
         }
@@ -456,6 +465,100 @@ final class BotService
             }
         }
         $this->telegram->sendMessage($chatId, $caption, $replyMarkup);
+    }
+
+    private function showAiFeaturesMenu(string $chatId): void
+    {
+        $musicReady = AiMediaService::featureEnabled('music');
+        $imageReady = AiMediaService::featureEnabled('image');
+        $coverReady = AiCoverService::enabled();
+        $status = static fn(bool $ready): string => $ready ? '🟢 Đang mở' : '🟡 Chưa sẵn sàng';
+        $lines = [
+            '🤖 <b>HENDY · TÍNH NĂNG AI</b>',
+            '━━━━━━━━━━━━━━━━━━━━',
+            'Chọn công cụ sáng tạo bạn muốn sử dụng:',
+            '',
+            '🎤 AI Cover: ' . $status($coverReady),
+            '🎵 Tạo âm nhạc AI: ' . $status($musicReady),
+            '🖼️ Chỉnh sửa ảnh AI: ' . $status($imageReady),
+            '',
+            'Các tác vụ được đưa vào hàng đợi và bot sẽ gửi kết quả trực tiếp trong cuộc trò chuyện. API key không hiển thị cho người dùng.',
+        ];
+        $this->telegram->sendMessage($chatId, implode("\n", $lines), [
+            'reply_markup' => $this->inlineMenu([
+                [['text' => '🎤 AI COVER', 'callback_data' => 'member:ai-cover', 'style' => 'success']],
+                [['text' => '🎵 TẠO ÂM NHẠC AI', 'callback_data' => 'member:music-ai', 'style' => 'primary']],
+                [['text' => '🖼️ CHỈNH SỬA ẢNH AI', 'callback_data' => 'member:image-ai', 'style' => 'success']],
+                [['text' => '🏠 MENU CHÍNH', 'callback_data' => 'member:home', 'style' => 'danger']],
+            ]),
+        ]);
+    }
+
+    private function startAiMusic(string $chatId, string $userId): void
+    {
+        if ($this->botKey !== 'primary' || !AiMediaService::featureEnabled('music')) {
+            $this->telegram->sendMessage($chatId, '🎵 TẠO ÂM NHẠC AI hiện chưa được mở. Admin cần bật AI Studio, cấu hình ELEVENLABS_API_KEY và khởi chạy AI Worker trong Render.');
+            return;
+        }
+        $this->setPending($userId, 'ai_music_prompt');
+        $this->telegram->sendMessage($chatId, implode("\n", [
+            '🎵 <b>TẠO ÂM NHẠC AI</b>',
+            'Hãy mô tả bản nhạc bạn muốn tạo: thể loại, cảm xúc, nhạc cụ, nhịp độ và giọng hát (nếu cần).',
+            'Ví dụ: Nhạc pop điện tử vui tươi, giai điệu truyền cảm hứng, piano và synth, nhịp 110 BPM, dài 30 giây.',
+            'Giới hạn mô tả: 5–500 ký tự. Mỗi tài khoản chỉ có một tác vụ AI đang chạy và tối đa ' . max(1, min(10, Env::int('AI_MEDIA_MAX_PER_DAY', 3))) . ' tác vụ/ngày.',
+            'Gửi /cancel để hủy thao tác.',
+        ]));
+    }
+
+    private function startAiImage(string $chatId, string $userId): void
+    {
+        if ($this->botKey !== 'primary' || !AiMediaService::featureEnabled('image')) {
+            $this->telegram->sendMessage($chatId, '🖼️ CHỈNH SỬA ẢNH AI hiện chưa được mở. Admin cần bật AI Studio, cấu hình OPENAI_API_KEY và khởi chạy AI Worker trong Render.');
+            return;
+        }
+        $this->setPending($userId, 'ai_image_prompt');
+        $this->telegram->sendMessage($chatId, implode("\n", [
+            '🖼️ <b>CHỈNH SỬA ẢNH AI</b>',
+            'Bước 1: Gửi mô tả điều bạn muốn thay đổi trên ảnh.',
+            'Bước 2: Gửi một ảnh JPG, PNG hoặc WEBP trong cuộc trò chuyện riêng với bot.',
+            'Ví dụ: Giữ nguyên gương mặt và bố cục, đổi nền thành studio màu xanh đậm, ánh sáng điện ảnh, ảnh chân thực.',
+            'Không gửi ảnh bạn không có quyền sử dụng hoặc ảnh nhạy cảm của người khác.',
+            'Mô tả: 5–1.000 ký tự. Gửi /cancel để hủy thao tác.',
+        ]));
+    }
+
+    private function handleAiImagePhoto(string $chatId, string $userId, array $message, array $pending): void
+    {
+        if ($this->botKey !== 'primary' || !AiMediaService::featureEnabled('image')) {
+            $this->clearPending($userId);
+            $this->telegram->sendMessage($chatId, 'Dịch vụ chỉnh sửa ảnh AI vừa được tạm tắt. Hãy kiểm tra lại sau.');
+            return;
+        }
+        if ((string) ($message['chat']['type'] ?? 'private') !== 'private') {
+            $this->telegram->sendMessage($chatId, 'Vui lòng gửi ảnh trong cuộc trò chuyện riêng với HENDY BOT.');
+            return;
+        }
+        $photos = is_array($message['photo'] ?? null) ? $message['photo'] : [];
+        if ($photos === []) {
+            $this->telegram->sendMessage($chatId, 'Không tìm thấy ảnh hợp lệ. Hãy gửi lại JPG, PNG hoặc WEBP.');
+            return;
+        }
+        $photo = $photos[count($photos) - 1];
+        $fileId = trim((string) ($photo['file_id'] ?? ''));
+        $fileSize = (int) ($photo['file_size'] ?? 0);
+        $prompt = trim((string) (self::jsonArray($pending['payload'] ?? [])['prompt'] ?? ''));
+        $caption = trim((string) ($message['caption'] ?? ''));
+        if ($caption !== '') $prompt = trim($prompt . "\n" . $caption);
+        if ($fileId === '' || ($fileSize > 0 && $fileSize > 20_971_520)) {
+            $this->telegram->sendMessage($chatId, 'Ảnh không hợp lệ hoặc vượt giới hạn 20 MB. Hãy gửi ảnh nhỏ hơn.');
+            return;
+        }
+        if (mb_strlen($prompt, 'UTF-8') < 5 || mb_strlen($prompt, 'UTF-8') > 1000) {
+            $this->telegram->sendMessage($chatId, 'Mô tả chỉnh sửa phải từ 5 đến 1.000 ký tự. Gửi lại mô tả trước khi tải ảnh.');
+            $this->setPending($userId, 'ai_image_prompt');
+            return;
+        }
+        $this->createAiMediaJob($chatId, $userId, 'image', $prompt, $fileId);
     }
 
     private function createAiMediaJob(string $chatId, string $userId, string $type, string $prompt, string $sourceFileId = ''): void
@@ -914,10 +1017,14 @@ final class BotService
             case 'customer':
                 $this->showCustomer($chatId, $userId);
                 return;
+            case 'ai-features':
+                $this->showAiFeaturesMenu($chatId);
+                return;
             case 'music-ai':
+                $this->startAiMusic($chatId, $userId);
+                return;
             case 'image-ai':
-                $this->clearPending($userId);
-                $this->sendUnavailableNotice($chatId);
+                $this->startAiImage($chatId, $userId);
                 return;
             case 'linked-accounts':
                 $this->showLiveAccounts($chatId, $userId);
@@ -2702,9 +2809,24 @@ final class BotService
                 return true;
 
             case 'ai_music_prompt':
+                if (mb_strlen($text, 'UTF-8') < 5 || mb_strlen($text, 'UTF-8') > 500) {
+                    $this->telegram->sendMessage($chatId, 'Mô tả nhạc cần từ 5 đến 500 ký tự. Hãy gửi lại hoặc dùng /cancel để hủy.');
+                    return true;
+                }
+                $this->createAiMediaJob($chatId, $userId, 'music', $text);
+                return true;
+
             case 'ai_image_prompt':
-                $this->clearPending($userId);
-                $this->sendUnavailableNotice($chatId);
+                if (mb_strlen($text, 'UTF-8') < 5 || mb_strlen($text, 'UTF-8') > 1000) {
+                    $this->telegram->sendMessage($chatId, 'Mô tả chỉnh ảnh cần từ 5 đến 1.000 ký tự. Hãy gửi lại hoặc dùng /cancel để hủy.');
+                    return true;
+                }
+                $this->setPending($userId, 'ai_image_photo', ['prompt' => $text]);
+                $this->telegram->sendMessage($chatId, '✅ Đã nhận mô tả. Bây giờ gửi một ảnh JPG, PNG hoặc WEBP (tối đa 20 MB) để AI chỉnh sửa.');
+                return true;
+
+            case 'ai_image_photo':
+                $this->telegram->sendMessage($chatId, '🖼️ HENDY đang chờ ảnh đầu vào. Gửi ảnh JPG, PNG hoặc WEBP hoặc dùng /cancel để hủy.');
                 return true;
 
             case 'giftcode':

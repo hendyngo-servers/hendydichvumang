@@ -44,7 +44,7 @@ $assert(!str_contains($telegramAuthSource, 'pg_advisory_xact_lock'), 'webhook/se
 $assert(str_contains($telegramAuthSource, 'char_length(telegram_webhook_secrets.secret_value) BETWEEN 32 AND 256') && str_contains($telegramAuthSource, 'secret_value !~'), 'PostgreSQL-safe secret validation combines character allowlist and length bounds');
 $assert(str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS website_session_secrets'), 'database schema creates the website session secret table used by authentication');
 $aiCoverSource = file_get_contents(dirname(__DIR__) . '/app/AiCoverService.php');
-$assert(str_contains($aiCoverSource, 'public static function runtimeEnabled()') && str_contains($aiCoverSource, 'public static function setServiceEnabled'), 'AI Cover member access has an Admin runtime toggle behind infrastructure readiness');
+$assert(str_contains($aiCoverSource, 'public static function runtimeEnabled()') && str_contains($aiCoverSource, 'public static function setServiceEnabled') && str_contains($aiCoverSource, 'hasReadyVoice()') && str_contains($aiCoverSource, 'voiceReady'), 'AI Cover member access requires a recent licensed preset and an Admin runtime toggle');
 $assert(TelegramLink::normalize('https://t.me/HendySupportGroup') === 'https://t.me/HendySupportGroup', 'chấp nhận liên kết Telegram HTTPS hợp lệ');
 $assert(TelegramLink::normalize('https://t.me/+Invite_Code-123') === 'https://t.me/+Invite_Code-123', 'chấp nhận liên kết mời Telegram');
 $assert(TelegramLink::normalize('http://t.me/HendySupportGroup') === '', 'từ chối liên kết Telegram không HTTPS');
@@ -112,6 +112,7 @@ $assert(str_contains($apiControllerSource, '/api/admin/ai-media') && str_contain
 $assert(str_contains($aiServiceSource, 'AI_MEDIA_QUEUE_ENABLED') && str_contains($aiServiceSource, 'ELEVENLABS_API_KEY') && str_contains($aiServiceSource, 'OPENAI_API_KEY'), 'AI generation uses server-side secrets and an explicit queue toggle');
 $assert(str_contains($botServiceSource, "case 'ai-features':") && str_contains($botServiceSource, 'private function showAiFeaturesMenu') && str_contains($botServiceSource, "'member:music-ai'") && str_contains($botServiceSource, "'member:image-ai'") && str_contains($botServiceSource, "'member:ai-cover'"), 'menu TÍNH NĂNG AI mở đủ ba công cụ AI');
 $assert(str_contains($botServiceSource, 'private function startAiMusic') && str_contains($botServiceSource, 'private function startAiImage') && str_contains($botServiceSource, 'private function handleAiImagePhoto') && str_contains($botServiceSource, "case 'ai_music_prompt':") && str_contains($botServiceSource, "case 'ai_image_prompt':"), 'AI Music and Image prompts connect to real job queue handlers');
+$assert(str_contains($botServiceSource, "preg_match('/^\\\\/cancel") && str_contains($botServiceSource, "preg_match('/^\\\\/(?:ai|aifeatures)"), 'Bot supports /cancel and /ai shortcuts for pending prompts and AI submenu');
 $welcomeStart = strpos($botServiceSource, '$lines = [', strpos($botServiceSource, 'private function sendHome'));
 $welcomeEnd = $welcomeStart === false ? false : strpos($botServiceSource, '];', $welcomeStart);
 $welcomeBlock = ($welcomeStart !== false && $welcomeEnd !== false) ? substr($botServiceSource, $welcomeStart, $welcomeEnd - $welcomeStart) : '';

@@ -104,7 +104,7 @@ final class NeonStorage
         $uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
         if (preg_match('#\Aai-cover/sources/'.$uuid.'/source\.(?:mp3|wav|flac|m4a|aac|ogg|opus)\z#i',$key) === 1) return true;
         if (preg_match('#\Aai-cover/results/'.$uuid.'/cover\.mp3\z#i',$key) === 1) return true;
-        if (preg_match('#\Aai-cover/models/[a-z0-9][a-z0-9_-]{1,47}/voice\.(?:pth|index)\z#',$key) === 1) return true;
+        if (preg_match('#\Aai-cover/models/[a-z0-9][a-z0-9_-]{1,47}/voice(?:-[a-f0-9]{16})?\.(?:pth|index)\z#',$key) === 1) return true;
         return false;
     }
     /**

@@ -16,6 +16,11 @@ final class AiCoverService
 
     public static function enabled(): bool
     {
+        return self::infrastructureReady() && self::runtimeEnabled();
+    }
+
+    private static function infrastructureReady(): bool
+    {
         if (!Env::bool('AI_COVER_ENABLED', false) || !Env::bool('AI_COVER_WORKER_ENABLED', false)) return false;
         try {
             return NeonStorage::configured()
@@ -26,19 +31,43 @@ final class AiCoverService
         }
     }
 
+    public static function runtimeEnabled(): bool
+    {
+        return (string) (Database::value('SELECT value FROM app_settings WHERE key=?', ['ai_cover_enabled']) ?? '0') === '1';
+    }
+
+    public static function setServiceEnabled(bool $enabled, string $adminId): array
+    {
+        if ($enabled && !self::infrastructureReady()) {
+            throw new RuntimeException('AI Cover chưa đủ cấu hình. Cần bật AI_COVER_ENABLED và AI_COVER_WORKER_ENABLED, cấu hình worker HTTPS, callback secret và Neon Object Storage trước.');
+        }
+        Database::run(
+            'INSERT INTO app_settings(key,value,is_public,updated_at) VALUES(?,?,FALSE,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,is_public=FALSE,updated_at=NOW()',
+            ['ai_cover_enabled', $enabled ? '1' : '0']
+        );
+        return [
+            'enabled' => self::enabled(),
+            'runtimeEnabled' => self::runtimeEnabled(),
+            'adminId' => $adminId,
+        ];
+    }
+
     public static function readiness(): array
     {
         $storage = false;
         try { $storage = NeonStorage::configured(); } catch (Throwable) {}
         $secretConfigured = strlen(trim((string) Env::get('AI_COVER_CALLBACK_SECRET', ''))) >= 32;
         $workerUrl = self::workerBaseUrl();
+        $infrastructureReady = self::infrastructureReady();
         return [
             'enabled' => self::enabled(),
+            'runtimeEnabled' => self::runtimeEnabled(),
+            'infrastructureReady' => $infrastructureReady,
             'workerEnabled' => Env::bool('AI_COVER_WORKER_ENABLED', false),
             'workerConfigured' => $workerUrl !== '',
             'storageConfigured' => $storage,
             'callbackSecretConfigured' => $secretConfigured,
-            'ready' => self::enabled(),
+            'ready' => $infrastructureReady,
         ];
     }
 

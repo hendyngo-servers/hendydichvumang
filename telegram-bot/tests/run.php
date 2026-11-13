@@ -42,6 +42,12 @@ $assert = static function (bool $condition, string $message) use (&$checks): voi
 };
 
 $schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
+$databaseRunnerSource = file_get_contents(dirname(__DIR__) . '/app/Database.php');
+$migrationCliSource = file_get_contents(dirname(__DIR__) . '/bin/migrate.php');
+$databaseDoctorSource = file_get_contents(dirname(__DIR__) . '/bin/database-doctor.php');
+$startupScriptSource = file_get_contents(dirname(__DIR__) . '/docker/start.sh');
+$configValidatorSource = file_get_contents(dirname(__DIR__) . '/bin/validate-config.php');
+$providerRegistryUiSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/index.html');
 
 $productReadinessBase = [
     'is_active' => true, 'stock' => 3,
@@ -56,6 +62,25 @@ $assert(ProductReadinessService::isSellable($productReadinessBase), 'product can
 $assert(class_exists(ServiceReadinessService::class), 'Admin service readiness report is registered without exposing provider secret values');
 $serviceReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ServiceReadinessService.php');
 $assert(str_contains($serviceReadinessSource, "'secretValuesReturned' => false") && str_contains($serviceReadinessSource, "'providerCredentialsStoredInDatabase' => false"), 'service readiness exposes configuration status only, never secret values');
+$assert(str_contains($databaseRunnerSource, 'current_database()') && str_contains($databaseRunnerSource, 'current_user') && str_contains($databaseRunnerSource, 'schema_migrations') && str_contains($databaseRunnerSource, 'hash_file(\'sha256\''), 'Database doctor and migration plan identify the connected database/role and track migration checksums');
+$assert(str_contains($databaseRunnerSource, 'hash_equals($expectedDatabase') && str_contains($databaseRunnerSource, '-pooler') && str_contains($databaseRunnerSource, 'hendy_bot_app') && str_contains($databaseRunnerSource, 'pg_advisory_lock'), 'Migration runner refuses the wrong database, pooled Neon connections and the restricted runtime role, with a concurrency lock');
+$assert(str_contains($databaseRunnerSource, 'beginTransaction()') && str_contains($databaseRunnerSource, 'rollBack()') && str_contains($databaseRunnerSource, 'checksum mismatch'), 'Each additive migration is transactional and checksum drift is rejected');
+$assert(str_contains($migrationCliSource, '$apply = in_array(\'--apply\', $argv, true)') && str_contains($migrationCliSource, '--expect-database=') && str_contains($migrationCliSource, 'MIGRATION_DATABASE_URL') && str_contains($migrationCliSource, 'DRY RUN'), 'Migration CLI defaults to a read-only dry-run and requires an explicit expected database before apply');
+$assert(str_contains($databaseDoctorSource, 'Database::migrationPlan()') && str_contains($databaseDoctorSource, 'READ ONLY') && !str_contains($databaseDoctorSource, 'Database::migrate('), 'Database doctor is read-only and never applies schema changes');
+$assert(str_contains($startupScriptSource, 'RUN_MIGRATIONS_ON_START:-false') && str_contains($startupScriptSource, 'APP_ENV') && str_contains($startupScriptSource, 'RUN_MIGRATIONS_ON_START=true không được phép'), 'Production container startup fails closed when automatic DDL migration is enabled');
+$assert(str_contains($startupScriptSource, 'MIGRATION_EXPECTED_DATABASE') && str_contains($startupScriptSource, '--expect-database=') && str_contains($startupScriptSource, 'MIGRATION_DATABASE_URL'), 'Non-production startup migration requires a confirmed DB name and a dedicated migration URL');
+$assert(!str_contains($configValidatorSource, "TelegramAuth::token('secondary')") && str_contains($configValidatorSource, 'một bot chính (BOT1_TOKEN)') && str_contains($configValidatorSource, 'BOT2 cũ'), 'Configuration validator matches the one-bot deployment and warns about unused legacy BOT2 settings');
+$assert(str_contains($providerRegistrySource, "'schemaReady' => false") && str_contains($providerRegistrySource, 'requireSchemaReady') && str_contains($providerRegistrySource, 'Thiếu bảng:'), 'Provider Registry returns an actionable schema-not-ready state and guards writes until migration');
+$assert(str_contains($providerRegistryUiSource, 'Database chưa sẵn sàng cho Provider Registry') && str_contains($providerRegistryUiSource, 'missingTables'), 'Admin dashboard explains which Provider Registry tables are missing');
+$assert(str_contains($providerRegistrySource, 'catch (\\Throwable $error)') && str_contains($providerRegistrySource, 'provider-registry-access-control'), 'Missing registry tables cannot crash normal member API access');
+$migrationFiles = glob(dirname(__DIR__) . '/database/migrations/*.sql') ?: [];
+$assert(count($migrationFiles) >= 9, 'All additive SQL migrations are included in the migration directory');
+foreach ($migrationFiles as $migrationFile) {
+    $migrationSql = (string) file_get_contents($migrationFile);
+    $migrationName = basename($migrationFile);
+    $destructive = preg_match('/^\\s*(?:DROP\\s+(?:TABLE|COLUMN|SCHEMA|INDEX)|TRUNCATE\\b|DELETE\\s+FROM)\\b/im', $migrationSql) === 1;
+    $assert(!$destructive, 'Migration does not delete existing customer/business data: ' . $migrationName);
+}
 
 
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'supplier_access_status' => 'pending']), 'unverified supplier keeps product locked');

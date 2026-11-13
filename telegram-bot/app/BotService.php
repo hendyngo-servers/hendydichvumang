@@ -476,18 +476,30 @@ final class BotService
 
     private function showAiFeaturesMenu(string $chatId): void
     {
-        $musicReady = AiMediaService::featureEnabled('music');
-        $imageReady = AiMediaService::featureEnabled('image');
-        $coverReady = AiCoverService::enabled();
-        $status = static fn(bool $ready): string => $ready ? '🟢 Đang mở' : '🟡 Chưa sẵn sàng';
+        $media = AiMediaService::readiness();
+        $cover = AiCoverService::readiness();
+        $musicReady = (bool) $media['musicEnabled'];
+        $imageReady = (bool) $media['imageEnabled'];
+        $coverReady = (bool) $cover['enabled'];
+        $musicStatus = $musicReady ? '🟢 Đang mở'
+            : (!$media['queueConfigured'] ? '🟡 Worker chưa cấu hình'
+                : (!$media['adminEnabled'] || !$media['musicFlag'] ? '🟡 Admin chưa mở dịch vụ'
+                    : (!$media['musicKeyConfigured'] ? '🟡 Máy chủ chưa có cấu hình âm nhạc' : '🟡 Đang tạm khóa')));
+        $imageStatus = $imageReady ? '🟢 Đang mở'
+            : (!$media['queueConfigured'] ? '🟡 Worker chưa cấu hình'
+                : (!$media['adminEnabled'] || !$media['imageFlag'] ? '🟡 Admin chưa mở dịch vụ'
+                    : (!$media['imageKeyConfigured'] ? '🟡 Máy chủ chưa có cấu hình chỉnh ảnh' : '🟡 Đang tạm khóa')));
+        $coverStatus = $coverReady ? '🟢 Đang mở'
+            : (!$cover['infrastructureReady'] ? '🟡 Worker / Storage chưa sẵn sàng'
+                : (!$cover['voiceReady'] ? '🟡 Đang chờ preset được cấp phép' : '🟡 Admin chưa mở dịch vụ'));
         $lines = [
             '🤖 <b>HENDY · TÍNH NĂNG AI</b>',
             '━━━━━━━━━━━━━━━━━━━━',
             'Chọn công cụ sáng tạo bạn muốn sử dụng:',
             '',
-            '🎤 AI Cover: ' . $status($coverReady),
-            '🎵 Tạo âm nhạc AI: ' . $status($musicReady),
-            '🖼️ Chỉnh sửa ảnh AI: ' . $status($imageReady),
+            '🎤 AI Cover: ' . $coverStatus,
+            '🎵 Tạo âm nhạc AI: ' . $musicStatus,
+            '🖼️ Chỉnh sửa ảnh AI: ' . $imageStatus,
             '',
             'Các tác vụ được đưa vào hàng đợi và bot sẽ gửi kết quả trực tiếp trong cuộc trò chuyện. API key không hiển thị cho người dùng.',
         ];

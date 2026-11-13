@@ -241,6 +241,18 @@ final class ProviderRegistryService
      * Local configuration check only. It does not send credentials to the
      * provider and does not claim that an external API call succeeded.
      */
+    private static function requiredEnvKey(string $serviceKey, string $adapterKey): string
+    {
+        return match ([$serviceKey, $adapterKey]) {
+            ['proxy', 'homeproxy'] => 'HOMEPROXY_ENCRYPTION_KEY',
+            ['ai_music', 'ai_media'] => 'ELEVENLABS_API_KEY',
+            ['ai_image', 'ai_media'] => 'OPENAI_API_KEY',
+            ['ai_cover', 'ai_cover_worker'] => 'AI_COVER_CALLBACK_SECRET',
+            ['vietsub', 'video_worker'] => 'VIDEO_PROCESSOR_SECRET',
+            default => '',
+        };
+    }
+
     public static function checkProvider(int $id): array
     {
         $row = Database::one(
@@ -250,7 +262,9 @@ final class ProviderRegistryService
         if ($row === null) throw new RuntimeException('Không tìm thấy nhà cung cấp.');
         $adapter = self::ADAPTERS[(string) $row['adapter_key']] ?? ['implemented' => false];
         $envKey = (string) $row['credential_env_key'];
-        $secretConfigured = $envKey !== '' && trim((string) Env::get($envKey, '')) !== '';
+        $requiredEnvKey = self::requiredEnvKey((string) $row['service_key'], (string) $row['adapter_key']);
+        $checkedEnvKey = $requiredEnvKey !== '' ? $requiredEnvKey : $envKey;
+        $secretConfigured = $checkedEnvKey !== '' && trim((string) Env::get($checkedEnvKey, '')) !== '';
         $endpointConfigured = trim((string) $row['endpoint_url']) !== '';
         if (!self::dbBool($row['enabled'])) {
             $status = 'disabled';
@@ -258,9 +272,12 @@ final class ProviderRegistryService
         } elseif (!(bool) ($adapter['implemented'] ?? false)) {
             $status = 'adapter_unavailable';
             $message = 'Chưa có adapter được kiểm thử trong mã nguồn; không cho phép thực thi tự động.';
-        } elseif ($envKey !== '' && !$secretConfigured) {
+        } elseif ($requiredEnvKey !== '' && $envKey !== $requiredEnvKey) {
             $status = 'missing_environment';
-            $message = 'Chưa tìm thấy giá trị của biến ' . $envKey . ' trong Environment máy chủ.';
+            $message = 'Adapter này yêu cầu đúng tên biến ' . $requiredEnvKey . ' trong Environment máy chủ.';
+        } elseif ($checkedEnvKey !== '' && !$secretConfigured) {
+            $status = 'missing_environment';
+            $message = 'Chưa tìm thấy giá trị của biến ' . $checkedEnvKey . ' trong Environment máy chủ.';
         } elseif ($row['adapter_key'] !== 'manual' && !$endpointConfigured && $row['adapter_key'] !== 'code_telegram') {
             $status = 'missing_endpoint';
             $message = 'Chưa khai báo Endpoint HTTPS.';

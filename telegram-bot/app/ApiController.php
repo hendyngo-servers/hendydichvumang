@@ -265,7 +265,7 @@ final class ApiController
                 throw new HttpException(400, 'Sản phẩm không hợp lệ.');
             }
             $order = Database::transaction(function () use ($userId, $productId): array {
-                $product = Database::one('SELECT * FROM products WHERE id = ? AND is_active = TRUE FOR UPDATE', [$productId]);
+                $product = Database::one('SELECT * FROM products WHERE id = ? AND is_active = TRUE AND ' . ProductReadinessService::sqlPredicate() . ' FOR UPDATE', [$productId]);
                 if ($product === null) throw new HttpException(404, 'Sản phẩm hiện không còn bán.');
                 if ($product['stock'] !== null && (int) $product['stock'] <= 0) throw new HttpException(409, 'Sản phẩm đã hết hàng.');
                 Database::run(
@@ -1067,13 +1067,21 @@ final class ApiController
             $image = $this->text($this->body['imageUrl'] ?? '', 500);
             self::validateHttps($image, 'Ảnh sản phẩm phải dùng HTTPS.');
             $metadata = $brand !== '' ? ['brand' => $brand] : [];
+            try {
+                $provider = $this->productProviderInput([]);
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            }
             $product = Database::one(
-                'INSERT INTO products (slug, name, category, description, price, duration_days, stock, vip_level, image_url, metadata, is_active) ' .
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, TRUE) RETURNING *',
-                [$slug, $name, $category, $description, $price, $days, $stock, $vip, $image ?: null, json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]
+                'INSERT INTO products (slug, name, category, description, price, duration_days, stock, vip_level, image_url, metadata, is_active, supplier_name, supplier_url, supplier_product_ref, source_url, source_permission_status, supplier_access_status, fulfillment_mode, credential_env_key, verified_by, verified_at) ' .
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, TRUE, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz) RETURNING *',
+                [$slug, $name, $category, $description, $price, $days, $stock, $vip, $image ?: null, json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    $provider['supplier_name'], $provider['supplier_url'], $provider['supplier_product_ref'], $provider['source_url'],
+                    $provider['source_permission_status'], $provider['supplier_access_status'], $provider['fulfillment_mode'],
+                    $provider['credential_env_key'], $provider['verified_by'], $provider['verified_at']]
             );
-            $this->audit('product.create', $slug, ['category' => $category, 'price' => $price]);
-            return self::response(['product' => self::publicProduct($product)], 201);
+            $this->audit('product.create', $slug, ['category' => $category, 'price' => $price, 'sourcePermissionStatus' => $provider['source_permission_status'], 'supplierAccessStatus' => $provider['supplier_access_status']]);
+            return self::response(['product' => self::adminProduct($product)], 201);
         }
 
         if (preg_match('#^/api/admin/products/(\d{1,18})$#', $path, $match)) {
@@ -1110,12 +1118,20 @@ final class ApiController
                     throw new HttpException(400, 'Thông tin sản phẩm không hợp lệ.');
                 }
                 self::validateHttps($image, 'Ảnh sản phẩm phải dùng HTTPS.');
+                try {
+                    $provider = $this->productProviderInput($current);
+                } catch (RuntimeException $error) {
+                    throw new HttpException(400, $error->getMessage());
+                }
                 $product = Database::one(
-                    'UPDATE products SET name = ?, category = ?, description = ?, price = ?, duration_days = ?, stock = ?, vip_level = ?, image_url = ?, metadata = ?::jsonb, is_active = ?, updated_at = NOW() WHERE id = ? RETURNING *',
-                    [$name, $category, $description, $price, $days, $stock, $vip, $image ?: null, json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $active, $id]
+                    'UPDATE products SET name = ?, category = ?, description = ?, price = ?, duration_days = ?, stock = ?, vip_level = ?, image_url = ?, metadata = ?::jsonb, is_active = ?, supplier_name = ?, supplier_url = ?, supplier_product_ref = ?, source_url = ?, source_permission_status = ?, supplier_access_status = ?, fulfillment_mode = ?, credential_env_key = ?, verified_by = ?, verified_at = ?::timestamptz, updated_at = NOW() WHERE id = ? RETURNING *',
+                    [$name, $category, $description, $price, $days, $stock, $vip, $image ?: null, json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $active,
+                        $provider['supplier_name'], $provider['supplier_url'], $provider['supplier_product_ref'], $provider['source_url'],
+                        $provider['source_permission_status'], $provider['supplier_access_status'], $provider['fulfillment_mode'],
+                        $provider['credential_env_key'], $provider['verified_by'], $provider['verified_at'], $id]
                 );
-                $this->audit('product.update', $id, ['isActive' => $active, 'category' => $category, 'price' => $price]);
-                return self::response(['product' => self::publicProduct($product)]);
+                $this->audit('product.update', $id, ['isActive' => $active, 'category' => $category, 'price' => $price, 'sourcePermissionStatus' => $provider['source_permission_status'], 'supplierAccessStatus' => $provider['supplier_access_status'], 'fulfillmentMode' => $provider['fulfillment_mode']]);
+                return self::response(['product' => self::adminProduct($product)]);
             }
             if ($method === 'DELETE') {
                 $deleted = Database::run('UPDATE products SET is_active = FALSE, updated_at = NOW() WHERE id = ? RETURNING id', [$id]);
@@ -1622,9 +1638,81 @@ final class ApiController
         }
         if (!$includeInactive) {
             $where[] = 'is_active = TRUE';
+            $where[] = ProductReadinessService::sqlPredicate();
+            $where[] = '(stock IS NULL OR stock > 0)';
         }
         $sql = 'SELECT * FROM products' . ($where !== [] ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY category, created_at DESC LIMIT 250';
-        return array_map(self::publicProduct(...), Database::all($sql, $parameters));
+        return array_map(
+            $includeInactive ? self::adminProduct(...) : self::publicProduct(...),
+            Database::all($sql, $parameters)
+        );
+    }
+
+    private static function adminProduct(array $row): array
+    {
+        return [...self::publicProduct($row), ...ProductReadinessService::adminFields($row)];
+    }
+
+    private function productProviderInput(array $current): array
+    {
+        $get = function (string $input, string $column, int $limit = 500) use ($current): string {
+            return array_key_exists($input, $this->body)
+                ? $this->text($this->body[$input], $limit)
+                : (string) ($current[$column] ?? '');
+        };
+        $supplierName = $get('supplierName', 'supplier_name', 120);
+        $supplierUrl = ProductReadinessService::validateHttpsUrl($get('supplierUrl', 'supplier_url'), 'URL nhà cung cấp');
+        $supplierRef = $get('supplierProductRef', 'supplier_product_ref', 160);
+        $sourceUrl = ProductReadinessService::validateHttpsUrl($get('sourceUrl', 'source_url'), 'URL nguồn / hồ sơ quyền sử dụng');
+        $permission = strtolower($get('sourcePermissionStatus', 'source_permission_status', 16) ?: 'pending');
+        $access = strtolower($get('supplierAccessStatus', 'supplier_access_status', 16) ?: 'pending');
+        $fulfillment = strtolower($get('fulfillmentMode', 'fulfillment_mode', 16) ?: 'manual');
+        $envKey = ProductReadinessService::validateEnvKey($get('credentialEnvKey', 'credential_env_key', 64));
+        if (!in_array($permission, ['pending','authorized','rejected'], true)) {
+            throw new RuntimeException('Trạng thái quyền nguồn không hợp lệ.');
+        }
+        if (!in_array($access, ['pending','verified','revoked'], true)) {
+            throw new RuntimeException('Trạng thái nhà cung cấp không hợp lệ.');
+        }
+        if (!in_array($fulfillment, ['manual','api'], true)) {
+            throw new RuntimeException('Phương thức bàn giao không hợp lệ.');
+        }
+
+        $sourceChanged = $current !== [] && $sourceUrl !== (string) ($current['source_url'] ?? '');
+        $supplierChanged = $current !== [] && (
+            $supplierName !== (string) ($current['supplier_name'] ?? '')
+            || $supplierUrl !== (string) ($current['supplier_url'] ?? '')
+            || $supplierRef !== (string) ($current['supplier_product_ref'] ?? '')
+        );
+        // Changing proof or supplier identity invalidates the old attestation.
+        if ($sourceChanged) $permission = 'pending';
+        if ($supplierChanged) $access = 'pending';
+
+        $fullyVerified = $permission === 'authorized' && $access === 'verified';
+        $wasVerified = (string) ($current['source_permission_status'] ?? '') === 'authorized'
+            && (string) ($current['supplier_access_status'] ?? '') === 'verified';
+        $verifiedBy = '';
+        $verifiedAt = null;
+        if ($fullyVerified) {
+            $verifiedBy = $wasVerified && !$sourceChanged && !$supplierChanged
+                ? (string) ($current['verified_by'] ?? '')
+                : (string) ($this->user['id'] ?? '');
+            $verifiedAt = $wasVerified && !$sourceChanged && !$supplierChanged
+                ? ($current['verified_at'] ?? null)
+                : gmdate('c');
+        }
+        return [
+            'supplier_name' => $supplierName,
+            'supplier_url' => $supplierUrl,
+            'supplier_product_ref' => $supplierRef,
+            'source_url' => $sourceUrl,
+            'source_permission_status' => $permission,
+            'supplier_access_status' => $access,
+            'fulfillment_mode' => $fulfillment,
+            'credential_env_key' => $envKey,
+            'verified_by' => $verifiedBy,
+            'verified_at' => $verifiedAt,
+        ];
     }
 
     private function settings(array $keys, bool $publicOnly): array
@@ -1791,6 +1879,7 @@ final class ApiController
             'vipLevel' => (int) $row['vip_level'],
             'imageUrl' => $row['image_url'] ?? '',
             'isActive' => filter_var($row['is_active'], FILTER_VALIDATE_BOOLEAN),
+            'isSellable' => ProductReadinessService::isSellable($row),
             'metadata' => self::jsonArray($row['metadata'] ?? []),
         ];
     }

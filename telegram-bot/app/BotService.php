@@ -101,6 +101,15 @@ final class BotService
         if (!preg_match('/^\d{5,20}$/', $userId) || $chatId === '' || ($text === '' && $photos === [] && !$audioMessage)) {
             return;
         }
+        if (preg_match('/^\/cancel(?:@\w+)?$/u', $text)) {
+            $this->clearPending($userId);
+            $this->telegram->sendMessage($chatId, '✅ Đã hủy thao tác đang chờ. Dữ liệu nhập tạm đã được xóa.');
+            return;
+        }
+        if (preg_match('/^\/(?:ai|aifeatures)(?:@\w+)?$/u', $text)) {
+            $this->showAiFeaturesMenu($chatId);
+            return;
+        }
         if (preg_match('/^\/code(?:@\w+)?(?:\s+(.+))?$/u', $text, $codeMatch)) {
             $this->showCodeTelegramCodes($chatId, trim((string) ($codeMatch[1] ?? '')));
             return;

@@ -30,6 +30,8 @@ use Hendy\BotMenuDefinition;
 use Hendy\WebhookSecurity;
 use Hendy\WebServiceKernel;
 use Hendy\ProductReadinessService;
+use Hendy\ServiceReadinessService;
+use Hendy\ProviderRegistryService;
 
 $checks = 0;
 $assert = static function (bool $condition, string $message) use (&$checks): void {

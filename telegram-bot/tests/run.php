@@ -91,6 +91,8 @@ $assert(str_contains($botServiceSource, '$widths = [2, 1]') && str_contains($bot
 $startupSource = file_get_contents(dirname(__DIR__) . '/docker/start.sh');
 $webhookRegistrationSource = file_get_contents(dirname(__DIR__) . '/bin/register-webhook.php');
 $assert(str_contains($startupSource, 'php bin/register-webhook.php') && str_contains($webhookRegistrationSource, '$telegram->setWebhook($webhookUrl, $secret)') && str_contains($webhookRegistrationSource, 'getWebhookInfo'), 'Render startup đăng ký và xác minh webhook Telegram chính');
+$assert(str_contains($startupSource, 'VIDEO_WORKER_ENABLED') && str_contains($startupSource, 'php bin/video-worker.php') && str_contains($startupSource, 'VIDEO_PROCESSOR_SECRET'), 'Vietsub worker starts only when its HTTPS provider URL and secret are configured');
+
 $assert(str_contains($botServiceSource, "'menu_mode' => 'inline_keyboard'"), 'menu mặc định là Inline Keyboard');
 $assert(str_contains($botServiceSource, "return ['inline_keyboard' => \$rows];"), 'menu luôn gửi Inline Keyboard, kể cả cấu hình cũ');
 $assert(str_contains($botServiceSource, "if (\$item['action'] === 'miniapp')") && str_contains($botServiceSource, "'web_app' => ['url' => \$url]"), 'nút Mở Mini App dùng Telegram Web App trực tiếp');
@@ -123,6 +125,9 @@ $productReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ProductRead
 $assert(str_contains($productReadinessMigration, "DEFAULT 'pending'") && str_contains($productReadinessMigration, 'credential_env_key') && str_contains($productReadinessMigration, 'No wallet'), 'supplier readiness migration is additive and defaults all catalog items to locked');
 $assert(str_contains($productReadinessSource, 'source_permission_status') && str_contains($productReadinessSource, 'supplier_access_status') && str_contains($productReadinessSource, "fulfillment_mode = 'manual'"), 'single product readiness policy verifies supplier, rights and manual fulfillment');
 $assert(str_contains($apiControllerSource, 'productProviderInput') && str_contains($apiControllerSource, 'ProductReadinessService::sqlPredicate()') && str_contains($apiControllerSource, 'adminProduct($product)'), 'Admin product CRUD records supplier evidence and checkout is gated');
+$assert(str_contains($apiControllerSource, '/api/admin/service-readiness') && str_contains($apiControllerSource, 'ServiceReadinessService::snapshot'), 'Admin has a protected endpoint for service and supplier readiness');
+$assert(str_contains($adminDashboardSource, 'data-admin-tab="service-readiness"') && str_contains($adminDashboardSource, 'adminServiceReadiness()') && str_contains($adminDashboardSource, '/api/admin/service-readiness'), 'Admin Dashboard exposes provider readiness and missing configuration names');
+
 
 $assert(str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS is_blocked') && str_contains($userAccessMigration, 'ADD COLUMN IF NOT EXISTS blocked_reason') && str_contains($schemaSource, 'blocked_by TEXT'), 'member access controls have an additive database migration and complete schema');
 $assert(str_contains($apiControllerSource, 'blocked_reason') && str_contains($apiControllerSource, 'user.access') && str_contains($apiControllerSource, 'DELETE FROM legacy_login_tickets WHERE user_id = ?'), 'blocking a member revokes pending login tickets and records an Admin audit event without deleting wallet data');
@@ -237,6 +242,9 @@ $assert(str_contains($renderSource, 'name: hendydichvumang-telegram-bot') && str
 $assert(!str_contains($renderSource, 'BOT2_TOKEN') && str_contains($renderSource, 'BOT1_TOKEN') && str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY'), 'production Blueprint documents the single bot and existing private secrets without copying secret values');
 $assert(!str_contains($envManifest, 'BOT2_TOKEN') && !str_contains($envManifest, 'BOT2_PUBLIC_URL') && !str_contains($envManifest, 'TELEGRAM_SECOND_WEBHOOK_SECRET'), 'runtime environment manifest contains no secondary-bot credentials');
 $assert(str_contains($renderSource, 'HOMEPROXY_ENCRYPTION_KEY') && str_contains($envManifest, 'HOMEPROXY_ENCRYPTION_KEY'), 'HomeProxy encryption secret remains documented in Blueprint and env manifest');
+$assert(str_contains($renderSource, 'RUN_MIGRATIONS_ON_START') && str_contains($renderSource, 'value: "true"'), 'Render applies the idempotent database schema before the new provider-readiness queries run');
+$assert(str_contains($renderSource, 'VIDEO_WORKER_ENABLED') && str_contains($envManifest, 'VIDEO_WORKER_ENABLED') && str_contains($envManifest, 'ELEVENLABS_API_KEY'), 'environment manifest documents the optional video worker and AI music provider credential name');
+
 $assert(str_contains($runtimeWorkflow, 'working-directory: telegram-bot') && str_contains($runtimeWorkflow, 'composer test'), 'monorepo CI runs Bot tests from the isolated application directory');
 $assert(str_contains($sitemapSource, 'hendydichvumang-szad.onrender.com') && str_contains($robotsSource, 'hendydichvumang-szad.onrender.com'), 'sitemap and robots reference the new Static Site hostname');
 $assert(str_contains($databaseSchema, 'https://hendydichvumang-szad.onrender.com') && str_contains($databaseSchema, "'https://hendy-bot-tele.onrender.com'"), 'Bot PostgreSQL migration seeds the new Static Site URL and keeps legacy URL migration rules');

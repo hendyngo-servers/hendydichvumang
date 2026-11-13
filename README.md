@@ -65,6 +65,21 @@ The Admin product form records supplier identity, supplier product reference, so
 
 Before deploying this readiness change to an existing Neon database, follow [the safe migration and provider onboarding checklist](docs/product-provider-onboarding.md) using the database owner/migration role. Production intentionally keeps `RUN_MIGRATIONS_ON_START=false`; CI success alone does not apply a production migration.
 
+## Provider & Service Registry
+
+The existing browser Admin at `/admin` now includes a Provider & Service Registry
+for the service inventory, supplier records, adapter family, Environment variable
+names, API-level service locks and maintenance messages. Provider credentials remain
+in Render Environment; the dashboard never reads or returns their values. The
+configuration check is local only and does not claim a live provider API test.
+
+Before deploying the registry change, apply
+`telegram-bot/database/migrations/20261113_provider_service_registry.sql` to Neon
+using the database owner/migration role. Production keeps
+`RUN_MIGRATIONS_ON_START=false`. See
+[Provider & Service Registry rollout](docs/provider-service-registry.md) for the
+migration, controls and provider activation checklist.
+
 ## Render environment
 
 Set secrets only in Render Environment. Never commit live credentials.

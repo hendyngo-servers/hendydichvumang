@@ -1301,6 +1301,7 @@
       ((d.jobs || []).length ? d.jobs.map(job =>
         '<article class="record"><div class="record-top"><div><b>' + escapeHtml(String(job.id).slice(0,8)) + ' · ' + (job.job_type === 'music' ? '🎵 Âm nhạc AI' : '🖼️ Chỉnh ảnh AI') + '</b><small>User ' + escapeHtml(job.user_id) + ' · ' + new Date(job.created_at).toLocaleString('vi-VN') + '</small></div><span class="status ' + escapeHtml(job.status) + '">' + escapeHtml(job.status) + '</span></div>' +
         (job.error_message ? '<p class="notice warn">' + escapeHtml(job.error_message) + '</p>' : '') +
+        (job.status === 'failed' ? '<button type="button" class="tiny-btn" data-ai-media-retry="' + escapeHtml(job.id) + '">↻ Đưa AI job chạy lại</button>' : '') +
         '</article>'
       ).join('') : empty('Chưa có tác vụ AI','Yêu cầu từ Telegram sẽ hiển thị tại đây sau khi AI Studio được bật.')) +
       '<div class="notice">Tác vụ AI hiện dùng hàng đợi PostgreSQL, giới hạn một job đang chạy trên mỗi thành viên và giới hạn số job mỗi ngày. Chưa cấu hình thu phí AI tự động; không tự trừ ví cho các tác vụ này.</div>';
@@ -1637,6 +1638,17 @@
         toast(result.message || 'Đã cập nhật preset.');
         await renderPage();
       } catch (error) { toast(error.message,'error'); }
+      return;
+    }
+    const aiMediaRetry = event.target.closest('[data-ai-media-retry]');
+    if (aiMediaRetry) {
+      if (!window.confirm('Đưa tác vụ AI Studio này trở lại hàng chờ?')) return;
+      aiMediaRetry.disabled = true;
+      try {
+        const result = await api('/api/admin/ai-media/jobs/' + encodeURIComponent(aiMediaRetry.dataset.aiMediaRetry) + '/retry','POST',{});
+        toast(result.message || 'Đã đưa AI job vào hàng chờ.');
+        await renderPage();
+      } catch (error) { toast(error.message,'error'); aiMediaRetry.disabled = false; }
       return;
     }
     const aiCoverRetry = event.target.closest('[data-ai-cover-retry]');

@@ -83,6 +83,14 @@ $builtInProvider = ProviderRegistryService::validateProviderInput([
 ]);
 $assert($builtInProvider['endpoint_url'] === '' && $builtInProvider['priority'] === 100, 'Adapter tích hợp sẵn có thể dùng endpoint được quản lý qua Environment hoặc cấu hình nội bộ');
 $assert($builtInProvider['credential_env_key'] === 'HOMEPROXY_ENCRYPTION_KEY', 'Adapter HomeProxy tự ràng buộc đúng tên biến khóa mã hóa máy chủ');
+$invalidAdapterPairRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'wrong-adapter', 'name' => 'OTP dùng nhầm adapter',
+        'adapterKey' => 'homeproxy', 'credentialEnvKey' => 'HOMEPROXY_ENCRYPTION_KEY',
+    ]);
+} catch (RuntimeException) { $invalidAdapterPairRejected = true; }
+$assert($invalidAdapterPairRejected, 'Provider Registry không cho ghép adapter HomeProxy vào dịch vụ OTP');
 $invalidPriorityRejected = false;
 try {
     ProviderRegistryService::validateProviderInput([

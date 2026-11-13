@@ -509,6 +509,66 @@ final class ApiController
             ]);
         }
 
+        if ($path === '/api/matchmaking/status' && $method === 'GET') {
+            return self::response(MatchmakingService::status($userId));
+        }
+        if ($path === '/api/matchmaking/history' && $method === 'GET') {
+            return self::response(['matches' => MatchmakingService::history($userId)]);
+        }
+        if ($path === '/api/matchmaking/leaderboard' && $method === 'GET') {
+            return self::response(['players' => MatchmakingService::leaderboard(20)]);
+        }
+        if ($path === '/api/matchmaking/queue' && $method === 'POST') {
+            try {
+                $result = MatchmakingService::joinQueue($userId, (string) ($this->body['mode'] ?? 'quick'));
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            Realtime::publish('matchmaking.queue.changed', ['userId' => $userId, 'state' => $result['state'] ?? 'unknown'], 'admin');
+            if (($result['state'] ?? '') === 'matched' && isset($result['match']['opponentId'])) {
+                $this->notify((string) $result['match']['opponentId'], '⚔️ HENDY đã tìm được đối thủ. Hãy mở Bot và xác nhận trận ghép đôi trong 3 phút.');
+            }
+            return self::response($result, ($result['state'] ?? '') === 'matched' ? 201 : 200);
+        }
+        if ($path === '/api/matchmaking/queue/cancel' && $method === 'POST') {
+            return self::response(['cancelled' => MatchmakingService::cancelQueue($userId)]);
+        }
+        if (preg_match('#^/api/matchmaking/matches/(\\d{1,18})/(accept|decline)$#', $path, $match) && $method === 'POST') {
+            try {
+                $result = $match[2] === 'accept'
+                    ? MatchmakingService::acceptMatch($userId, (int) $match[1])
+                    : MatchmakingService::declineMatch($userId, (int) $match[1]);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            if (($result['state'] ?? '') === 'active') {
+                $this->notify((string) $result['match']['opponentId'], '✅ Cả hai người đã xác nhận. Trận HENDY #' . (int) $match[1] . ' bắt đầu!');
+            } elseif (($result['state'] ?? '') === 'cancelled' && !empty($result['opponentId'])) {
+                $this->notify((string) $result['opponentId'], 'ℹ️ Đối thủ đã từ chối trận ghép đôi. Bạn có thể vào hàng chờ lại.');
+            }
+            return self::response($result);
+        }
+        if (preg_match('#^/api/matchmaking/matches/(\\d{1,18})/result$#', $path, $match) && $method === 'POST') {
+            $scoreFor = filter_var($this->body['scoreFor'] ?? null, FILTER_VALIDATE_INT);
+            $scoreAgainst = filter_var($this->body['scoreAgainst'] ?? null, FILTER_VALIDATE_INT);
+            if ($scoreFor === false || $scoreAgainst === false) throw new HttpException(400, 'Điểm số phải là số nguyên.');
+            try {
+                $result = MatchmakingService::submitResult($userId, (int) $match[1], $scoreFor, $scoreAgainst);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            if (($result['state'] ?? '') === 'disputed') {
+                $this->notify((string) $result['opponentId'], '⚠️ Hai báo cáo kết quả trận #' . (int) $match[1] . ' không khớp. Admin sẽ kiểm tra trước khi cộng điểm.');
+                Realtime::publish('admin.matchmaking.disputed', ['matchId' => (int) $match[1]], 'admin');
+            } elseif (($result['state'] ?? '') === 'pending' && !empty($result['opponentId'])) {
+                $this->notify((string) $result['opponentId'], '📊 Đối thủ đã gửi kết quả trận #' . (int) $match[1] . '. Hãy gửi kết quả theo góc nhìn của bạn để xác nhận.');
+            } elseif (($result['state'] ?? '') === 'confirmed') {
+                $this->notify((string) $result['playerOne'], '🏁 Trận #' . (int) $match[1] . ' đã xác nhận. Điểm thưởng: ' . (int) $result['pointsAwardedOne'] . '. Elo: ' . (int) $result['ratingDeltaOne'] . '.');
+                $this->notify((string) $result['playerTwo'], '🏁 Trận #' . (int) $match[1] . ' đã xác nhận. Điểm thưởng: ' . (int) $result['pointsAwardedTwo'] . '. Elo: ' . (int) $result['ratingDeltaTwo'] . '.');
+            }
+            return self::response($result);
+        }
+
         if ($path === '/api/proxy/homeproxy/status' && $method === 'GET') return self::response(ProxyService::userStatus($userId));
         if ($path === '/api/proxy/homeproxy/connect' && $method === 'POST') {
             try { $status=ProxyService::connect($userId,(string)($this->body['apiKey']??'')); }
@@ -1279,6 +1339,28 @@ final class ApiController
             return $this->saveBotMenu($match[1]);
         }
 
+        if ($method === 'GET' && $path === '/api/admin/matches') {
+            try {
+                $matches = MatchmakingService::adminMatches((string) ($this->query['status'] ?? ''), (int) ($this->query['limit'] ?? 100));
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            }
+            return self::response(['matches' => $matches]);
+        }
+        if (preg_match('#^/api/admin/matches/(\\d{1,18})/resolve$#', $path, $match) && $method === 'POST') {
+            $scoreOne = filter_var($this->body['scoreOne'] ?? null, FILTER_VALIDATE_INT);
+            $scoreTwo = filter_var($this->body['scoreTwo'] ?? null, FILTER_VALIDATE_INT);
+            if ($scoreOne === false || $scoreTwo === false) throw new HttpException(400, 'Điểm số phải là số nguyên.');
+            try {
+                $result = MatchmakingService::resolveByAdmin((int) $match[1], $scoreOne, $scoreTwo, (string) $this->user['id'], (string) ($this->body['note'] ?? ''));
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            $this->audit('matchmaking.result.resolve', (string) $match[1], ['scoreOne' => $scoreOne, 'scoreTwo' => $scoreTwo, 'note' => (string) ($this->body['note'] ?? '')]);
+            $this->notify((string) $result['playerOne'], '🏁 Admin đã xác nhận kết quả trận #' . (int) $match[1] . ': ' . $scoreOne . '-' . $scoreTwo . '.');
+            $this->notify((string) $result['playerTwo'], '🏁 Admin đã xác nhận kết quả trận #' . (int) $match[1] . ': ' . $scoreOne . '-' . $scoreTwo . '.');
+            return self::response(['result' => $result, 'message' => 'Đã xác nhận kết quả và cập nhật bảng xếp hạng.']);
+        }
         if ($method === 'GET' && $path === '/api/admin/giftcodes') {
             return self::response(['giftcodes' => Database::all('SELECT * FROM giftcodes ORDER BY created_at DESC LIMIT 200')]);
         }

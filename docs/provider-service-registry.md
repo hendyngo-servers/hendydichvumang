@@ -15,7 +15,9 @@ For each service, an Admin can set:
 - Registry state (enabled or API-locked).
 - Maintenance mode and the member-facing maintenance message.
 - Provider records (provider name/key, adapter family, HTTPS endpoint, credential
-  Environment variable NAME, operational notes and enabled state).
+  Environment variable NAME, priority order, operational notes and enabled state).
+  Lower priority numbers are displayed first for operational selection; failover is
+  not automatically executed by the Registry.
 - Local configuration-check history.
 
 The registry-level maintenance/lock flags are enforced for the API paths explicitly

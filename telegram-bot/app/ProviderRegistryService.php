@@ -78,6 +78,10 @@ final class ProviderRegistryService
         $endpoint = trim((string) ($input['endpointUrl'] ?? $input['endpoint_url'] ?? ''));
         $envKey = trim((string) ($input['credentialEnvKey'] ?? $input['credential_env_key'] ?? ''));
         $notes = trim((string) ($input['notes'] ?? ''));
+        $priority = filter_var($input['priority'] ?? 100, FILTER_VALIDATE_INT);
+        if ($priority === false || $priority < 0 || $priority > 10000) {
+            throw new RuntimeException('Độ ưu tiên phải là số nguyên từ 0 đến 10.000.');
+        }
 
         if (!preg_match('/^[a-z][a-z0-9_-]{1,47}$/', $providerKey)) {
             throw new RuntimeException('Mã nhà cung cấp chỉ gồm chữ thường, số, dấu gạch ngang hoặc gạch dưới (2–48 ký tự).');
@@ -115,6 +119,7 @@ final class ProviderRegistryService
             'endpoint_url' => $endpoint,
             'credential_env_key' => $credentialEnvKey,
             'enabled' => filter_var($input['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'priority' => $priority,
             'notes' => $notes,
         ];
     }
@@ -131,7 +136,7 @@ final class ProviderRegistryService
             $settings[(string) $row['service_key']] = $row;
         }
         $providers = [];
-        foreach (Database::all('SELECT id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at FROM service_providers ORDER BY service_key, priority, id') as $row) {
+        foreach (Database::all('SELECT id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, priority, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at FROM service_providers ORDER BY service_key, priority, id') as $row) {
             $providers[(string) $row['service_key']][] = self::safeProvider($row);
         }
 
@@ -218,12 +223,12 @@ final class ProviderRegistryService
         $data = self::validateProviderInput($input);
         if ($id !== null) {
             $row = Database::one(
-                'UPDATE service_providers SET service_key = ?, provider_key = ?, provider_name = ?, adapter_key = ?, endpoint_url = ?, credential_env_key = ?, enabled = ?, notes = ?, last_check_at = NULL, last_check_status = \'not_checked\', last_check_message = \'Cần kiểm tra lại sau khi thay cấu hình.\', updated_by = ?, updated_at = NOW() WHERE id = ? RETURNING id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at',
+                'UPDATE service_providers SET service_key = ?, provider_key = ?, provider_name = ?, adapter_key = ?, endpoint_url = ?, credential_env_key = ?, enabled = ?, priority = ?, notes = ?, last_check_at = NULL, last_check_status = \'not_checked\', last_check_message = \'Cần kiểm tra lại sau khi thay cấu hình.\', updated_by = ?, updated_at = NOW() WHERE id = ? RETURNING id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, priority, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at',
                 [...array_values($data), $adminId, $id]
             );
         } else {
             $row = Database::one(
-                'INSERT INTO service_providers (service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, notes, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at',
+                'INSERT INTO service_providers (service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, priority, notes, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, priority, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at',
                 [...array_values($data), $adminId, $adminId]
             );
         }
@@ -256,7 +261,7 @@ final class ProviderRegistryService
     public static function checkProvider(int $id): array
     {
         $row = Database::one(
-            'SELECT id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at FROM service_providers WHERE id = ?',
+            'SELECT id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, priority, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at FROM service_providers WHERE id = ?',
             [$id]
         );
         if ($row === null) throw new RuntimeException('Không tìm thấy nhà cung cấp.');
@@ -286,7 +291,7 @@ final class ProviderRegistryService
             $message = 'Cấu hình cục bộ hợp lệ. Đây chưa phải kết quả gọi thử API hoặc xác minh tài khoản nhà cung cấp.';
         }
         $updated = Database::one(
-            'UPDATE service_providers SET last_check_at = NOW(), last_check_status = ?, last_check_message = ?, updated_at = NOW() WHERE id = ? RETURNING id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at',
+            'UPDATE service_providers SET last_check_at = NOW(), last_check_status = ?, last_check_message = ?, updated_at = NOW() WHERE id = ? RETURNING id, service_key, provider_key, provider_name, adapter_key, endpoint_url, credential_env_key, enabled, priority, notes, last_check_at, last_check_status, last_check_message, created_at, updated_at',
             [$status, $message, $id]
         );
         return self::safeProvider($updated ?? $row);
@@ -330,6 +335,7 @@ final class ProviderRegistryService
             'adapterImplemented' => (bool) ($adapter['implemented'] ?? false),
             'endpointUrl' => (string) $row['endpoint_url'],
             'credentialEnvKey' => $envKey,
+            'priority' => (int) ($row['priority'] ?? 100),
             'credentialConfigured' => $envKey !== '' && trim((string) Env::get($envKey, '')) !== '',
             'enabled' => self::dbBool($row['enabled']),
             'notes' => (string) $row['notes'],

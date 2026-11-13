@@ -29,6 +29,7 @@ use Hendy\BotMenuDefinition;
 use Hendy\WebhookSecurity;
 use Hendy\WebServiceKernel;
 use Hendy\ProductReadinessService;
+use Hendy\ServiceReadinessService;
 
 $checks = 0;
 $assert = static function (bool $condition, string $message) use (&$checks): void {
@@ -51,7 +52,7 @@ $assert(ProductReadinessService::isSellable($productReadinessBase), 'product can
 $assert(class_exists(ServiceReadinessService::class), 'Admin service readiness report is registered without exposing provider secret values');
 $serviceReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ServiceReadinessService.php');
 $assert(str_contains($serviceReadinessSource, "'secretValuesReturned' => false") && str_contains($serviceReadinessSource, "'providerCredentialsStoredInDatabase' => false"), 'service readiness exposes configuration status only, never secret values');
-$assert(str_contains($schemaSource, 'source_permission_status') && str_contains($schemaSource, 'supplier_access_status'), 'production schema includes additive supplier/source readiness fields');
+
 
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'supplier_access_status' => 'pending']), 'unverified supplier keeps product locked');
 $assert(!ProductReadinessService::isSellable([...$productReadinessBase, 'source_permission_status' => 'pending']), 'unverified source permission keeps product locked');
@@ -66,6 +67,7 @@ $assert(!TelegramAuth::safeEquals('different', 'same-secret'), 'so sánh chuỗi
 $assert(!TelegramAuth::safeEquals('', ''), 'secret rỗng bị từ chối');
 $telegramAuthSource = file_get_contents(dirname(__DIR__) . '/app/TelegramAuth.php');
 $schemaSource = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
+$assert(str_contains($schemaSource, 'source_permission_status') && str_contains($schemaSource, 'supplier_access_status'), 'production schema includes additive supplier/source readiness fields');
 $dockerfileSource = file_get_contents(dirname(__DIR__) . '/Dockerfile');
 $assert(str_contains($dockerfileSource, "printf '%s\\n'") && str_contains($dockerfileSource, "'upload_max_filesize=205M'") && str_contains($dockerfileSource, "'post_max_size=260M'"), 'Docker writes PHP upload limits as separate real INI lines, not literal backslash-n text');
 $assert(str_contains($telegramAuthSource, 'ON CONFLICT (bot_key) DO UPDATE SET') && str_contains($telegramAuthSource, 'RETURNING secret_value'), 'webhook/session secrets persist using atomic PostgreSQL upserts');

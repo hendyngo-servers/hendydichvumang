@@ -243,6 +243,7 @@ try {
             'version' => 'v1',
             'routes' => [
                 'publicConfig' => '/api/v1/public/config',
+                'catalog' => '/api/v1/public/catalog',
                 'health' => '/api/v1/health',
                 'bootstrap' => '/api/v1/bootstrap',
                 'customerCenter' => '/api/v1/customer-center',
@@ -253,6 +254,49 @@ try {
             ],
             'web' => ['home' => '/', 'admin' => '/admin', 'customer' => '/customer', 'miniapp' => '/miniapp'],
         ]);
+    }
+
+    // Public catalog for the Static Site. Only deliberately public product fields are returned.
+    // The Website never receives database credentials or admin/private metadata.
+    if ($method === 'GET' && in_array($path, ['/api/v1/public/catalog', '/api/public/catalog'], true)) {
+        header('Cache-Control: public, max-age=60, stale-while-revalidate=120');
+        header('X-Robots-Tag: noindex, nofollow');
+        try {
+            $products = Database::all(
+                "SELECT id, slug, name, category, description, price, duration_days, stock, vip_level, image_url,
+                        NULLIF(metadata->>'brand', '') AS brand
+                 FROM products
+                 WHERE is_active = TRUE
+                   AND category IN ('minigame','tools','codes','otp','proxy','vip')
+                   AND (stock IS NULL OR stock > 0)
+                 ORDER BY category ASC, created_at DESC
+                 LIMIT 100"
+            );
+            $products = array_map(static function (array $product): array {
+                return [
+                    'id' => (int) $product['id'],
+                    'slug' => (string) $product['slug'],
+                    'name' => (string) $product['name'],
+                    'category' => (string) $product['category'],
+                    'description' => (string) $product['description'],
+                    'price' => (int) $product['price'],
+                    'durationDays' => (int) $product['duration_days'],
+                    'stock' => $product['stock'] === null ? null : (int) $product['stock'],
+                    'vipLevel' => (int) $product['vip_level'],
+                    'imageUrl' => (string) ($product['image_url'] ?? ''),
+                    'brand' => (string) ($product['brand'] ?? ''),
+                ];
+            }, $products);
+            respond([
+                'ok' => true,
+                'currency' => 'VND',
+                'count' => count($products),
+                'products' => $products,
+            ]);
+        } catch (Throwable $error) {
+            error_log('[public-catalog] ' . $error::class . ': ' . $error->getMessage());
+            respond(['ok' => false, 'error' => 'Danh mục đang tạm thời không khả dụng.'], 503);
+        }
     }
 
     // Public website config. Telegram entry links are configured explicitly in deployment environment.

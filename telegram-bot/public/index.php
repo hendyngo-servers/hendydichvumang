@@ -31,6 +31,7 @@ require dirname(__DIR__) . '/app/Realtime.php';
 require dirname(__DIR__) . '/app/NeonStorage.php';
 require dirname(__DIR__) . '/app/AiCoverService.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
+require dirname(__DIR__) . '/app/ProductReadinessService.php';
 require dirname(__DIR__) . '/app/WebServiceContract.php';
 require dirname(__DIR__) . '/app/WebServiceKernel.php';
 require dirname(__DIR__) . '/app/SystemWebService.php';
@@ -268,6 +269,7 @@ try {
                         NULLIF(metadata->>'brand', '') AS brand
                  FROM products
                  WHERE is_active = TRUE
+                   AND " . Hendy\ProductReadinessService::sqlPredicate('products') . " 
                    AND category IN ('minigame','tools','codes','otp','proxy','vip')
                    AND (stock IS NULL OR stock > 0)
                  ORDER BY category ASC, created_at DESC

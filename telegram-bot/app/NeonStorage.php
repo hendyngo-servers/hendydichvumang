@@ -50,6 +50,42 @@ final class NeonStorage
             if($response===false||$status<200||$status>=300) throw new RuntimeException('Không thể lưu tệp vào Neon Object Storage (HTTP '.$status.').');
         }finally{curl_close($curl);fclose($stream);}
     }
+    /**
+     * Create a short-lived private upload capability for the external AI Cover
+     * worker. The S3 secret never leaves the Neon Function.
+     *
+     * @return array{url:string,method:string,headers:array}
+     */
+    public static function presignedUploadRequest(string $objectKey, string $contentType = 'audio/mpeg', int $expiresIn = 300): array
+    {
+        if (!self::validObjectKey($objectKey) || !str_starts_with($objectKey, 'ai-cover/results/')) {
+            throw new RuntimeException('Đường dẫn kết quả AI Cover không hợp lệ.');
+        }
+        if ($contentType !== 'audio/mpeg') {
+            throw new RuntimeException('AI Cover chỉ chấp nhận kết quả MP3.');
+        }
+        $signed = self::requestPresignedUrl('upload', $objectKey, $contentType, $expiresIn);
+        $parts = parse_url($signed['url']);
+        $method = strtoupper((string) ($signed['method'] ?? ''));
+        if (!is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || !str_contains(strtolower((string) ($parts['host'] ?? '')), '.storage.')
+            || !str_ends_with(strtolower((string) ($parts['host'] ?? '')), '.neon.tech')
+            || !in_array($method, ['PUT', 'POST'], true)
+            || !is_array($signed['headers'] ?? null)) {
+            throw new RuntimeException('Neon Storage không cấp được quyền tải MP3 lên an toàn.');
+        }
+        $headers = [];
+        foreach ($signed['headers'] as $name => $value) {
+            if (!is_string($name) || !is_scalar($value)
+                || preg_match('/[\\r\\n]/', $name . (string) $value)) {
+                throw new RuntimeException('Header tải lên Neon Storage không hợp lệ.');
+            }
+            $headers[$name] = (string) $value;
+        }
+        return ['url' => (string) $signed['url'], 'method' => $method, 'headers' => $headers];
+    }
+
     public static function presignedDownloadUrl(string $objectKey,int $expiresIn=300): string
     {
         if(!self::validObjectKey($objectKey)) throw new RuntimeException('Đường dẫn tệp lưu trữ không hợp lệ.');

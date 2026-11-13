@@ -520,8 +520,34 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && $path === '/api/admin/ai-media') {
+            return self::response(AiMediaService::adminSnapshot());
+        }
+        if ($method === 'PATCH' && $path === '/api/admin/ai-media') {
+            try {
+                $result = AiMediaService::setFeatures($this->body);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            $this->audit('ai_media.settings.update', 'ai-studio', [
+                'enabled' => (bool) ($this->body['enabled'] ?? false),
+                'musicEnabled' => (bool) ($this->body['musicEnabled'] ?? false),
+                'imageEnabled' => (bool) ($this->body['imageEnabled'] ?? false),
+            ]);
+            return self::response(['aiMedia' => $result, 'message' => 'Đã lưu cấu hình AI Studio.']);
+        }
         if ($method === 'GET' && $path === '/api/admin/ai-cover') {
             return self::response(AiCoverService::adminSnapshot());
+        }
+        if ($method === 'PATCH' && $path === '/api/admin/ai-cover/settings') {
+            $enabled = $this->toBool($this->body['enabled'] ?? false);
+            try {
+                $result = AiCoverService::setServiceEnabled($enabled, (string) $this->user['id']);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            }
+            $this->audit('ai_cover.service.toggle', 'ai-cover', ['enabled' => $enabled]);
+            return self::response(['aiCover' => $result, 'message' => $enabled ? 'Đã bật dịch vụ AI Cover.' : 'Đã tạm tắt dịch vụ AI Cover.']);
         }
         if (preg_match('#^/api/admin/ai-cover/voices/([a-z0-9][a-z0-9_-]{1,47})$#', $path, $voiceMatch) && $method === 'PATCH') {
             $enabled = $this->toBool($this->body['enabled'] ?? false);

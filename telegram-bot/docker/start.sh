@@ -72,6 +72,16 @@ if [[ "${CODE_TELEGRAM_WORKER_ENABLED:-false}" == "true" ]]; then
     echo "HENDY Code Telegram OCR worker đã khởi chạy."
 fi
 
+if [[ "${AI_COVER_WORKER_ENABLED:-false}" == "true" ]]; then
+    if [[ "${AI_COVER_ENABLED:-false}" != "true" || -z "${AI_COVER_WORKER_URL:-}" || -z "${AI_COVER_CALLBACK_SECRET:-}" ]]; then
+        echo "AI_COVER_WORKER_ENABLED=true nhưng AI_COVER_ENABLED, AI_COVER_WORKER_URL hoặc AI_COVER_CALLBACK_SECRET chưa hợp lệ." >&2
+        exit 1
+    fi
+    php bin/ai-cover-dispatcher.php &
+    background_pids+=("$!")
+    echo "HENDY AI Cover dispatcher đã khởi chạy."
+fi
+
 if [[ "${WEBSOCKET_ENABLED:-false}" == "true" ]]; then
     if [[ -z "${WEBSOCKET_ALLOWED_ORIGINS:-}" ]]; then
         echo "WEBSOCKET_ALLOWED_ORIGINS bắt buộc khi bật WebSocket." >&2
@@ -94,7 +104,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "HENDY services started; Apache port=$port; AI queue=${AI_MEDIA_QUEUE_ENABLED:-false}; WebSocket=${WEBSOCKET_ENABLED:-false}."
+echo "HENDY services started; Apache port=$port; AI queue=${AI_MEDIA_QUEUE_ENABLED:-false}; AI Cover=${AI_COVER_WORKER_ENABLED:-false}; WebSocket=${WEBSOCKET_ENABLED:-false}."
 set +e
 wait -n "${background_pids[@]}"
 status=$?

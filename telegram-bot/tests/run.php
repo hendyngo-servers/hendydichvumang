@@ -6,6 +6,7 @@ require dirname(__DIR__) . '/app/NeonStorage.php';
 require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/ProductReadinessService.php';
 require dirname(__DIR__) . '/app/ServiceReadinessService.php';
+require dirname(__DIR__) . '/app/ProviderRegistryService.php';
 require dirname(__DIR__) . '/app/TelegramAuth.php';
 require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/BotMenuDefinition.php';
@@ -61,6 +62,38 @@ $invalidEnvRejected = false;
 try { ProductReadinessService::validateEnvKey('real-secret-value'); } catch (RuntimeException) { $invalidEnvRejected = true; }
 $assert($invalidEnvRejected, 'credential field rejects an actual secret value');
 
+$assert(count(ProviderRegistryService::serviceKeys()) >= 20, 'Provider Registry chứa danh mục quản lý cho toàn bộ nhóm dịch vụ HENDY');
+$assert(in_array('custom_api_pending', ProviderRegistryService::adapterKeys(), true), 'API tùy chỉnh không có adapter được giữ ở trạng thái chưa hỗ trợ');
+$validProvider = ProviderRegistryService::validateProviderInput([
+    'serviceKey' => 'otp',
+    'providerKey' => 'example-otp',
+    'name' => 'Nhà cung cấp OTP thử nghiệm',
+    'adapterKey' => 'custom_api_pending',
+    'endpointUrl' => 'https://provider.example/api',
+    'credentialEnvKey' => 'OTP_PROVIDER_API_KEY',
+    'enabled' => true,
+]);
+$assert($validProvider['credential_env_key'] === 'OTP_PROVIDER_API_KEY' && $validProvider['enabled'], 'Provider Registry chỉ ghi tên Environment và xác thực input hợp lệ');
+$invalidProviderUrlRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'bad-provider', 'name' => 'Provider không an toàn',
+        'adapterKey' => 'custom_api_pending', 'endpointUrl' => 'http://127.0.0.1/admin',
+    ]);
+} catch (RuntimeException) { $invalidProviderUrlRejected = true; }
+$assert($invalidProviderUrlRejected, 'Provider Registry từ chối endpoint HTTP và IP nội bộ');
+$invalidProviderSecretRejected = false;
+try {
+    ProviderRegistryService::validateProviderInput([
+        'serviceKey' => 'otp', 'providerKey' => 'secret-provider', 'name' => 'Provider secret',
+        'adapterKey' => 'manual', 'credentialEnvKey' => 'actual-secret-value',
+    ]);
+} catch (RuntimeException) { $invalidProviderSecretRejected = true; }
+$assert($invalidProviderSecretRejected, 'Provider Registry không chấp nhận giá trị secret thay cho tên biến Environment');
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/app/ProviderRegistryService.php'), "'configurationCheckIsLiveApiTest' => false"), 'Kiểm tra cấu hình không giả mạo kết quả kết nối API thật');
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/app/ApiController.php'), 'ProviderRegistryService::blockMessageForPath'), 'Cờ tạm khóa dịch vụ được áp dụng lên các API path đã đăng ký');
+$assert(str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS service_registry') && str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS service_providers'), 'Fresh schema tạo bảng quản lý dịch vụ và nhà cung cấp');
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/database/migrations/20261113_provider_service_registry.sql'), 'GRANT SELECT, INSERT, UPDATE, DELETE ON service_registry, service_providers TO hendy_bot_app'), 'Migration cấp đúng quyền DML cho runtime role');
 $assert(TelegramAuth::safeEquals('same-secret', 'same-secret'), 'so sánh chuỗi đúng');
 $assert(!TelegramAuth::safeEquals('different', 'same-secret'), 'so sánh chuỗi khác');
 $assert(!TelegramAuth::safeEquals('', ''), 'secret rỗng bị từ chối');

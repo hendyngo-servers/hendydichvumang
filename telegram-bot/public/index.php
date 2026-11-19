@@ -34,6 +34,7 @@ require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/ProductReadinessService.php';
 require dirname(__DIR__) . '/app/ServiceReadinessService.php';
 require dirname(__DIR__) . '/app/ProviderRegistryService.php';
+require dirname(__DIR__) . '/app/SourceControlService.php';
 require dirname(__DIR__) . '/app/WebServiceContract.php';
 require dirname(__DIR__) . '/app/WebServiceKernel.php';
 require dirname(__DIR__) . '/app/SystemWebService.php';

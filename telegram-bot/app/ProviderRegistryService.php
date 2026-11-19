@@ -147,7 +147,7 @@ final class ProviderRegistryService
      * Schema status is reported instead of allowing a missing migration to turn
      * the Admin Provider Registry endpoint into an unexplained HTTP 500.
      */
-    private static function schemaStatus(): array
+    public static function schemaStatus(): array
     {
         $required = ['service_registry', 'service_providers'];
         try {
@@ -158,10 +158,22 @@ final class ProviderRegistryService
             );
             $present = array_map(static fn(array $row): string => (string) $row['table_name'], $rows);
             $missing = array_values(array_diff($required, $present));
-            return ['ready' => $missing === [], 'missingTables' => $missing];
+            return [
+                'ready' => $missing === [],
+                'requiredTables' => $required,
+                'presentTables' => $present,
+                'missingTables' => $missing,
+                'checkFailed' => false,
+            ];
         } catch (\Throwable $error) {
             error_log('[provider-registry-schema] ' . $error::class);
-            return ['ready' => false, 'missingTables' => $required];
+            return [
+                'ready' => false,
+                'requiredTables' => $required,
+                'presentTables' => [],
+                'missingTables' => $required,
+                'checkFailed' => true,
+            ];
         }
     }
 

@@ -7,6 +7,7 @@ require dirname(__DIR__) . '/app/ModuleRegistry.php';
 require dirname(__DIR__) . '/app/ProductReadinessService.php';
 require dirname(__DIR__) . '/app/ServiceReadinessService.php';
 require dirname(__DIR__) . '/app/ProviderRegistryService.php';
+require dirname(__DIR__) . '/app/SourceControlService.php';
 require dirname(__DIR__) . '/app/TelegramAuth.php';
 require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/BotMenuDefinition.php';
@@ -32,6 +33,7 @@ use Hendy\WebServiceKernel;
 use Hendy\ProductReadinessService;
 use Hendy\ServiceReadinessService;
 use Hendy\ProviderRegistryService;
+use Hendy\SourceControlService;
 
 $checks = 0;
 $assert = static function (bool $condition, string $message) use (&$checks): void {
@@ -60,6 +62,28 @@ $productReadinessBase = [
     'fulfillment_mode' => 'manual',
 ];
 $assert(ProductReadinessService::isSellable($productReadinessBase), 'product can sell only after source permission and supplier access verification');
+$sourcePhpPath = SourceControlService::pathPolicy('telegram-bot/app/ApiController.php');
+$assert($sourcePhpPath['visible'] && $sourcePhpPath['editable'], 'source editor permits normal PHP source files');
+$sourceProcfile = SourceControlService::pathPolicy('Procfile');
+$assert($sourceProcfile['editable'], 'source editor permits common extensionless text source files');
+$sourceEnv = SourceControlService::pathPolicy('.env');
+$sourceEnvExample = SourceControlService::pathPolicy('telegram-bot/.env.example');
+$assert(!$sourceEnv['visible'] && !$sourceEnvExample['visible'], 'source editor never reveals environment files');
+$sourcePrivateKey = SourceControlService::pathPolicy('config/server.pem');
+$assert(!$sourcePrivateKey['visible'], 'source editor never reveals private key and certificate files');
+$sourceWorkflow = SourceControlService::pathPolicy('.github/workflows/hendy-monorepo-ci.yml');
+$assert($sourceWorkflow['visible'] && !$sourceWorkflow['editable'], 'source editor keeps CI workflows read-only');
+$sourceTraversal = SourceControlService::pathPolicy('telegram-bot/app/../../.env');
+$assert(!$sourceTraversal['visible'], 'source editor rejects path traversal');
+$sourceMigration = SourceControlService::pathPolicy('telegram-bot/database/migrations/20261120_feature.sql');
+$assert($sourceMigration['editable'] && $sourceMigration['requiresConfirmation'], 'source editor requires an explicit confirmation for SQL and migrations');
+$sourceDeployConfig = SourceControlService::pathPolicy('render.yaml');
+$assert($sourceDeployConfig['editable'] && $sourceDeployConfig['requiresConfirmation'], 'source editor requires explicit confirmation for deployment configuration');
+$sampleTelegramToken = '123456:' . str_repeat('A', 36);
+$sampleGithubToken = 'ghp_' . str_repeat('B', 32);
+$samplePrivateKey = '-----BEGIN ' . 'RSA PRIVATE KEY-----';
+$assert(SourceControlService::containsSecret($sampleTelegramToken) && SourceControlService::containsSecret($sampleGithubToken) && SourceControlService::containsSecret($samplePrivateKey), 'source editor rejects common Telegram/GitHub tokens and private keys');
+$assert(!SourceControlService::containsSecret('HENDY_SOURCE_CONTROL_BASE_BRANCH=main'), 'source editor permits ordinary non-secret configuration');
 $assert(class_exists(ServiceReadinessService::class), 'Admin service readiness report is registered without exposing provider secret values');
 $serviceReadinessSource = file_get_contents(dirname(__DIR__) . '/app/ServiceReadinessService.php');
 $assert(str_contains($serviceReadinessSource, "'secretValuesReturned' => false") && str_contains($serviceReadinessSource, "'providerCredentialsStoredInDatabase' => false"), 'service readiness exposes configuration status only, never secret values');
@@ -231,6 +255,12 @@ $assert(str_contains($productReadinessSource, 'function schemaStatus()') && str_
 $assert(str_contains($databaseRunnerSource, 'function connectionInfo()') && str_contains($databaseRunnerSource, 'SELECT current_database()') && str_contains($databaseRunnerSource, 'SELECT current_user'), 'Admin database identity uses only the runtime connection identity, without requiring migration-ledger owner privileges');
 $assert(str_contains($apiControllerSource, 'productProviderInput') && str_contains($apiControllerSource, 'ProductReadinessService::sqlPredicate()') && str_contains($apiControllerSource, 'adminProduct($product)'), 'Admin product CRUD records supplier evidence and checkout is gated');
 $assert(str_contains($apiControllerSource, '/api/admin/database/readiness') && str_contains($apiControllerSource, 'Database::connectionInfo()') && str_contains($apiControllerSource, 'ProductReadinessService::schemaStatus()') && str_contains($apiControllerSource, 'ProviderRegistryService::schemaStatus()'), 'Admin database readiness endpoint reports the actual runtime target and both feature schemas without applying migrations');
+$sourceControlServiceSource = file_get_contents(dirname(__DIR__) . '/app/SourceControlService.php');
+$assert(str_contains($apiControllerSource, '/api/admin/source-control/status') && str_contains($apiControllerSource, '/api/admin/source-control/tree') && str_contains($apiControllerSource, '/api/admin/source-control/file') && str_contains($apiControllerSource, '/api/admin/source-control/pull-requests'), 'Admin source editor uses protected backend routes for GitHub repository reads and draft PR creation');
+$assert(str_contains($sourceControlServiceSource, 'Authorization: Bearer ') && str_contains($sourceControlServiceSource, 'HENDY_GITHUB_TOKEN') && str_contains($sourceControlServiceSource, "'draft' => true"), 'GitHub token stays on the server and source edits are submitted as draft Pull Requests');
+$assert(str_contains($sourceControlServiceSource, 'expectedBaseSha') && str_contains($sourceControlServiceSource, 'expectedFileSha') && str_contains($sourceControlServiceSource, 'MAX_BATCH_BYTES'), 'source editor detects stale branches/files and limits payload size');
+$assert(str_contains($sourceControlServiceSource, '-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----') && str_contains($sourceControlServiceSource, '.github/workflows/'), 'source editor applies secret scanning and protects CI workflow files');
+$assert(str_contains($adminDashboardSource, 'data-admin-tab="source-control"') && str_contains($adminDashboardSource, 'function adminSourceControl()') && str_contains($adminDashboardSource, 'source-pr-form'), 'Admin dashboard provides a source tree, editor, staging list and Draft PR form');
 $assert(str_contains($apiControllerSource, '/api/admin/service-readiness') && str_contains($apiControllerSource, 'ServiceReadinessService::snapshot'), 'Admin has a protected endpoint for service and supplier readiness');
 $assert(str_contains($adminDashboardSource, 'data-admin-tab="service-readiness"') && str_contains($adminDashboardSource, 'adminServiceReadiness()') && str_contains($adminDashboardSource, '/api/admin/service-readiness'), 'Admin Dashboard exposes provider readiness and missing configuration names');
 $assert(str_contains($adminDashboardSource, 'data-admin-tab="provider-registry"') && str_contains($adminDashboardSource, 'adminProviderRegistry()') && str_contains($adminDashboardSource, '/api/admin/provider-registry'), 'Existing Admin Dashboard includes the Provider & Service Registry tab');

@@ -413,7 +413,7 @@
   let welcomeSloganTimer = null;
   let welcomeSloganSwap = null;
   const requestedView = new URLSearchParams(window.location.search).get('view') || (window.location.pathname.startsWith('/admin') ? 'admin' : '');
-  const state = { boot:null, page:requestedView === 'admin' ? 'admin' : (requestedView === 'customer' ? 'customer' : 'home'), category:'minigame', adminTab:'overview', wallet:null, orders:[], tickets:[], adminData:{}, editingProductId:null, homeProxyStatus:null, homeProxyResult:null, sourceEditor:{activeFile:null,drafts:{},showDiff:false} };
+  const state = { boot:null, page:requestedView === 'admin' ? 'admin' : (requestedView === 'customer' ? 'customer' : 'home'), category:'minigame', adminTab:'overview', wallet:null, orders:[], tickets:[], adminData:{}, editingProductId:null, homeProxyStatus:null, homeProxyResult:null, sourceEditor:{activeFile:null,drafts:{},buffers:{},showDiff:false} };
 
   function hapticImpact(style='light'){
     try{if(typeof tg?.HapticFeedback?.impactOccurred==='function')tg.HapticFeedback.impactOccurred(style);}catch(_){}
@@ -1295,7 +1295,7 @@
     const needsConfirmation = draftPaths.some(path => Boolean(drafts[path].requiresConfirmation));
     const active = editor.activeFile;
     const activeDraft = active ? drafts[active.path] : null;
-    const displayContent = activeDraft ? (activeDraft.deleted ? '' : activeDraft.content) : (active ? active.content : '');
+    const displayContent = active && Object.prototype.hasOwnProperty.call(editor.buffers || {}, active.path) ? editor.buffers[active.path] : (activeDraft ? (activeDraft.deleted ? '' : activeDraft.content) : (active ? active.content : ''));
     const filtered = Array.isArray(tree.entries) ? tree.entries : [];
     const files = filtered.slice(0, 1200);
     const filesMarkup = files.map(item => {
@@ -1824,6 +1824,11 @@
   }, {passive:true});
 
   document.addEventListener('input', event => {
+    const editorNode = event.target.closest('#source-editor-content');
+    if (editorNode && state.sourceEditor.activeFile) {
+      state.sourceEditor.buffers[state.sourceEditor.activeFile.path] = editorNode.value;
+      return;
+    }
     const filter = event.target.closest('#source-file-filter');
     if (!filter) return;
     const query = String(filter.value || '').trim().toLowerCase();
@@ -1858,16 +1863,16 @@
     }
     const sourceOpen = event.target.closest('[data-source-open]');
     if (sourceOpen) {
-      const active = state.sourceEditor.activeFile;
-      const editorNode = document.getElementById('source-editor-content');
-      const staged = active ? state.sourceEditor.drafts[active.path] : null;
-      const currentDraftContent = staged && !staged.deleted ? staged.content : (active ? active.content : '');
-      if (active && editorNode && editorNode.value !== currentDraftContent
-          && !window.confirm('Tệp đang có nội dung chưa staging. Bỏ phần sửa chưa staging để mở tệp khác?')) return;
       sourceOpen.disabled = true;
       try {
         const file = await api('/api/admin/source-control/file?path=' + encodeURIComponent(sourceOpen.dataset.sourceOpen));
         state.sourceEditor.activeFile = file;
+        const stagedFile = state.sourceEditor.drafts[file.path];
+        if (!Object.prototype.hasOwnProperty.call(state.sourceEditor.buffers, file.path)) {
+          state.sourceEditor.buffers[file.path] = stagedFile
+            ? (stagedFile.deleted ? '' : stagedFile.content)
+            : file.content;
+        }
         state.sourceEditor.showDiff = false;
         await renderPage();
       } catch (error) {
@@ -1878,12 +1883,6 @@
     }
     const sourceNew = event.target.closest('[data-source-new]');
     if (sourceNew) {
-      const active = state.sourceEditor.activeFile;
-      const editorNode = document.getElementById('source-editor-content');
-      const staged = active ? state.sourceEditor.drafts[active.path] : null;
-      const currentDraftContent = staged && !staged.deleted ? staged.content : (active ? active.content : '');
-      if (active && editorNode && editorNode.value !== currentDraftContent
-          && !window.confirm('Bỏ phần sửa chưa staging trước khi tạo tệp mới?')) return;
       const newPath = String(window.prompt('Đường dẫn tệp mới trong repository (ví dụ telegram-bot/app/NewService.php):') || '').trim();
       if (!newPath) return;
       if ((state.adminData.sourceControlTree?.entries || []).some(item => item.path === newPath) || state.sourceEditor.drafts[newPath]) {
@@ -1894,6 +1893,7 @@
         path:newPath, content:'', sha:'', baseSha:state.adminData.sourceControlTree?.baseSha || '',
         size:0, requiresConfirmation:/\.sql$/i.test(newPath) || /(^|\/)(render\.yaml|Dockerfile|composer\.lock|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/i.test(newPath)
       };
+      state.sourceEditor.buffers[newPath] = '';
       state.sourceEditor.showDiff = false;
       await renderPage();
       document.getElementById('source-editor-content')?.focus();
@@ -1905,6 +1905,7 @@
       const editorNode = document.getElementById('source-editor-content');
       if (!active || !editorNode) return;
       const contentValue = editorNode.value;
+      state.sourceEditor.buffers[active.path] = contentValue;
       if (contentValue.length > 524288) {
         toast('Tệp vượt giới hạn 512 KB.', 'error');
         return;
@@ -1913,6 +1914,7 @@
         path:active.path, sha:active.sha || '', baseSha:active.baseSha || state.adminData.sourceControlTree?.baseSha || '',
         content:contentValue, deleted:false, requiresConfirmation:Boolean(active.requiresConfirmation)
       };
+      state.sourceEditor.buffers[active.path] = contentValue;
       state.sourceEditor.showDiff = false;
       toast('Đã đưa ' + active.path + ' vào danh sách thay đổi.');
       await renderPage();
@@ -1927,6 +1929,7 @@
         path:active.path, sha:active.sha, baseSha:active.baseSha || state.adminData.sourceControlTree?.baseSha || '',
         content:'', deleted:true, requiresConfirmation:Boolean(active.requiresConfirmation)
       };
+      state.sourceEditor.buffers[active.path] = '';
       state.sourceEditor.showDiff = false;
       toast('Đã đánh dấu tệp để xóa trong Draft PR.');
       await renderPage();
@@ -1936,8 +1939,13 @@
     if (sourceUnstage) {
       const filePath = sourceUnstage.dataset.sourceUnstage;
       delete state.sourceEditor.drafts[filePath];
-      if (state.sourceEditor.activeFile?.path === filePath && !state.sourceEditor.activeFile.sha) {
-        state.sourceEditor.activeFile = null;
+      if (state.sourceEditor.activeFile?.path === filePath) {
+        if (!state.sourceEditor.activeFile.sha) {
+          state.sourceEditor.activeFile = null;
+          delete state.sourceEditor.buffers[filePath];
+        } else {
+          state.sourceEditor.buffers[filePath] = state.sourceEditor.activeFile.content;
+        }
       }
       state.sourceEditor.showDiff = false;
       await renderPage();

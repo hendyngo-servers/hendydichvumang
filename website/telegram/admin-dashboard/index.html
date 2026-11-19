@@ -246,6 +246,24 @@
     @media(max-width:760px){.sidebar{transform:translateX(-102%);box-shadow:24px 0 60px #0008}.main-content{margin-left:0}.menu-toggle{display:grid;place-items:center}.top-header{padding:0 15px}.content-body{padding:22px 15px 48px}.admin-profile{padding-left:10px}.admin-info small{font-size:9px}.admin-heading{align-items:flex-start;flex-direction:column}.stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}body.sidebar-open .sidebar{transform:translateX(0)}body.sidebar-open:after{content:"";position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:90}}
     @media(max-width:430px){.top-header-title{font-size:11px}.content-body{padding-left:12px;padding-right:12px}.stat-grid{gap:8px}.stat{padding:12px}.stat b{font-size:17px}.two-col{grid-template-columns:1fr}.admin-shortcuts{grid-template-columns:1fr 1fr}.record-top{flex-direction:column}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+    .source-editor-grid{display:grid;grid-template-columns:minmax(220px,29%) minmax(0,1fr);gap:12px;align-items:start}
+    .source-panel{min-width:0;border:1px solid var(--panel-border);border-radius:15px;background:rgba(12,15,25,.92);overflow:hidden}
+    .source-panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;border-bottom:1px solid var(--panel-border);font-size:11px;font-weight:850}
+    .source-file-list{max-height:62vh;overflow:auto;padding:6px}
+    .source-file{display:block;width:100%;padding:8px 9px;border:1px solid transparent;border-radius:8px;background:transparent;color:#d9e4f9;text-align:left;font:11px ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;cursor:pointer}
+    .source-file:hover,.source-file.active{background:#102336;border-color:#1c5266;color:#fff}
+    .source-file:disabled{opacity:.45;cursor:not-allowed}
+    .source-file small{display:block;margin-top:3px;color:#8997b0;font:10px Inter,system-ui,sans-serif}
+    .source-toolbar{display:flex;gap:7px;flex-wrap:wrap;padding:10px;border-bottom:1px solid var(--panel-border)}
+    .source-toolbar button,.source-action{border:1px solid #31506a;border-radius:8px;background:#0d2031;color:#d9f5ff;padding:8px 10px;font-size:10px;font-weight:800}
+    .source-editor-area{display:block;width:100%;min-height:430px;resize:vertical;box-sizing:border-box;border:0;border-radius:0;background:#050811;color:#e5f2ff;padding:14px;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:2;outline:none;white-space:pre;overflow:auto}
+    .source-editor-area:focus{box-shadow:inset 0 0 0 1px #176b8a}
+    .source-diff{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px}
+    .source-diff pre{max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#050811;border:1px solid var(--panel-border);padding:10px;border-radius:9px;color:#c8d8ef;font:10px/1.5 ui-monospace,monospace}
+    .source-pill{display:inline-flex;align-items:center;border:1px solid var(--panel-border);border-radius:99px;padding:4px 8px;color:#a9b8d2;font-size:9px;font-weight:850}
+    .source-pr-form{margin-top:12px}
+    .source-empty{padding:24px 12px;color:var(--text-muted);font-size:11px;text-align:center}
+    @media(max-width:900px){.source-editor-grid{grid-template-columns:1fr}.source-file-list{max-height:260px}.source-diff{grid-template-columns:1fr}.source-editor-area{min-height:340px}}
 </style>
   <link rel="stylesheet" href="/styles/buttons.css">
 
@@ -335,6 +353,7 @@
       <button class="menu-item" type="button" data-admin-tab="operations"><span class="menu-icon">🛠️</span>Bảo trì & nâng cấp</button>
       <button class="menu-item" type="button" data-admin-tab="proxy"><span class="menu-icon">🌐</span>Proxy / HomeProxy</button>
       <button class="menu-item" type="button" data-admin-tab="modules"><span class="menu-icon">🧩</span>Tệp & module</button>
+      <button class="menu-item" type="button" data-admin-tab="source-control"><span class="menu-icon">🧑‍💻</span>Quản lý toàn bộ mã nguồn</button>
       <button class="menu-item" type="button" data-admin-tab="video-jobs"><span class="menu-icon">🎬</span>Video Jobs</button>
       <button class="menu-item" type="button" data-admin-tab="code-telegram"><span class="menu-icon">📡</span>Code Telegram</button>
       <button class="menu-item" type="button" data-admin-tab="ai-media"><span class="menu-icon">🤖</span>AI Studio · Music & Image</button>
@@ -394,7 +413,7 @@
   let welcomeSloganTimer = null;
   let welcomeSloganSwap = null;
   const requestedView = new URLSearchParams(window.location.search).get('view') || (window.location.pathname.startsWith('/admin') ? 'admin' : '');
-  const state = { boot:null, page:requestedView === 'admin' ? 'admin' : (requestedView === 'customer' ? 'customer' : 'home'), category:'minigame', adminTab:'overview', wallet:null, orders:[], tickets:[], adminData:{}, editingProductId:null, homeProxyStatus:null, homeProxyResult:null };
+  const state = { boot:null, page:requestedView === 'admin' ? 'admin' : (requestedView === 'customer' ? 'customer' : 'home'), category:'minigame', adminTab:'overview', wallet:null, orders:[], tickets:[], adminData:{}, editingProductId:null, homeProxyStatus:null, homeProxyResult:null, sourceEditor:{activeFile:null,drafts:{},showDiff:false} };
 
   function hapticImpact(style='light'){
     try{if(typeof tg?.HapticFeedback?.impactOccurred==='function')tg.HapticFeedback.impactOccurred(style);}catch(_){}
@@ -988,6 +1007,15 @@
     }
     if (tab === 'service-readiness') state.adminData.serviceReadiness = await api('/api/admin/service-readiness');
     if (tab === 'provider-registry') state.adminData.providerRegistry = await api('/api/admin/provider-registry');
+    if (tab === 'source-control') {
+      const status = await api('/api/admin/source-control/status');
+      state.adminData.sourceControlStatus = status;
+      if (status.connected) {
+        state.adminData.sourceControlTree = await api('/api/admin/source-control/tree');
+      } else {
+        state.adminData.sourceControlTree = {entries:[],baseSha:'',count:0};
+      }
+    }
     if (tab === 'orders') state.adminData.orders = (await api('/api/admin/orders')).orders;
     if (tab === 'tickets') state.adminData.tickets = (await api('/api/admin/tickets')).tickets;
     if (tab === 'settings') state.adminData.settings = (await api('/api/admin/settings')).settings;
@@ -1576,6 +1604,7 @@
     if (state.adminTab === 'products') body = adminProducts();
     if (state.adminTab === 'service-readiness') body = adminServiceReadiness();
     if (state.adminTab === 'provider-registry') body = adminProviderRegistry();
+    if (state.adminTab === 'source-control') body = adminSourceControl();
     if (state.adminTab === 'orders') body = adminOrders();
     if (state.adminTab === 'tickets') body = adminTickets();
     if (state.adminTab === 'settings') body = adminSettings();

@@ -1285,6 +1285,69 @@
       '<div class="notice">Lưu ý: quyền bật/tắt API ở Registry là lớp khóa API trung tâm cho các route đã liên kết. Các luồng Bot/worker có công tắc riêng như AI Studio, AI Cover, HomeProxy, Video Worker và Code Telegram vẫn cần bật tại đúng module chuyên trách sau khi kiểm thử adapter thật.</div>';
   }
 
+  function adminSourceControl() {
+    const status = state.adminData.sourceControlStatus || {};
+    const tree = state.adminData.sourceControlTree || {entries:[],baseSha:'',count:0};
+    const editor = state.sourceEditor || (state.sourceEditor = {activeFile:null,drafts:{},showDiff:false});
+    const drafts = editor.drafts || {};
+    const draftPaths = Object.keys(drafts);
+    const stagedCount = draftPaths.length;
+    const needsConfirmation = draftPaths.some(path => Boolean(drafts[path].requiresConfirmation));
+    const active = editor.activeFile;
+    const activeDraft = active ? drafts[active.path] : null;
+    const displayContent = activeDraft ? (activeDraft.deleted ? '' : activeDraft.content) : (active ? active.content : '');
+    const filtered = Array.isArray(tree.entries) ? tree.entries : [];
+    const files = filtered.slice(0, 1200);
+    const filesMarkup = files.map(item => {
+      const draft = drafts[item.path];
+      const selected = active && active.path === item.path;
+      const statusText = draft ? (draft.deleted ? 'Đang chờ xóa' : 'Đã sửa · chờ gửi') : (item.editable ? String(Math.ceil((item.size || 0) / 1024)) + ' KB' : (item.reason || 'Chỉ đọc'));
+      return '<button type="button" class="source-file' + (selected ? ' active' : '') + '" data-source-open="' + escapeHtml(item.path) + '"' + (!item.editable ? ' disabled title="' + escapeHtml(item.reason || 'Chỉ đọc') + '"' : '') + '>' +
+        escapeHtml(item.path) + '<small>' + escapeHtml(statusText) + '</small></button>';
+    }).join('');
+    const stagedMarkup = draftPaths.length ? draftPaths.map(path => {
+      const item = drafts[path];
+      return '<div class="list-row"><div><b>' + escapeHtml(path) + '</b><small>' + (item.deleted ? 'Sẽ xóa trong Draft PR' : 'Thay đổi đang chờ · ' + Math.max(0, Number(item.content?.length || 0)) + ' ký tự') + '</small></div><button type="button" class="source-action" data-source-unstage="' + escapeHtml(path) + '">Bỏ</button></div>';
+    }).join('') : '<div class="source-empty">Chưa có tệp nào được đưa vào danh sách thay đổi.</div>';
+    const editorPanel = active
+      ? '<div class="source-panel"><div class="source-panel-head"><div><b>' + escapeHtml(active.path) + '</b><div class="source-pill">' + (active.sha ? 'Tệp hiện có' : 'Tệp mới') + (active.requiresConfirmation || activeDraft?.requiresConfirmation ? ' · Cần xác nhận' : '') + '</div></div><span class="source-pill">' + (activeDraft ? 'Đã staging' : 'Đang chỉnh sửa') + '</span></div>' +
+        '<div class="source-toolbar"><button type="button" data-source-stage>＋ Đưa vào thay đổi</button>' +
+        (active.sha ? '<button type="button" data-source-delete>' + (activeDraft?.deleted ? 'Đã đánh dấu xóa' : 'Đánh dấu xóa') + '</button>' : '') +
+        (activeDraft ? '<button type="button" data-source-unstage="' + escapeHtml(active.path) + '">Bỏ thay đổi</button>' : '') +
+        '<button type="button" data-source-preview>' + (editor.showDiff ? 'Ẩn so sánh' : 'So sánh bản gốc') + '</button></div>' +
+        (activeDraft?.deleted ? '<div class="source-empty">Tệp này đang được đánh dấu xóa. Bỏ thay đổi để khôi phục bản gốc.</div>' :
+          '<textarea class="source-editor-area" id="source-editor-content" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Nội dung mã nguồn">' + escapeHtml(displayContent) + '</textarea>') +
+        (editor.showDiff && activeDraft && !activeDraft.deleted ? '<div class="source-diff"><div><b class="small muted">Bản trên nhánh ' + escapeHtml(tree.baseBranch || 'main') + '</b><pre>' + escapeHtml(active.content || '') + '</pre></div><div><b class="small muted">Bản đang staging</b><pre>' + escapeHtml(activeDraft.content || '') + '</pre></div></div>' : '') +
+        '<div class="notice">Trình soạn thảo lưu bản thay đổi trong phiên trình duyệt cho đến khi tạo Draft PR. Đổi tệp không tự ghi đè repository.</div></div>'
+      : '<div class="source-panel source-empty">Chọn một tệp ở danh sách bên trái hoặc tạo tệp mới để bắt đầu chỉnh sửa.</div>';
+    const connected = status.configured === true && status.connected === true;
+    const connectionPanel = !status.configured
+      ? '<div class="notice warn"><b>Chưa kết nối GitHub.</b> Đặt HENDY_GITHUB_TOKEN tại Render Environment. Token chỉ nằm ở máy chủ, không nhập vào giao diện và không lưu trong PostgreSQL. Sau khi thêm biến, deploy Bot rồi nhấn Kiểm tra kết nối.</div>'
+      : (!status.connected
+        ? '<div class="notice warn"><b>Không kết nối được GitHub.</b> ' + escapeHtml(status.message || 'Kiểm tra token/repository.') + '</div>'
+        : '<div class="notice good">Đã kết nối ' + escapeHtml(status.repository || '') + ' · nhánh gốc ' + escapeHtml(status.baseBranch || '') + '. Editor chỉ tạo branch và Draft PR; không commit trực tiếp vào main.</div>');
+    const prResult = state.sourceEditor.lastPullRequest
+      ? '<div class="notice good"><b>Đã tạo Draft Pull Request #' + Number(state.sourceEditor.lastPullRequest.number || 0) + '.</b> ' + escapeHtml(state.sourceEditor.lastPullRequest.message || '') + '<br><a href="' + escapeHtml(state.sourceEditor.lastPullRequest.url || '#') + '" target="_blank" rel="noopener noreferrer">Mở Pull Request trên GitHub ↗</a></div>'
+      : '';
+    return '<div class="app-banner"><div><b>🧑‍💻 HENDY · SOURCE CODE CONTROL</b><small>Duyệt, tìm, chỉnh sửa nhiều tệp mã nguồn và gửi thành Pull Request để CI/review. Không cập nhật trực tiếp tệp đang chạy.</small></div><span class="banner-icon">⌘</span></div>' +
+      '<div class="stat-grid"><div class="stat"><small>Repository</small><b style="font-size:13px">' + escapeHtml(status.repository || 'hendydichvumang') + '</b></div><div class="stat"><small>Nhánh gốc</small><b>' + escapeHtml(status.baseBranch || 'main') + '</b></div><div class="stat"><small>Tệp có thể duyệt</small><b>' + Number(tree.count || 0) + '</b></div><div class="stat"><small>Thay đổi đang chờ</small><b>' + stagedCount + '</b></div></div>' +
+      connectionPanel + prResult +
+      '<div class="notice warn"><b>Quy tắc an toàn:</b> Không hiển thị .env/credential/private key; không cho chỉnh workflow CI/CD; không thực thi lệnh hoặc chạy code trong Admin. Mọi sửa đổi đi qua Draft PR, CI và review. Tệp SQL, migration, Dockerfile, render.yaml và lockfile yêu cầu xác nhận riêng.</div>' +
+      (connected ? '<div class="source-editor-grid">' +
+        '<div class="source-panel"><div class="source-panel-head"><b>Repository files</b><span class="source-pill">' + files.length + ' mục</span></div>' +
+        '<div class="source-toolbar"><input type="search" id="source-file-filter" placeholder="Lọc theo đường dẫn/tên tệp…" aria-label="Lọc tệp mã nguồn"><button type="button" data-source-refresh>↻</button><button type="button" data-source-new>＋ Tệp mới</button></div>' +
+        '<div class="source-file-list" id="source-file-list">' + (filesMarkup || '<div class="source-empty">Không tìm thấy tệp văn bản.</div>') + '</div>' +
+        (tree.count > files.length ? '<div class="source-empty">Đang hiển thị 1.200 tệp đầu tiên. Hãy lọc theo tên/đường dẫn.</div>' : '') + '</div>' +
+        '<div>' + editorPanel +
+          '<div class="source-panel" style="margin-top:12px"><div class="source-panel-head"><b>Thay đổi đang chờ</b><span class="source-pill">' + stagedCount + ' tệp</span></div><div style="padding:8px 12px">' + stagedMarkup + '</div>' +
+          '<form class="form source-pr-form" id="source-pr-form" style="padding:12px"><div class="field"><label>Tiêu đề Pull Request</label><input name="title" maxlength="120" value="Update HENDY source from Admin" required></div>' +
+          '<div class="field"><label>Mô tả / phạm vi thay đổi</label><textarea name="summary" maxlength="8000" rows="3" placeholder="Mô tả tính năng, file đã thay đổi và cách kiểm thử"></textarea></div>' +
+          (needsConfirmation ? '<label class="notice warn" style="display:block"><input type="checkbox" name="sensitiveConfirmation" required> Tôi đã rà soát tác động của SQL/migration, cấu hình triển khai hoặc dependency lockfile trong thay đổi này.</label>' : '') +
+          '<button class="primary" type="submit"' + (stagedCount ? '' : ' disabled') + '>Tạo Draft Pull Request (' + stagedCount + ' tệp)</button></form></div>' +
+        '</div></div>' : '') +
+      '<div class="notice">Quyền GitHub cần cấp cho token: Metadata (read), Contents (read/write), Pull requests (read/write), chỉ giới hạn ở repository hendydichvumang. Không cấp Actions, Administration hoặc Secrets write.</div>';
+  }
+
   function adminOrders() {
     const orders = state.adminData.orders || [];
     return orders.length ? orders.map(order =>

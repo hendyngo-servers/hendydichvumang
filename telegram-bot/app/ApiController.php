@@ -790,6 +790,45 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && $path === '/api/admin/source-control/status') {
+            try {
+                return self::response(SourceControlService::status());
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            }
+        }
+        if ($method === 'GET' && $path === '/api/admin/source-control/tree') {
+            try {
+                return self::response(SourceControlService::tree((string) ($this->query['prefix'] ?? '')));
+            } catch (RuntimeException $error) {
+                throw new HttpException(503, $error->getMessage());
+            }
+        }
+        if ($method === 'GET' && $path === '/api/admin/source-control/file') {
+            try {
+                return self::response(SourceControlService::readFile((string) ($this->query['path'] ?? '')));
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            }
+        }
+        if ($method === 'POST' && $path === '/api/admin/source-control/pull-requests') {
+            try {
+                $result = SourceControlService::createPullRequest($this->body);
+            } catch (RuntimeException $error) {
+                throw new HttpException(409, $error->getMessage());
+            } catch (Throwable $error) {
+                error_log('[admin-source-control-pr] ' . $error::class);
+                throw new HttpException(502, 'Không thể tạo Pull Request. Kiểm tra quyền GitHub App/token, repository và log máy chủ.');
+            }
+            $this->audit('source_control.pull_request.create', (string) ($result['number'] ?? ''), [
+                'branch' => (string) ($result['branch'] ?? ''),
+                'commitSha' => (string) ($result['commitSha'] ?? ''),
+                'changedFiles' => $result['changedFiles'] ?? [],
+                'draft' => true,
+            ]);
+            return self::response(['pullRequest' => $result], 201);
+        }
+
         if ($method === 'GET' && $path === '/api/admin/database/readiness') {
             try {
                 $connection = Database::connectionInfo();

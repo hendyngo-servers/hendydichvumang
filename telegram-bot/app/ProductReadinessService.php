@@ -56,7 +56,7 @@ final class ProductReadinessService
                 'missingColumns' => $missing,
                 'checkFailed' => false,
             ];
-        } catch (\\Throwable $error) {
+        } catch (\Throwable $error) {
             error_log('[product-readiness-schema] ' . $error::class);
             return [
                 'ready' => false,

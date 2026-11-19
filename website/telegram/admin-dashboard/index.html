@@ -978,7 +978,14 @@
     state.adminTab = tab;
     if (tab === 'overview') state.adminData.overview = await api('/api/admin/overview');
     if (tab === 'modules') state.adminData.modules = (await api('/api/admin/modules')).artifacts || [];
-    if (tab === 'products') state.adminData.products = (await api('/api/admin/products')).products;
+    if (tab === 'products') {
+      const [productData, databaseReadiness] = await Promise.all([
+        api('/api/admin/products'),
+        api('/api/admin/database/readiness').catch(error => ({available:false,message:error.message}))
+      ]);
+      state.adminData.products = productData.products || [];
+      state.adminData.databaseReadiness = databaseReadiness;
+    }
     if (tab === 'service-readiness') state.adminData.serviceReadiness = await api('/api/admin/service-readiness');
     if (tab === 'provider-registry') state.adminData.providerRegistry = await api('/api/admin/provider-registry');
     if (tab === 'orders') state.adminData.orders = (await api('/api/admin/orders')).orders;
@@ -1087,7 +1094,23 @@
     const permissionOptions = selectOptions([['pending','Chờ xác minh'],['authorized','Đã xác minh quyền phân phối'],['rejected','Không được phép']],value('sourcePermissionStatus',''), 'pending');
     const supplierOptions = selectOptions([['pending','Chờ xác minh nhà cung cấp'],['verified','Đã xác minh quyền truy cập'],['revoked','Đã thu hồi quyền truy cập']],value('supplierAccessStatus',''), 'pending');
     const fulfillmentOptions = selectOptions([['manual','Bàn giao thủ công'],['api','API (đang khóa, chưa có adapter)']],value('fulfillmentMode',''), 'manual');
-    return '<form class="card form" id="admin-product-form" data-product-id="' + (editing ? escapeHtml(editing.id) : '') + '"><b>' +
+    const dbStatus = state.adminData.databaseReadiness || {};
+    const productSchema = dbStatus.productSupplierReadiness || {};
+    const registrySchema = dbStatus.providerRegistry || {};
+    const supplierSchemaReady = dbStatus.available === true && productSchema.schemaReady === true;
+    const databaseName = String(dbStatus.database || 'Chưa xác định');
+    const missingColumns = Array.isArray(productSchema.missingColumns) ? productSchema.missingColumns : [];
+    const missingTables = Array.isArray(registrySchema.missingTables) ? registrySchema.missingTables : [];
+    const productSchemaPanel = dbStatus.available !== true
+      ? '<div class="notice warn"><b>Chưa đọc được trạng thái database.</b><br>' + escapeHtml(dbStatus.message || 'Không thể xác minh PostgreSQL.') + '<br>Biểu mẫu đang khóa thao tác lưu để tránh lỗi ghi dữ liệu. Nhấn tải lại sau khi kiểm tra kết nối máy chủ.</div>'
+      : '<div class="card"><div class="record-top"><div><b>🗄️ DATABASE ĐANG KẾT NỐI</b><small>Database: ' + escapeHtml(databaseName) + ' · Role: ' + escapeHtml(dbStatus.runtimeRole || '—') + ' · ' + (dbStatus.pooledConnection ? 'Pooled connection' : 'Direct / unpooled connection') + '</small></div><span class="status ' + (supplierSchemaReady ? 'completed' : 'pending') + '">' + (supplierSchemaReady ? 'Supplier schema sẵn sàng' : 'Thiếu migration') + '</span></div>' +
+        '<div class="list-row"><span>Product Supplier Readiness</span><span class="status ' + (supplierSchemaReady ? 'completed' : 'pending') + '">' + (supplierSchemaReady ? 'Đủ 10 cột' : 'Chưa sẵn sàng') + '</span></div>' +
+        (missingColumns.length ? '<p class="small muted">Cột còn thiếu: ' + escapeHtml(missingColumns.join(', ')) + '</p>' : '') +
+        '<div class="list-row"><span>Provider & Service Registry</span><span class="status ' + (registrySchema.schemaReady ? 'completed' : 'pending') + '">' + (registrySchema.schemaReady ? 'Đã có bảng' : 'Chưa sẵn sàng') + '</span></div>' +
+        (missingTables.length ? '<p class="small muted">Bảng còn thiếu: ' + escapeHtml(missingTables.join(', ')) + '</p>' : '') +
+        (!supplierSchemaReady ? '<div class="notice warn"><b>Chưa thể lưu sản phẩm.</b><br>1. Mở Render Shell của service Bot và chạy <code>php bin/database-doctor.php</code>.<br>2. Đặt riêng <code>MIGRATION_DATABASE_URL</code> bằng direct/unpooled Neon URL với database-owner role; không thay <code>DATABASE_URL</code> runtime.<br>3. Chạy <code>php bin/migrate.php</code> để xem DRY RUN và rà soát toàn bộ migration đang chờ.<br>4. Sau khi tạo restore point và xác nhận đúng database, chạy:<br><code>' + escapeHtml('php bin/migrate.php --apply --expect-database=' + databaseName) + '</code><br>Migration runner áp dụng tất cả migration đang chờ trong repository, không chỉ hai file Provider/Supplier. Sau đó tải lại trang để xác minh.</div>' : '<div class="notice good">Schema sản phẩm đã sẵn sàng. Việc mở bán vẫn phụ thuộc xác minh quyền nguồn, nhà cung cấp, tồn kho và bàn giao.</div>') +
+        '<button type="button" class="tiny-btn" data-database-readiness-refresh>↻ Tải lại trạng thái database</button></div>';
+    return productSchemaPanel + '<form class="card form" id="admin-product-form" data-product-id="' + (editing ? escapeHtml(editing.id) : '') + '"><b>' +
       (editing ? 'Chỉnh sửa sản phẩm #' + escapeHtml(editing.id) : 'Thêm sản phẩm mới') + '</b>' +
       '<div class="field"><label>Tên sản phẩm</label><input name="name" maxlength="120" value="' + value('name','') + '" required></div>' +
       '<div class="two-col"><div class="field"><label>Danh mục</label><select name="category">' +
@@ -1109,7 +1132,7 @@
       '<div class="two-col"><div class="field"><label>Phương thức bàn giao</label><select name="fulfillmentMode">' + fulfillmentOptions + '</select></div>' +
       '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" value="' + value('credentialEnvKey','') + '" placeholder="OTP_PROVIDER_API_KEY"></div></div>' +
       '<div class="notice warn">Chỉ nhập URL và thông tin mô tả nhà cung cấp. Không dán API Key, mật khẩu, cookie hay OTP vào đây. Khi thay nhà cung cấp hoặc URL nguồn, hệ thống tự đưa xác minh tương ứng về trạng thái chờ. Chế độ API vẫn khóa đến khi có adapter riêng được kiểm thử.</div>' +
-      '<div class="two-col"><button class="primary">' + (editing ? 'Lưu thay đổi' : '＋ Tạo sản phẩm') + '</button>' +
+      '<div class="two-col"><button class="primary"' + (supplierSchemaReady ? '' : ' disabled title="Cần hoàn tất migration Supplier Readiness trước khi lưu"') + '>' + (supplierSchemaReady ? (editing ? 'Lưu thay đổi' : '＋ Tạo sản phẩm') : 'Chờ đồng bộ database') + '</button>' +
       (editing ? '<button type="button" class="secondary" data-cancel-product-edit>Hủy chỉnh sửa</button>' : '') + '</div></form>' +
       '<div class="section-head"><h3>Danh sách sản phẩm</h3><span>' + products.length + ' sản phẩm</span></div>' +
       (products.length ? products.map(product => {
@@ -1718,6 +1741,18 @@
       await renderPage();
       return;
     }
+    const databaseReadinessRefresh = event.target.closest('[data-database-readiness-refresh]');
+    if (databaseReadinessRefresh) {
+      databaseReadinessRefresh.disabled = true;
+      try {
+        await adminLoad('products');
+        await renderPage();
+      } catch (error) {
+        toast(error.message, 'error');
+        databaseReadinessRefresh.disabled = false;
+      }
+      return;
+    }
     const providerEdit = event.target.closest('[data-provider-edit]');
     if (providerEdit) {
       const id = Number(providerEdit.dataset.providerEdit);
@@ -2126,6 +2161,9 @@
         toast(result.message + ' +' + money(result.reward));
         await renderPage();
       } else if (form.id === 'admin-product-form') {
+        if (state.adminData.databaseReadiness?.available !== true || state.adminData.databaseReadiness?.productSupplierReadiness?.schemaReady !== true) {
+          throw new Error('Database chưa sẵn sàng cho Supplier Readiness. Hãy hoàn tất kiểm tra/migration trong khung trạng thái database trước khi lưu.');
+        }
         data.price = Number(data.price);
         data.durationDays = Number(data.durationDays || 0);
         data.vipLevel = Number(data.vipLevel || 0);

@@ -1823,6 +1823,15 @@
     window.setTimeout(() => ripple.remove(), 650);
   }, {passive:true});
 
+  document.addEventListener('input', event => {
+    const filter = event.target.closest('#source-file-filter');
+    if (!filter) return;
+    const query = String(filter.value || '').trim().toLowerCase();
+    document.querySelectorAll('#source-file-list [data-source-open]').forEach(button => {
+      button.hidden = query !== '' && !button.dataset.sourceOpen.toLowerCase().includes(query);
+    });
+  });
+
   document.addEventListener('click', async event => {
     const pageButton = event.target.closest('[data-page]');
     if (pageButton) { navigate(pageButton.dataset.page); return; }
@@ -1832,6 +1841,111 @@
     if (adminTab) {
       state.adminTab=adminTab.dataset.adminTab;
       document.body.classList.remove('sidebar-open');
+      await renderPage();
+      return;
+    }
+    const sourceRefresh = event.target.closest('[data-source-refresh]');
+    if (sourceRefresh) {
+      sourceRefresh.disabled = true;
+      try {
+        await adminLoad('source-control');
+        await renderPage();
+      } catch (error) {
+        toast(error.message, 'error');
+        sourceRefresh.disabled = false;
+      }
+      return;
+    }
+    const sourceOpen = event.target.closest('[data-source-open]');
+    if (sourceOpen) {
+      const active = state.sourceEditor.activeFile;
+      const editorNode = document.getElementById('source-editor-content');
+      const staged = active ? state.sourceEditor.drafts[active.path] : null;
+      const currentDraftContent = staged && !staged.deleted ? staged.content : (active ? active.content : '');
+      if (active && editorNode && editorNode.value !== currentDraftContent
+          && !window.confirm('Tệp đang có nội dung chưa staging. Bỏ phần sửa chưa staging để mở tệp khác?')) return;
+      sourceOpen.disabled = true;
+      try {
+        const file = await api('/api/admin/source-control/file?path=' + encodeURIComponent(sourceOpen.dataset.sourceOpen));
+        state.sourceEditor.activeFile = file;
+        state.sourceEditor.showDiff = false;
+        await renderPage();
+      } catch (error) {
+        toast(error.message, 'error');
+        sourceOpen.disabled = false;
+      }
+      return;
+    }
+    const sourceNew = event.target.closest('[data-source-new]');
+    if (sourceNew) {
+      const active = state.sourceEditor.activeFile;
+      const editorNode = document.getElementById('source-editor-content');
+      const staged = active ? state.sourceEditor.drafts[active.path] : null;
+      const currentDraftContent = staged && !staged.deleted ? staged.content : (active ? active.content : '');
+      if (active && editorNode && editorNode.value !== currentDraftContent
+          && !window.confirm('Bỏ phần sửa chưa staging trước khi tạo tệp mới?')) return;
+      const newPath = String(window.prompt('Đường dẫn tệp mới trong repository (ví dụ telegram-bot/app/NewService.php):') || '').trim();
+      if (!newPath) return;
+      if ((state.adminData.sourceControlTree?.entries || []).some(item => item.path === newPath) || state.sourceEditor.drafts[newPath]) {
+        toast('Đường dẫn này đã tồn tại hoặc đã được thêm.', 'error');
+        return;
+      }
+      state.sourceEditor.activeFile = {
+        path:newPath, content:'', sha:'', baseSha:state.adminData.sourceControlTree?.baseSha || '',
+        size:0, requiresConfirmation:/\.sql$/i.test(newPath) || /(^|\/)(render\.yaml|Dockerfile|composer\.lock|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/i.test(newPath)
+      };
+      state.sourceEditor.showDiff = false;
+      await renderPage();
+      document.getElementById('source-editor-content')?.focus();
+      return;
+    }
+    const sourceStage = event.target.closest('[data-source-stage]');
+    if (sourceStage) {
+      const active = state.sourceEditor.activeFile;
+      const editorNode = document.getElementById('source-editor-content');
+      if (!active || !editorNode) return;
+      const contentValue = editorNode.value;
+      if (contentValue.length > 524288) {
+        toast('Tệp vượt giới hạn 512 KB.', 'error');
+        return;
+      }
+      state.sourceEditor.drafts[active.path] = {
+        path:active.path, sha:active.sha || '', baseSha:active.baseSha || state.adminData.sourceControlTree?.baseSha || '',
+        content:contentValue, deleted:false, requiresConfirmation:Boolean(active.requiresConfirmation)
+      };
+      state.sourceEditor.showDiff = false;
+      toast('Đã đưa ' + active.path + ' vào danh sách thay đổi.');
+      await renderPage();
+      return;
+    }
+    const sourceDelete = event.target.closest('[data-source-delete]');
+    if (sourceDelete) {
+      const active = state.sourceEditor.activeFile;
+      if (!active || !active.sha) return;
+      if (!window.confirm('Đánh dấu xóa tệp ' + active.path + ' trong Pull Request? Tệp chưa bị xóa khỏi nhánh gốc.')) return;
+      state.sourceEditor.drafts[active.path] = {
+        path:active.path, sha:active.sha, baseSha:active.baseSha || state.adminData.sourceControlTree?.baseSha || '',
+        content:'', deleted:true, requiresConfirmation:Boolean(active.requiresConfirmation)
+      };
+      state.sourceEditor.showDiff = false;
+      toast('Đã đánh dấu tệp để xóa trong Draft PR.');
+      await renderPage();
+      return;
+    }
+    const sourceUnstage = event.target.closest('[data-source-unstage]');
+    if (sourceUnstage) {
+      const filePath = sourceUnstage.dataset.sourceUnstage;
+      delete state.sourceEditor.drafts[filePath];
+      if (state.sourceEditor.activeFile?.path === filePath && !state.sourceEditor.activeFile.sha) {
+        state.sourceEditor.activeFile = null;
+      }
+      state.sourceEditor.showDiff = false;
+      await renderPage();
+      return;
+    }
+    const sourcePreview = event.target.closest('[data-source-preview]');
+    if (sourcePreview) {
+      state.sourceEditor.showDiff = !state.sourceEditor.showDiff;
       await renderPage();
       return;
     }
@@ -2165,7 +2279,28 @@
       submitButton.disabled = true;
     }
     try {
-      if (form.id === 'admin-provider-form') {
+      if (form.id === 'source-pr-form') {
+        const stagedFiles = Object.values(state.sourceEditor.drafts || {}).map(item => ({
+          path:item.path,
+          sha:item.sha || '',
+          content:item.deleted ? '' : item.content,
+          deleted:Boolean(item.deleted)
+        }));
+        if (!stagedFiles.length) throw new Error('Chưa có thay đổi nào để tạo Pull Request.');
+        const result = await api('/api/admin/source-control/pull-requests','POST',{
+          expectedBaseSha:state.adminData.sourceControlTree?.baseSha || '',
+          title:String(data.title || '').trim(),
+          summary:String(data.summary || '').trim(),
+          sensitiveConfirmation:Boolean(data.sensitiveConfirmation),
+          files:stagedFiles
+        });
+        state.sourceEditor.lastPullRequest = result.pullRequest || null;
+        state.sourceEditor.drafts = {};
+        state.sourceEditor.activeFile = null;
+        state.sourceEditor.showDiff = false;
+        toast(result.pullRequest?.message || 'Đã tạo Draft Pull Request.');
+        await renderPage();
+      } else if (form.id === 'admin-provider-form') {
         const payload = {
           serviceKey:String(data.serviceKey || ''),
           providerKey:String(data.providerKey || '').trim().toLowerCase(),

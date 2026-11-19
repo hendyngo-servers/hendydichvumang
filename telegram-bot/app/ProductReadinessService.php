@@ -24,27 +24,60 @@ final class ProductReadinessService
             . "NULLIF(BTRIM(COALESCE(" . $row . "->>'source_url','')), '') IS NOT NULL";
     }
 
-    public static function missingSchemaColumns(): array
+    /**
+     * Read-only schema diagnostic used by both the Admin UI and product guards.
+     * A failed inspection is treated as not-ready; it never enables product sales.
+     */
+    public static function schemaStatus(): array
     {
         $required = [
             'supplier_name','supplier_url','supplier_product_ref','source_url',
             'source_permission_status','supplier_access_status','fulfillment_mode',
             'credential_env_key','verified_by','verified_at',
         ];
-        $placeholders = implode(',', array_fill(0, count($required), '?'));
-        $rows = Database::all(
-            "SELECT column_name FROM information_schema.columns
-             WHERE table_schema = current_schema() AND table_name = 'products'
-               AND column_name IN (" . $placeholders . ")",
-            $required
-        );
-        $present = array_map(static fn(array $row): string => (string) $row['column_name'], $rows);
-        return array_values(array_diff($required, $present));
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($required), '?'));
+            $rows = Database::all(
+                "SELECT column_name FROM information_schema.columns
+                 WHERE table_schema = current_schema() AND table_name = 'products'
+                   AND column_name IN (" . $placeholders . ")",
+                $required
+            );
+            $present = array_map(static fn(array $row): string => (string) $row['column_name'], $rows);
+            $missing = array_values(array_diff($required, $present));
+
+            return [
+                'ready' => $missing === [],
+                'table' => 'products',
+                'migration' => '20261113_product_supplier_readiness.sql',
+                'requiredColumns' => $required,
+                'presentColumns' => $present,
+                'missingColumns' => $missing,
+                'checkFailed' => false,
+            ];
+        } catch (\\Throwable $error) {
+            error_log('[product-readiness-schema] ' . $error::class);
+            return [
+                'ready' => false,
+                'table' => 'products',
+                'migration' => '20261113_product_supplier_readiness.sql',
+                'requiredColumns' => $required,
+                'presentColumns' => [],
+                'missingColumns' => $required,
+                'checkFailed' => true,
+            ];
+        }
+    }
+
+    public static function missingSchemaColumns(): array
+    {
+        return self::schemaStatus()['missingColumns'];
     }
 
     public static function schemaReady(): bool
     {
-        return self::missingSchemaColumns() === [];
+        return self::schemaStatus()['ready'];
     }
 
     public static function isSellable(array $product): bool

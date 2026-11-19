@@ -790,6 +790,51 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && $path === '/api/admin/database/readiness') {
+            try {
+                $connection = Database::connectionInfo();
+                $productSchema = ProductReadinessService::schemaStatus();
+                $providerSchema = ProviderRegistryService::schemaStatus();
+
+                return self::response([
+                    'available' => true,
+                    'checkedAt' => gmdate(DATE_ATOM),
+                    'database' => $connection['database'],
+                    'runtimeRole' => $connection['role'],
+                    'pooledConnection' => $connection['pooled'],
+                    'productSupplierReadiness' => [
+                        'schemaReady' => $productSchema['ready'],
+                        'table' => $productSchema['table'],
+                        'migration' => $productSchema['migration'],
+                        'missingColumns' => $productSchema['missingColumns'],
+                        'checkFailed' => $productSchema['checkFailed'],
+                    ],
+                    'providerRegistry' => [
+                        'schemaReady' => $providerSchema['ready'],
+                        'migration' => '20261113_provider_service_registry.sql',
+                        'missingTables' => $providerSchema['missingTables'],
+                        'checkFailed' => $providerSchema['checkFailed'],
+                    ],
+                    'safety' => [
+                        'readOnly' => true,
+                        'migrationExecuted' => false,
+                        'runtimeRoleMayApplyDdl' => false,
+                    ],
+                ]);
+            } catch (Throwable $error) {
+                error_log('[admin-database-readiness] ' . $error::class);
+                return self::response([
+                    'available' => false,
+                    'checkedAt' => gmdate(DATE_ATOM),
+                    'message' => 'Không thể đọc trạng thái PostgreSQL/schema. Hãy kiểm tra log Backend và chạy database-doctor bằng kết nối migration phù hợp.',
+                    'safety' => [
+                        'readOnly' => true,
+                        'migrationExecuted' => false,
+                    ],
+                ], 503);
+            }
+        }
+
         if ($method === 'GET' && $path === '/api/admin/service-readiness') {
             return self::response(ServiceReadinessService::snapshot());
         }
@@ -1317,7 +1362,7 @@ final class ApiController
         }
         if ($method === 'POST' && $path === '/api/admin/products') {
             if (!ProductReadinessService::schemaReady()) {
-                throw new HttpException(409, 'Database chưa áp migration nhà cung cấp/quyền nguồn. Hãy chạy telegram-bot/database/migrations/20261113_product_supplier_readiness.sql bằng database owner trước khi tạo hoặc chỉnh sửa sản phẩm.');
+                throw new HttpException(409, 'Database chưa sẵn sàng cho Supplier Readiness. Hãy mở trạng thái Database trong Admin, chạy php bin/database-doctor.php và php bin/migrate.php để kiểm tra; chỉ áp dụng bằng direct/unpooled MIGRATION_DATABASE_URL với database-owner role và --expect-database=<đúng_tên_database>. Không chạy DDL bằng DATABASE_URL runtime.');
             }
             $name = $this->text($this->body['name'] ?? '', 120);
             $category = $this->text($this->body['category'] ?? '', 32);
@@ -1361,7 +1406,7 @@ final class ApiController
             $id = $match[1];
             if ($method === 'PATCH') {
                 if (!ProductReadinessService::schemaReady()) {
-                    throw new HttpException(409, 'Database chưa áp migration nhà cung cấp/quyền nguồn. Hãy chạy telegram-bot/database/migrations/20261113_product_supplier_readiness.sql bằng database owner trước khi tạo hoặc chỉnh sửa sản phẩm.');
+                    throw new HttpException(409, 'Database chưa sẵn sàng cho Supplier Readiness. Hãy mở trạng thái Database trong Admin, chạy php bin/database-doctor.php và php bin/migrate.php để kiểm tra; chỉ áp dụng bằng direct/unpooled MIGRATION_DATABASE_URL với database-owner role và --expect-database=<đúng_tên_database>. Không chạy DDL bằng DATABASE_URL runtime.');
                 }
                 $current = Database::one('SELECT * FROM products WHERE id = ?', [$id]);
                 if ($current === null) {

@@ -374,7 +374,7 @@ final class SourceControlService
         }
 
         $extension = strtolower(pathinfo($base, PATHINFO_EXTENSION));
-        $specialNames = ['dockerfile', 'makefile', 'caddyfile', '.gitignore', '.dockerignore'];
+        $specialNames = ['dockerfile', 'makefile', 'caddyfile', 'procfile', 'readme', 'license', 'notice', 'copying', 'gemfile', 'brewfile', 'justfile', 'taskfile', '.gitignore', '.dockerignore', '.gitattributes', '.editorconfig'];
         $isText = in_array($base, $specialNames, true) || in_array($extension, self::TEXT_EXTENSIONS, true);
         if (!$isText) {
             return ['visible' => true, 'editable' => false, 'reason' => 'Định dạng không phải tệp văn bản được hỗ trợ.', 'requiresConfirmation' => false];

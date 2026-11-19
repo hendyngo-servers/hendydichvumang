@@ -38,7 +38,7 @@ or return connection strings, or reveal database passwords/API tokens.
 
    ```sh
    read -r -s -p "Neon direct owner URL: " MIGRATION_DATABASE_URL
-   printf '\\n'
+   printf '\n'
    export MIGRATION_DATABASE_URL
    ```
 

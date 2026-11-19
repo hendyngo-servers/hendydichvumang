@@ -1097,18 +1097,26 @@
     const dbStatus = state.adminData.databaseReadiness || {};
     const productSchema = dbStatus.productSupplierReadiness || {};
     const registrySchema = dbStatus.providerRegistry || {};
-    const supplierSchemaReady = dbStatus.available === true && productSchema.schemaReady === true;
+    const supplierSchemaReady = dbStatus.available === true && productSchema.schemaReady === true && productSchema.checkFailed !== true;
+    const productSchemaCheckFailed = productSchema.checkFailed === true;
+    const providerSchemaCheckFailed = registrySchema.checkFailed === true;
     const databaseName = String(dbStatus.database || 'Chưa xác định');
     const missingColumns = Array.isArray(productSchema.missingColumns) ? productSchema.missingColumns : [];
     const missingTables = Array.isArray(registrySchema.missingTables) ? registrySchema.missingTables : [];
+    const productSchemaLabel = supplierSchemaReady ? 'Đã sẵn sàng' : (productSchemaCheckFailed ? 'Không kiểm tra được' : 'Thiếu migration');
+    const registrySchemaLabel = registrySchema.schemaReady ? 'Đã có bảng' : (providerSchemaCheckFailed ? 'Không kiểm tra được' : 'Chưa sẵn sàng');
     const productSchemaPanel = dbStatus.available !== true
       ? '<div class="notice warn"><b>Chưa đọc được trạng thái database.</b><br>' + escapeHtml(dbStatus.message || 'Không thể xác minh PostgreSQL.') + '<br>Biểu mẫu đang khóa thao tác lưu để tránh lỗi ghi dữ liệu. Nhấn tải lại sau khi kiểm tra kết nối máy chủ.</div>'
-      : '<div class="card"><div class="record-top"><div><b>🗄️ DATABASE ĐANG KẾT NỐI</b><small>Database: ' + escapeHtml(databaseName) + ' · Role: ' + escapeHtml(dbStatus.runtimeRole || '—') + ' · ' + (dbStatus.pooledConnection ? 'Pooled connection' : 'Direct / unpooled connection') + '</small></div><span class="status ' + (supplierSchemaReady ? 'completed' : 'pending') + '">' + (supplierSchemaReady ? 'Supplier schema sẵn sàng' : 'Thiếu migration') + '</span></div>' +
-        '<div class="list-row"><span>Product Supplier Readiness</span><span class="status ' + (supplierSchemaReady ? 'completed' : 'pending') + '">' + (supplierSchemaReady ? 'Đủ 10 cột' : 'Chưa sẵn sàng') + '</span></div>' +
-        (missingColumns.length ? '<p class="small muted">Cột còn thiếu: ' + escapeHtml(missingColumns.join(', ')) + '</p>' : '') +
-        '<div class="list-row"><span>Provider & Service Registry</span><span class="status ' + (registrySchema.schemaReady ? 'completed' : 'pending') + '">' + (registrySchema.schemaReady ? 'Đã có bảng' : 'Chưa sẵn sàng') + '</span></div>' +
-        (missingTables.length ? '<p class="small muted">Bảng còn thiếu: ' + escapeHtml(missingTables.join(', ')) + '</p>' : '') +
-        (!supplierSchemaReady ? '<div class="notice warn"><b>Chưa thể lưu sản phẩm.</b><br>1. Mở Render Shell của service Bot và chạy <code>php bin/database-doctor.php</code>.<br>2. Đặt riêng <code>MIGRATION_DATABASE_URL</code> bằng direct/unpooled Neon URL với database-owner role; không thay <code>DATABASE_URL</code> runtime.<br>3. Chạy <code>php bin/migrate.php</code> để xem DRY RUN và rà soát toàn bộ migration đang chờ.<br>4. Sau khi tạo restore point và xác nhận đúng database, chạy:<br><code>' + escapeHtml('php bin/migrate.php --apply --expect-database=' + databaseName) + '</code><br>Migration runner áp dụng tất cả migration đang chờ trong repository, không chỉ hai file Provider/Supplier. Sau đó tải lại trang để xác minh.</div>' : '<div class="notice good">Schema sản phẩm đã sẵn sàng. Việc mở bán vẫn phụ thuộc xác minh quyền nguồn, nhà cung cấp, tồn kho và bàn giao.</div>') +
+      : '<div class="card"><div class="record-top"><div><b>🗄️ DATABASE ĐANG KẾT NỐI</b><small>Database: ' + escapeHtml(databaseName) + ' · Role: ' + escapeHtml(dbStatus.runtimeRole || '—') + ' · ' + (dbStatus.pooledConnection ? 'Pooled connection' : 'Direct / unpooled connection') + '</small></div><span class="status ' + (supplierSchemaReady ? 'completed' : 'pending') + '">' + escapeHtml(productSchemaLabel) + '</span></div>' +
+        '<div class="list-row"><span>Product Supplier Readiness</span><span class="status ' + (supplierSchemaReady ? 'completed' : 'pending') + '">' + escapeHtml(productSchemaLabel) + '</span></div>' +
+        (missingColumns.length && !productSchemaCheckFailed ? '<p class="small muted">Cột còn thiếu: ' + escapeHtml(missingColumns.join(', ')) + '</p>' : '') +
+        (productSchemaCheckFailed ? '<p class="small muted">Không thể đọc metadata của bảng products. Hãy kiểm tra quyền đọc information_schema và log backend trước khi chạy migration.</p>' : '') +
+        '<div class="list-row"><span>Provider & Service Registry</span><span class="status ' + (registrySchema.schemaReady ? 'completed' : 'pending') + '">' + escapeHtml(registrySchemaLabel) + '</span></div>' +
+        (missingTables.length && !providerSchemaCheckFailed ? '<p class="small muted">Bảng còn thiếu: ' + escapeHtml(missingTables.join(', ')) + '</p>' : '') +
+        (providerSchemaCheckFailed ? '<p class="small muted">Không thể đọc metadata Provider Registry. Hãy kiểm tra quyền đọc information_schema và log backend.</p>' : '') +
+        (!supplierSchemaReady && !productSchemaCheckFailed ? '<div class="notice warn"><b>Chưa thể lưu sản phẩm.</b><br>1. Mở Render Shell của service Bot và chạy <code>php bin/database-doctor.php</code>.<br>2. Đặt riêng <code>MIGRATION_DATABASE_URL</code> bằng direct/unpooled Neon URL với database-owner role; không thay <code>DATABASE_URL</code> runtime.<br>3. Chạy <code>php bin/migrate.php</code> để xem DRY RUN và rà soát toàn bộ migration đang chờ.<br>4. Sau khi tạo restore point và xác nhận đúng database, chạy:<br><code>' + escapeHtml('php bin/migrate.php --apply --expect-database=' + databaseName) + '</code><br>Migration runner áp dụng tất cả migration đang chờ trong repository, không chỉ hai file Provider/Supplier. Sau đó tải lại trang để xác minh.</div>' : '') +
+        (productSchemaCheckFailed ? '<div class="notice warn"><b>Không tự chạy migration lúc này.</b> Chẩn đoán schema chưa đọc được; cần xử lý quyền truy cập/kiểm tra PostgreSQL trước.</div>' : '') +
+        (supplierSchemaReady ? '<div class="notice good">Schema sản phẩm đã sẵn sàng. Việc mở bán vẫn phụ thuộc xác minh quyền nguồn, nhà cung cấp, tồn kho và bàn giao.</div>' : '') +
         '<button type="button" class="tiny-btn" data-database-readiness-refresh>↻ Tải lại trạng thái database</button></div>';
     return productSchemaPanel + '<form class="card form" id="admin-product-form" data-product-id="' + (editing ? escapeHtml(editing.id) : '') + '"><b>' +
       (editing ? 'Chỉnh sửa sản phẩm #' + escapeHtml(editing.id) : 'Thêm sản phẩm mới') + '</b>' +

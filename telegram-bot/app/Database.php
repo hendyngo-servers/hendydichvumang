@@ -72,6 +72,36 @@ final class Database
         return self::$connection;
     }
 
+    /**
+     * Safe identity of the runtime PostgreSQL connection for Admin diagnostics.
+     * This deliberately avoids reading the migration ledger because the runtime
+     * role is DML-only and must not need owner privileges just to view status.
+     */
+    public static function connectionInfo(): array
+    {
+        $url = Env::get('DATABASE_URL');
+        if ($url === null) {
+            throw new RuntimeException('Thiếu DATABASE_URL.');
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host']) || empty($parts['path'])) {
+            throw new RuntimeException('DATABASE_URL không đúng định dạng PostgreSQL URL.');
+        }
+
+        $databaseName = (string) self::value('SELECT current_database()');
+        $roleName = (string) self::value('SELECT current_user');
+        if ($databaseName === '' || $roleName === '') {
+            throw new RuntimeException('Không xác định được database hoặc role PostgreSQL hiện tại.');
+        }
+
+        $host = strtolower((string) $parts['host']);
+        return [
+            'database' => $databaseName,
+            'role' => $roleName,
+            'pooled' => (bool) preg_match('/-pooler(?:\.|$)/i', $host),
+        ];
+    }
+
     public static function run(string $sql, array $parameters = []): PDOStatement
     {
         $statement = self::connection()->prepare($sql);

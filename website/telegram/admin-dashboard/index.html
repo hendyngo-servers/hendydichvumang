@@ -2304,6 +2304,7 @@
         });
         state.sourceEditor.lastPullRequest = result.pullRequest || null;
         state.sourceEditor.drafts = {};
+        state.sourceEditor.buffers = {};
         state.sourceEditor.activeFile = null;
         state.sourceEditor.showDiff = false;
         toast(result.pullRequest?.message || 'Đã tạo Draft Pull Request.');

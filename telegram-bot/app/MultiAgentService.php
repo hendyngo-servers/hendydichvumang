@@ -120,7 +120,7 @@ final class MultiAgentService
             $steps=$task['workflow_steps'];if(is_string($steps)){$x=json_decode($steps,true);$steps=is_array($x)?$x:[];}if(!is_array($steps))$steps=[];
             $nextIndex=(int)$task['current_step']+1;$next=isset($steps[$nextIndex])?(string)$steps[$nextIndex]:'';
             if($next!==''){$v=Database::value('SELECT enabled FROM multi_agent_agents WHERE agent_key=?',[$next]);if(!in_array($v,[true,1,'1','t','true'],true))throw new RuntimeException('Agent kế tiếp đã bị tắt trong khi quy trình đang chạy.');}
-            Database::transaction(function()use($task,$result,$nextIndex,$next):void{
+            Database::transaction(function()use($task,$result,$nextIndex,$next,$steps):void{
                 Database::run("UPDATE multi_agent_runs SET status='completed',input_tokens=?,output_tokens=?,output_text=?,finished_at=NOW() WHERE id=? AND status='running'",[$result['inputTokens'],$result['outputTokens'],$result['text'],$task['run_id']]);
                 if($next!==''){
                     Database::run("UPDATE multi_agent_tasks SET status='queued',agent_key=?,current_step=?,result_text=?,attempts=0,claimed_at=NULL,error_message='',updated_at=NOW() WHERE id=? AND status='running'",[$next,$nextIndex,$result['text'],$task['id']]);

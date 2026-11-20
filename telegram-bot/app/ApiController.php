@@ -977,6 +977,39 @@ final class ApiController
             ]);
             return self::response(['aiMedia' => $result, 'message' => 'Đã lưu cấu hình AI Studio.']);
         }
+        if ($method === 'GET' && $path === '/api/admin/multi-agent') {
+            return self::response(MultiAgentService::adminSnapshot());
+        }
+        if ($method === 'POST' && $path === '/api/admin/multi-agent/agents') {
+            try { $agent=MultiAgentService::createAgent($this->body,(string)$this->user['id']); }
+            catch(RuntimeException $error){throw new HttpException(400,$error->getMessage());}
+            catch(Throwable $error){throw new HttpException(409,'Không thể tạo Agent. Hãy kiểm tra Agent Key có bị trùng không.');}
+            $this->audit('multi_agent.agent.create',(string)$agent['agent_key'],['enabled'=>(bool)$agent['enabled']]);
+            return self::response(['agent'=>$agent,'message'=>'Đã tạo Agent mới.'],201);
+        }
+        if(preg_match('#^/api/admin/multi-agent/agents/([a-z][a-z0-9_]{1,63})$#',$path,$m)&&$method==='PATCH'){
+            try{$agent=MultiAgentService::saveAgent($m[1],$this->body,(string)$this->user['id']);}
+            catch(RuntimeException $error){throw new HttpException(400,$error->getMessage());}
+            $this->audit('multi_agent.agent.update',$m[1],['enabled'=>(bool)$agent['enabled']]);
+            return self::response(['agent'=>$agent,'message'=>'Đã cập nhật cấu hình Agent.']);
+        }
+        if($method==='POST'&&$path==='/api/admin/multi-agent/tasks'){
+            try{$task=MultiAgentService::createTask($this->body,(string)$this->user['id']);}
+            catch(RuntimeException $error){throw new HttpException(409,$error->getMessage());}
+            $this->audit('multi_agent.task.create',(string)$task['id'],['taskType'=>(string)$task['task_type']]);
+            return self::response(['task'=>$task,'message'=>'Đã đưa công việc vào Hub Điều phối.'],201);
+        }
+        if(preg_match('#^/api/admin/multi-agent/tasks/([0-9a-f-]{36})/(approve|reject|retry)$#i',$path,$m)&&$method==='POST'){
+            $id=strtolower($m[1]);$action=strtolower($m[2]);
+            try{
+                if($action==='approve')$task=MultiAgentService::approveTask($id,(string)$this->user['id'],(string)($this->body['note']??''));
+                elseif($action==='reject')$task=MultiAgentService::rejectTask($id,(string)$this->user['id'],(string)($this->body['note']??''));
+                else $task=MultiAgentService::retryTask($id,(string)$this->user['id']);
+            }catch(RuntimeException $error){throw new HttpException(409,$error->getMessage());}
+            $this->audit('multi_agent.task.'.$action,$id,['status'=>(string)$task['status']]);
+            return self::response(['task'=>$task,'message'=>$action==='approve'?'Đã ghi nhận phê duyệt.':($action==='reject'?'Đã từ chối bản nháp.':'Đã đưa công việc về hàng chờ.')]);
+        }
+
         if ($method === 'GET' && $path === '/api/admin/ai-cover') {
             return self::response(AiCoverService::adminSnapshot());
         }

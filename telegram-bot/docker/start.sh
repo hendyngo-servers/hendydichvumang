@@ -78,6 +78,13 @@ if [[ "${AI_MEDIA_QUEUE_ENABLED:-false}" == "true" ]]; then
     echo "HENDY AI media worker đã khởi chạy."
 fi
 
+if [[ "${MULTI_AGENT_ENABLED:-false}" == "true" ]]; then
+    php bin/multi-agent-preflight.php
+    php bin/multi-agent-worker.php &
+    background_pids+=("$!")
+    echo "HENDY Multi-Agent worker đã khởi chạy."
+fi
+
 if [[ "${VIDEO_WORKER_ENABLED:-false}" == "true" ]]; then
     if [[ -z "${VIDEO_PROCESSOR_URL:-}" || -z "${VIDEO_PROCESSOR_SECRET:-}" ]]; then
         echo "VIDEO_WORKER_ENABLED=true nhưng VIDEO_PROCESSOR_URL hoặc VIDEO_PROCESSOR_SECRET chưa cấu hình." >&2

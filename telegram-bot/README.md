@@ -146,3 +146,8 @@ Phân hệ này chỉ đọc bài đăng từ Telegram channel đã được Adm
 4. Mở Website Admin → **Code Telegram** → kết nối channel bằng `@username` hoặc channel ID. Mặc định mã trích từ cả tin chữ/video đều chờ Admin duyệt; chỉ Admin mới bật tự xuất bản mã chữ cho nguồn đáng tin cậy.
 
 Lưu ý: gói dịch vụ và luồng gửi username đã được tích hợp, nhưng thao tác đổi/redeem mã trên từng nhà cái vẫn cần API đối tác được ủy quyền hoặc thao tác vận hành có xác nhận của Admin. HENDY không tự đăng nhập vào tài khoản game, không lưu mật khẩu, và không tuyên bố đã nhập mã vào nhà cái khi chưa có xác nhận thành công. Không dùng user session/MTProto để vượt quyền riêng tư, không tự động tham gia kênh, và không thu thập mật khẩu, OTP đăng nhập hoặc dữ liệu cá nhân.
+
+
+## Multi-Agent Control Center
+
+The Admin Dashboard provides a PostgreSQL-backed Agent registry and Hub. Tasks flow through specialist agents and the final output waits for Admin approval. See ../docs/MULTI-AGENT-CONTROL-CENTER.md before enabling the worker.

@@ -22,6 +22,7 @@ require dirname(__DIR__) . '/app/SystemWebService.php';
 require dirname(__DIR__) . '/app/OperationsService.php';
 require dirname(__DIR__) . '/app/MatchmakingService.php';
 require dirname(__DIR__) . '/app/ProxyService.php';
+require dirname(__DIR__) . '/app/MultiAgentService.php';
 
 use Hendy\VideoJobService;
 use Hendy\CodeTelegramService;
@@ -34,6 +35,7 @@ use Hendy\ProductReadinessService;
 use Hendy\ServiceReadinessService;
 use Hendy\ProviderRegistryService;
 use Hendy\SourceControlService;
+use Hendy\MultiAgentService;
 
 $checks = 0;
 $assert = static function (bool $condition, string $message) use (&$checks): void {
@@ -93,11 +95,24 @@ $assert(str_contains($databaseRunnerSource, 'beginTransaction()') && str_contain
 $assert(str_contains($migrationCliSource, '$apply = in_array(\'--apply\', $argv, true)') && str_contains($migrationCliSource, '--expect-database=') && str_contains($migrationCliSource, 'MIGRATION_DATABASE_URL') && str_contains($migrationCliSource, 'DRY RUN'), 'Migration CLI defaults to a read-only dry-run and requires an explicit expected database before apply');
 $assert(str_contains($databaseDoctorSource, 'Database::migrationPlan()') && str_contains($databaseDoctorSource, 'READ ONLY') && !str_contains($databaseDoctorSource, 'Database::migrate('), 'Database doctor is read-only and never applies schema changes');
 $assert(str_contains($startupScriptSource, 'RUN_MIGRATIONS_ON_START:-false') && str_contains($startupScriptSource, 'local|development|test') && str_contains($startupScriptSource, 'Chỉ cho phép tự động migration trong môi trường local/development/test'), 'Render production/staging startup refuses automatic DDL; only local, development and test may opt in');
+$assert(str_contains($startupScriptSource, 'if php bin/multi-agent-preflight.php; then') && str_contains($startupScriptSource, 'Bot/API vẫn tiếp tục'), 'a disabled or misconfigured optional Multi-Agent worker cannot prevent the main Bot/API service from starting');
 $assert(str_contains($startupScriptSource, 'MIGRATION_EXPECTED_DATABASE') && str_contains($startupScriptSource, '--expect-database=') && str_contains($startupScriptSource, 'MIGRATION_DATABASE_URL'), 'Non-production startup migration requires a confirmed DB name and a dedicated migration URL');
 $assert(!str_contains($configValidatorSource, "TelegramAuth::token('secondary')") && str_contains($configValidatorSource, 'một bot chính (BOT1_TOKEN)') && str_contains($configValidatorSource, 'BOT2 cũ'), 'Configuration validator matches the one-bot deployment and warns about unused legacy BOT2 settings');
 $assert(str_contains($providerRegistrySource, "'schemaReady' => false") && str_contains($providerRegistrySource, 'requireSchemaReady') && str_contains($providerRegistrySource, 'Thiếu bảng:'), 'Provider Registry returns an actionable schema-not-ready state and guards writes until migration');
 $assert(str_contains($providerRegistryUiSource, 'Database chưa sẵn sàng cho Provider Registry') && str_contains($providerRegistryUiSource, 'missingTables'), 'Admin dashboard explains which Provider Registry tables are missing');
 $assert(str_contains($providerRegistrySource, 'catch (\\Throwable $error)') && str_contains($providerRegistrySource, 'provider-registry-access-control'), 'Missing registry tables cannot crash normal member API access');
+$multiAgentSource=file_get_contents(dirname(__DIR__).'/app/MultiAgentService.php');
+$assert(MultiAgentService::workflowForTaskType('content')===['research','content'],'content work is handed from Research to Content');
+$assert(MultiAgentService::workflowForTaskType('video')===['research','content','video'],'video workflow flows through specialist agents');
+$assert(MultiAgentService::workflowForTaskType('support')===['support'],'support task uses the support specialist');
+$assert(MultiAgentService::workflowForTaskType('custom','my_agent')===['my_agent'],'custom task can select a specialist');
+$assert(MultiAgentService::isValidAgentKey('content_agent')&&!MultiAgentService::isValidAgentKey('../admin'),'Agent keys reject unsafe identifiers');
+$assert(MultiAgentService::validModelName('gpt-6.2-astra')&&!MultiAgentService::validModelName('model name with spaces'),'model override accepts only safe model IDs');
+$invalidWorkflow=false;try{MultiAgentService::workflowForTaskType('unknown');}catch(RuntimeException){$invalidWorkflow=true;}
+$assert($invalidWorkflow,'unknown Multi-Agent workflow is rejected');
+$assert(str_contains($multiAgentSource,"'tool_choice'=>'none'")&&str_contains($multiAgentSource,"'store'=>false"),'Multi-Agent request disables tool execution and response storage');
+$assert(str_contains($multiAgentSource,"status='awaiting_approval'")&&str_contains($multiAgentSource,'task.approved')&&str_contains($multiAgentSource,'task.rejected'),'Multi-Agent output requires human approval');
+$assert(str_contains($multiAgentSource,'FOR UPDATE OF t SKIP LOCKED')&&str_contains($multiAgentSource,'recoverStaleTasks'),'worker uses collision-safe queue claims and stale-task recovery');
 $migrationFiles = glob(dirname(__DIR__) . '/database/migrations/*.sql') ?: [];
 $assert(count($migrationFiles) >= 9, 'All additive SQL migrations are included in the migration directory');
 foreach ($migrationFiles as $migrationFile) {

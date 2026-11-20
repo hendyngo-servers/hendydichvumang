@@ -78,6 +78,17 @@ if [[ "${AI_MEDIA_QUEUE_ENABLED:-false}" == "true" ]]; then
     echo "HENDY AI media worker đã khởi chạy."
 fi
 
+if [[ "${MULTI_AGENT_ENABLED:-false}" == "true" ]]; then
+    # A misconfigured optional Agent worker must not prevent the Bot/API from starting.
+    if php bin/multi-agent-preflight.php; then
+        php bin/multi-agent-worker.php &
+        background_pids+=("$!")
+        echo "HENDY Multi-Agent worker đã khởi chạy."
+    else
+        echo "HENDY Multi-Agent worker chưa khởi chạy; Bot/API vẫn tiếp tục. Kiểm tra migration và OPENAI_API_KEY." >&2
+    fi
+fi
+
 if [[ "${VIDEO_WORKER_ENABLED:-false}" == "true" ]]; then
     if [[ -z "${VIDEO_PROCESSOR_URL:-}" || -z "${VIDEO_PROCESSOR_SECRET:-}" ]]; then
         echo "VIDEO_WORKER_ENABLED=true nhưng VIDEO_PROCESSOR_URL hoặc VIDEO_PROCESSOR_SECRET chưa cấu hình." >&2

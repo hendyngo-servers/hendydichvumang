@@ -124,3 +124,9 @@ The migration runner rejects pooled Neon URLs, the restricted `hendy_bot_app` ro
 2. Populate credentials locally; never commit `.env`.
 3. Run `composer install` in `telegram-bot/`.
 4. Run `composer validate-config`, `composer lint` and `composer test`.
+
+## Multi-Agent Control Center
+
+The authenticated Admin Dashboard now includes a PostgreSQL-backed Agent Registry, sequential Hub workflows, queue/run/event history, worker heartbeat and a human approval queue. Workflows include Research → Content, Research → Sales, Research → Content → Video, Support-only and a selected custom Agent. Results remain drafts and require Admin approval; the module does not publish, send Telegram messages, charge the wallet or modify customer records.
+
+The worker is disabled by default. Apply the additive migration telegram-bot/database/migrations/20261120_multi_agent_control_center.sql with the existing owner-role migration runbook first. Then configure OPENAI_API_KEY and explicitly set MULTI_AGENT_ENABLED=true in the Bot Render Environment. See docs/MULTI-AGENT-CONTROL-CENTER.md. Keep RUN_MIGRATIONS_ON_START=false.

@@ -25,7 +25,8 @@
     "websocket": "php bin/websocket.php",
     "video-worker": "php bin/video-worker.php",
     "code-telegram-worker": "php bin/code-telegram-worker.php",
-    "ai-cover-worker": "php bin/ai-cover-dispatcher.php"
+    "ai-cover-worker": "php bin/ai-cover-dispatcher.php",
+    "multi-agent-worker": "php bin/multi-agent-worker.php"
   },
   "config": {
     "sort-packages": true

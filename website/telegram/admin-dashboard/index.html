@@ -239,6 +239,7 @@
     .audit-event{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
     .audit-dot{width:8px;height:8px;flex:none;border-radius:50%;margin-top:5px;background:var(--primary);box-shadow:0 0 10px rgba(0,231,245,.45)}
     .json-help{color:var(--text-muted);font-size:10px;line-height:1.5}
+    .multi-agent-output{white-space:pre-wrap;overflow-wrap:anywhere;max-height:460px;overflow:auto;background:#080d18;border:1px solid var(--panel-border);border-radius:12px;padding:12px;color:#d9edff;font:11px/1.65 ui-monospace,monospace;margin:10px 0}.multi-agent-agent{margin:10px 0}.multi-agent-task{border-color:rgba(0,231,245,.12)}.record-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
     .bottom-nav,#bottom-navigation{display:none!important}
     #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:300;max-width:min(94vw,520px);padding:11px 16px;border:1px solid var(--panel-border);border-radius:12px;background:#101a2c;color:#fff;box-shadow:0 12px 35px #0009}
     #toast:not(.show){opacity:0;pointer-events:none}
@@ -358,6 +359,7 @@
       <button class="menu-item" type="button" data-admin-tab="code-telegram"><span class="menu-icon">📡</span>Code Telegram</button>
       <button class="menu-item" type="button" data-admin-tab="ai-media"><span class="menu-icon">🤖</span>AI Studio · Music & Image</button>
       <button class="menu-item" type="button" data-admin-tab="ai-cover"><span class="menu-icon">🎤</span>AI Cover / RVC</button>
+      <button class="menu-item" type="button" data-admin-tab="multi-agent"><span class="menu-icon">🧠</span>Phòng điều hành Multi-Agent</button>
       <button class="menu-item" type="button" data-admin-tab="settings"><span class="menu-icon">⚙️</span>Cấu hình chung</button>
       <button class="menu-item" type="button" data-admin-tab="audit"><span class="menu-icon">🧾</span>Nhật ký quản trị</button>
     </nav>
@@ -1036,6 +1038,7 @@
     if (tab === 'code-telegram') state.adminData.codeTelegram = await api('/api/admin/code-telegram');
     if (tab === 'ai-media') state.adminData.aiMedia = await api('/api/admin/ai-media');
     if (tab === 'ai-cover') state.adminData.aiCover = await api('/api/admin/ai-cover');
+    if (tab === 'multi-agent') state.adminData.multiAgent = await api('/api/admin/multi-agent');
   }
 
   function adminTabs() {
@@ -1573,7 +1576,97 @@
       '<div class="notice">Tác vụ AI hiện dùng hàng đợi PostgreSQL, giới hạn một job đang chạy trên mỗi thành viên và giới hạn số job mỗi ngày. Chưa cấu hình thu phí AI tự động; không tự trừ ví cho các tác vụ này.</div>';
   }
 
-  function adminAiCover() {
+  function adminMultiAgent() {
+    const d = state.adminData.multiAgent || {};
+    const readiness = d.readiness || {};
+    const stats = d.stats || {};
+    const agents = d.agents || [];
+    const tasks = d.tasks || [];
+    const runs = d.runs || [];
+    const stateLabel = value => ({queued:'Hàng chờ',running:'Đang chạy',awaiting_approval:'Chờ duyệt',approved:'Đã duyệt',rejected:'Đã từ chối',failed:'Thất bại'}[value] || value);
+    const stateClass = value => ({queued:'pending',running:'processing',awaiting_approval:'pending',approved:'completed',rejected:'rejected',failed:'rejected'}[value] || 'pending');
+    const flag = value => '<span class="status ' + (value ? 'completed' : 'pending') + '">' + (value ? 'Sẵn sàng' : 'Chưa sẵn sàng') + '</span>';
+    const agentName = key => { const item = agents.find(agent => agent.agent_key === key); return item ? item.name : key; };
+    const agentCards = agents.length ? agents.map(agent =>
+      '<form class="card form multi-agent-agent" data-multi-agent-agent-form="' + escapeHtml(agent.agent_key) + '">' +
+        '<div class="record-top"><div><b>🧠 ' + escapeHtml(agent.name) + '</b><small>' + escapeHtml(agent.role) + ' · ' + escapeHtml(agent.agent_key) + '</small></div>' +
+        '<span class="status ' + (agent.enabled ? 'completed' : 'pending') + '">' + (agent.enabled ? 'Đang bật' : 'Đang tắt') + '</span></div>' +
+        '<p class="muted">' + escapeHtml(agent.description || '') + '</p>' +
+        '<div class="two-col"><div class="field"><label>Trạng thái Agent</label><select name="enabled"><option value="true"' + (agent.enabled ? ' selected' : '') + '>Bật</option><option value="false"' + (!agent.enabled ? ' selected' : '') + '>Tắt</option></select></div>' +
+        '<div class="field"><label>Model riêng (để trống dùng model chung)</label><input name="modelOverride" maxlength="80" value="' + escapeHtml(agent.model_override || '') + '" placeholder="' + escapeHtml(readiness.model || 'gpt-6.2-astra') + '"></div></div>' +
+        '<div class="field"><label>System Prompt / hướng dẫn Agent</label><textarea name="systemPrompt" rows="5" minlength="20" maxlength="6000" required>' + escapeHtml(agent.system_prompt || '') + '</textarea></div>' +
+        '<button class="tiny-btn">Lưu cấu hình Agent</button></form>'
+    ).join('') : empty('Chưa có Agent','Hãy kiểm tra migration Multi-Agent đã được áp dụng chưa.');
+
+    const taskCards = tasks.length ? tasks.map(task => {
+      const flow = Array.isArray(task.workflow_steps) ? task.workflow_steps : [];
+      const step = Math.min(Number(task.current_step || 0) + 1, Math.max(flow.length, 1));
+      const flowText = flow.map((key,index) => (index + 1) + '. ' + agentName(key)).join(' → ');
+      return '<article class="record multi-agent-task"><div class="record-top"><div><b>' + escapeHtml(task.title) + '</b><small>' +
+        escapeHtml(task.task_type) + ' · Agent: ' + escapeHtml(task.agent_name || task.agent_key || '—') + ' · ' +
+        new Date(task.created_at).toLocaleString('vi-VN') + '</small></div><span class="status ' + stateClass(task.status) + '">' + stateLabel(task.status) + '</span></div>' +
+        '<p class="small muted">Quy trình: ' + escapeHtml(flowText || task.agent_key || '—') + ' · Bước ' + step + '/' + Math.max(flow.length,1) + '</p>' +
+        (task.result_text ? '<details><summary>Xem đầu ra hiện tại</summary><pre class="multi-agent-output">' + escapeHtml(task.result_text) + '</pre></details>' : '') +
+        (task.error_message ? '<p class="notice warn">' + escapeHtml(task.error_message) + '</p>' : '') +
+        (task.status === 'awaiting_approval' ? '<div class="record-actions"><button type="button" class="tiny-btn" data-multi-agent-approve="' + escapeHtml(task.id) + '">✓ Duyệt bản nháp</button><button type="button" class="tiny-btn danger" data-multi-agent-reject="' + escapeHtml(task.id) + '">Từ chối</button></div>' : '') +
+        (task.status === 'failed' ? '<button type="button" class="tiny-btn" data-multi-agent-retry="' + escapeHtml(task.id) + '">↻ Chạy lại</button>' : '') +
+      '</article>';
+    }).join('') : empty('Chưa có công việc','Tạo một yêu cầu ở Hub Điều phối để bắt đầu.');
+
+    const connection =
+      '<div class="card"><div class="section-head"><h3>Trạng thái hệ thống</h3><button type="button" class="tiny-btn" data-multi-agent-refresh>↻ Làm mới</button></div>' +
+      '<div class="list-row"><span>Schema PostgreSQL</span>' + flag(Boolean(readiness.schemaReady)) + '</div>' +
+      '<div class="list-row"><span>Worker được bật trong Render</span>' + flag(Boolean(readiness.workerConfigured)) + '</div>' +
+      '<div class="list-row"><span>OpenAI API Key đã cấu hình</span>' + flag(Boolean(readiness.apiKeyConfigured)) + '</div>' +
+      '<div class="list-row"><span>Worker đang online</span>' + flag(Boolean(readiness.workerOnline)) + '</div>' +
+      '<p class="json-help">Model đang chọn: ' + escapeHtml(readiness.model || 'Chưa cấu hình') + '</p>' +
+      ((readiness.missingTables || []).length ? '<p class="notice warn">Thiếu bảng: ' + escapeHtml(readiness.missingTables.join(', ')) + '. Cần áp migration trước khi bật worker.</p>' : '') +
+      (!readiness.ready ? '<p class="notice warn">Chưa sẵn sàng. Cần migration, MULTI_AGENT_ENABLED=true và OPENAI_API_KEY hợp lệ.</p>' : '<p class="notice">Hub sẵn sàng. Công việc hoàn tất sẽ dừng ở trạng thái chờ Admin duyệt.</p>') +
+      '</div>';
+
+    const taskForm =
+      '<form class="card form" id="admin-multi-agent-task-form"><b>✚ Giao việc cho Hub Điều phối</b>' +
+      '<div class="field"><label>Tiêu đề công việc</label><input name="title" required minlength="5" maxlength="120" placeholder="Ví dụ: Lập kế hoạch nội dung ra mắt dịch vụ mới"></div>' +
+      '<div class="two-col"><div class="field"><label>Loại công việc</label><select name="taskType">' +
+      '<option value="research">Nghiên cứu / phân tích</option><option value="content">Sản xuất nội dung</option><option value="sales">Bán hàng</option><option value="video">Kịch bản video</option><option value="support">Chăm sóc khách hàng</option><option value="custom">Giao cho Agent tùy chọn</option></select></div>' +
+      '<div class="field"><label>Agent tùy chọn (chỉ dùng với Custom)</label><select name="agentKey">' +
+      agents.filter(agent => agent.enabled).map(agent => '<option value="' + escapeHtml(agent.agent_key) + '">' + escapeHtml(agent.name) + '</option>').join('') +
+      '</select></div></div>' +
+      '<div class="field"><label>Yêu cầu chi tiết</label><textarea name="prompt" required minlength="10" maxlength="8000" rows="5" placeholder="Mục tiêu, đối tượng, đầu ra cần nhận..."></textarea></div>' +
+      '<div class="field"><label>Tài liệu / ngữ cảnh do Admin cung cấp</label><textarea name="context" maxlength="10000" rows="4" placeholder="Dán brief, dữ liệu, mô tả sản phẩm hoặc nội dung có sẵn..."></textarea></div>' +
+      '<button class="primary"' + (!readiness.ready ? ' disabled' : '') + '>Giao việc cho Multi-Agent</button>' +
+      '<p class="json-help">Quy trình: Content = Nghiên cứu → Content; Sales = Nghiên cứu → Bán hàng; Video = Nghiên cứu → Content → Video. Nghiên cứu hiện chỉ dùng tài liệu được cung cấp, chưa tự duyệt web.</p></form>';
+
+    const agentCreate =
+      '<form class="card form" id="admin-multi-agent-new-agent-form"' + (!readiness.schemaReady ? ' data-disabled="true"' : '') + '><b>＋ Thêm Agent</b>' +
+      '<div class="two-col"><div class="field"><label>Agent Key</label><input name="agentKey" required maxlength="64" pattern="[a-z][a-z0-9_]{1,63}" placeholder="translator"></div>' +
+      '<div class="field"><label>Tên hiển thị</label><input name="name" required maxlength="100" placeholder="Dịch thuật"></div></div>' +
+      '<div class="two-col"><div class="field"><label>Vai trò</label><input name="role" required maxlength="100" placeholder="Dịch và bản địa hóa"></div>' +
+      '<div class="field"><label>Model riêng</label><input name="modelOverride" maxlength="80" placeholder="Để trống dùng model chung"></div></div>' +
+      '<div class="field"><label>Mô tả</label><input name="description" required maxlength="300"></div>' +
+      '<div class="field"><label>System Prompt</label><textarea name="systemPrompt" required minlength="20" maxlength="6000" rows="4"></textarea></div>' +
+      '<div class="field"><label>Trạng thái</label><select name="enabled"><option value="true">Bật</option><option value="false">Tắt</option></select></div>' +
+      '<button class="primary"' + (!readiness.schemaReady ? ' disabled' : '') + '>Tạo Agent</button></form>';
+
+    const runHistory = runs.length ? '<div class="card"><h3>Lịch sử thực thi Agent</h3>' + runs.slice(0,15).map(run =>
+      '<div class="list-row"><span><b>' + escapeHtml(run.agent_name || run.agent_key) + '</b><small>' + escapeHtml(String(run.task_id).slice(0,8)) + ' · ' + escapeHtml(run.model || '') + '</small></span>' +
+      '<span class="status ' + stateClass(run.status === 'completed' ? 'approved' : run.status === 'failed' ? 'failed' : 'running') + '">' + escapeHtml(run.status) + '</span></div>'
+    ).join('') + '</div>' : '';
+
+    return '<div class="app-banner"><div><b>🧠 HENDY MULTI-AGENT CONTROL CENTER</b><small>Hub Điều phối · Agent chuyên môn · Hàng đợi PostgreSQL · Duyệt của Admin</small></div><span class="banner-icon">🧠</span></div>' +
+      '<div class="stat-grid"><div class="stat"><small>Tổng công việc</small><b>' + Number(stats.total || 0) + '</b></div>' +
+      '<div class="stat"><small>Hàng chờ</small><b>' + Number(stats.queued || 0) + '</b></div>' +
+      '<div class="stat"><small>Đang thực thi</small><b>' + Number(stats.running || 0) + '</b></div>' +
+      '<div class="stat"><small>Chờ duyệt</small><b>' + Number(stats.awaiting_approval || 0) + '</b></div></div>' +
+      connection + taskForm +
+      '<div class="section-head"><h3>Agent Registry</h3><span>' + agents.length + ' Agent</span></div>' +
+      '<div class="notice">Có thể chỉnh sửa hướng dẫn, model và trạng thái từng Agent. Khi tắt Agent trong một quy trình đang chạy, Hub sẽ dừng an toàn thay vì tự bỏ qua.</div>' +
+      agentCards + agentCreate +
+      '<div class="section-head"><h3>Luồng công việc</h3><span>' + tasks.length + ' gần đây</span></div>' + taskCards + runHistory +
+      '<div class="notice">Duyệt chỉ ghi nhận quyết định của Admin. Module hiện chưa tự đăng bài, gửi Telegram, thực hiện thanh toán hoặc thay đổi dữ liệu khách hàng.</div>';
+  }
+
+    function adminAiCover() {
     const d = state.adminData.aiCover || {};
     const stats = d.stats || {};
     const voices = d.voices || [];
@@ -1680,6 +1773,7 @@
     if (state.adminTab === 'code-telegram') body = adminCodeTelegram();
     if (state.adminTab === 'ai-media') body = adminAiMedia();
     if (state.adminTab === 'ai-cover') body = adminAiCover();
+    if (state.adminTab === 'multi-agent') body = adminMultiAgent();
     if (state.adminTab === 'runtime') body = adminRuntime();
     if (state.adminTab === 'operations') body = adminOperations();
     if (state.adminTab === 'proxy') body = adminProxy();
@@ -1847,6 +1941,29 @@
       state.adminTab=adminTab.dataset.adminTab;
       document.body.classList.remove('sidebar-open');
       await renderPage();
+      return;
+    }
+    const multiRefresh = event.target.closest('[data-multi-agent-refresh]');
+    if (multiRefresh) {
+      multiRefresh.disabled = true;
+      try { await adminLoad('multi-agent'); await renderPage(); }
+      catch (error) { toast(error.message, 'error'); multiRefresh.disabled = false; }
+      return;
+    }
+    const multiAction = event.target.closest('[data-multi-agent-approve],[data-multi-agent-reject],[data-multi-agent-retry]');
+    if (multiAction) {
+      const taskId = multiAction.dataset.multiAgentApprove || multiAction.dataset.multiAgentReject || multiAction.dataset.multiAgentRetry;
+      const action = multiAction.dataset.multiAgentApprove ? 'approve' : (multiAction.dataset.multiAgentReject ? 'reject' : 'retry');
+      const prompt = action === 'approve' ? 'Xác nhận duyệt bản nháp này?' : (action === 'reject' ? 'Xác nhận từ chối bản nháp này?' : 'Đưa công việc lỗi về hàng chờ để chạy lại?');
+      if (!window.confirm(prompt)) return;
+      multiAction.disabled = true;
+      try {
+        const note = action === 'retry' ? '' : (window.prompt('Ghi chú của Admin (không bắt buộc):') || '');
+        const result = await api('/api/admin/multi-agent/tasks/' + encodeURIComponent(taskId) + '/' + action,'POST',{note});
+        toast(result.message || 'Đã cập nhật công việc.');
+        await adminLoad('multi-agent');
+        await renderPage();
+      } catch (error) { toast(error.message, 'error'); multiAction.disabled = false; }
       return;
     }
     const sourceRefresh = event.target.closest('[data-source-refresh]');
@@ -2337,6 +2454,33 @@
           maintenanceMessage:String(data.maintenanceMessage || '').trim()
         });
         toast(result.message || 'Đã cập nhật dịch vụ.');
+        await renderPage();
+      } else if (form.id === 'admin-multi-agent-task-form') {
+        const result = await api('/api/admin/multi-agent/tasks','POST',{
+          title:String(data.title || '').trim(),taskType:String(data.taskType || ''),
+          agentKey:String(data.agentKey || ''),prompt:String(data.prompt || '').trim(),context:String(data.context || '').trim()
+        });
+        toast(result.message || 'Đã giao việc cho Hub Điều phối.');
+        await adminLoad('multi-agent');
+        await renderPage();
+      } else if (form.id === 'admin-multi-agent-new-agent-form') {
+        const result = await api('/api/admin/multi-agent/agents','POST',{
+          agentKey:String(data.agentKey || '').trim().toLowerCase(),name:String(data.name || '').trim(),
+          role:String(data.role || '').trim(),description:String(data.description || '').trim(),
+          systemPrompt:String(data.systemPrompt || '').trim(),modelOverride:String(data.modelOverride || '').trim(),
+          enabled:data.enabled === 'true'
+        });
+        toast(result.message || 'Đã tạo Agent.');
+        await adminLoad('multi-agent');
+        await renderPage();
+      } else if (form.dataset.multiAgentAgentForm) {
+        const agentKey = String(form.dataset.multiAgentAgentForm || '');
+        const result = await api('/api/admin/multi-agent/agents/' + encodeURIComponent(agentKey),'PATCH',{
+          systemPrompt:String(data.systemPrompt || '').trim(),modelOverride:String(data.modelOverride || '').trim(),
+          enabled:data.enabled === 'true'
+        });
+        toast(result.message || 'Đã cập nhật Agent.');
+        await adminLoad('multi-agent');
         await renderPage();
       } else if (form.id === 'admin-ai-media-form') {
         const payload = {

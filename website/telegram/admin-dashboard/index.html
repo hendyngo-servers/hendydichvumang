@@ -2588,7 +2588,7 @@
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Không thể upload binary. Kiểm tra Neon Object Storage và cấu hình Render.');
-        if (manifestUrl) await api('/api/admin/products/' + encodeURIComponent(productId), 'PATCH', {storeReleaseManifestUrl:manifestUrl});
+        await api('/api/admin/products/' + encodeURIComponent(productId), 'PATCH', {storeReleaseManifestUrl:manifestUrl});
         state.storeReleaseProductId = productId;
         toast(result.message || 'Đã lưu binary ở trạng thái nháp. Kiểm tra và công khai khi sẵn sàng.');
         await renderPage();

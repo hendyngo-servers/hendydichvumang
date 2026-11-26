@@ -30,6 +30,20 @@ for (const file of files) {
     }
   }
 }
+const externalScripts = [
+  'website/public/app-store/config.js',
+  'website/public/app-store/app.js',
+];
+for (const file of externalScripts) {
+  try {
+    const source = readFileSync(file, 'utf8');
+    if (!source.trim()) throw new Error('File is empty.');
+    checked += 1;
+    new vm.Script(source, { filename:file });
+  } catch (error) {
+    failures.push(file + ': ' + (error.stack || error.message));
+  }
+}
 if (checked === 0) failures.push('No inline browser scripts were checked.');
 if (failures.length) {
   for (const failure of failures) process.stderr.write('FAIL ' + failure + '\n');

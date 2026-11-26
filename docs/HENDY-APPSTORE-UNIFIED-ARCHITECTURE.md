@@ -23,8 +23,10 @@ The endpoint is read-only:
 - Admin auth is enforced by the existing `ApiController::handle()` / `requireAdmin()` path.
 - The list is capped at 20 runs and the default is 10.
 - Token values and raw GitHub responses are never returned.
-- Configure `HENDY_GITHUB_TOKEN` in Render with repository metadata access and GitHub Actions read permission. If Actions read is missing, the UI reports that monitoring is unavailable; it does not claim CI is green.
-- The existing `hendy-monorepo-ci.yml` now supports manual `workflow_dispatch` runs. The Admin links to the GitHub Actions page; it does not trigger deployments or mutate workflow runs.
+- Configure `HENDY_GITHUB_TOKEN` in Render with repository metadata access and GitHub Actions read permission for monitoring.
+- The Admin can dispatch only the fixed `hendy-monorepo-ci.yml` workflow on the configured base branch through `POST /api/admin/source-control/workflows/dispatch`; this requires Actions write permission. No user-supplied workflow filename/ref is accepted.
+- GitHub's successful HTTP 204 dispatch response is handled without expecting a JSON body. The API response means a run request was accepted by GitHub; the subsequent workflow run must still be checked in CI / Build Monitor.
+- The CI dispatch runs tests only. It does not trigger a Render deploy or publish a release binary.
 
 ## Release safety invariants
 

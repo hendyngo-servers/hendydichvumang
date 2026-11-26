@@ -1015,6 +1015,9 @@
       ]);
       state.adminData.storeReleaseProducts = productData.products || [];
       state.adminData.storeReleaseDatabaseReadiness = databaseReadiness;
+      state.adminData.storeReleaseWorkflows = await api('/api/admin/source-control/workflows?limit=10').catch(error => ({
+        configured: false, connected: false, runs: [], message: error.message
+      }));
       const products = state.adminData.storeReleaseProducts;
       if (!state.storeReleaseProductId || !products.some(item => String(item.id) === String(state.storeReleaseProductId))) {
         state.storeReleaseProductId = products[0] ? String(products[0].id) : '';
@@ -1262,6 +1265,40 @@
           '<p class="small muted">SHA-256: ' + escapeHtml(item.sha256 || '—') + '</p></article>').join('')
       : '<p class="small muted">Chưa có lịch sử bản phát hành trước. HENDY sẽ giữ tối đa 10 bản ghi khi thay thế binary.</p>';
 
+    const workflowState = state.adminData.storeReleaseWorkflows || {};
+    const workflowRuns = Array.isArray(workflowState.runs) ? workflowState.runs : [];
+    const repositoryName = String(workflowState.repository || '');
+    const validRepository = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repositoryName);
+    const actionsUrl = validRepository ? 'https://github.com/' + repositoryName + '/actions' : '';
+    const workflowRunLabel = item => {
+      if (item.conclusion === 'success') return 'Thành công';
+      if (item.conclusion === 'failure') return 'Thất bại';
+      if (item.status === 'in_progress') return 'Đang chạy';
+      if (item.status === 'queued' || item.status === 'waiting' || item.status === 'requested') return 'Đang chờ';
+      if (item.conclusion === 'cancelled') return 'Đã hủy';
+      return item.conclusion || item.status || 'Không rõ';
+    };
+    const workflowMonitor = '<div class="section-head"><h3>CI / BUILD MONITOR</h3><span>' +
+      (workflowState.connected ? 'GitHub Actions · ' + escapeHtml(workflowState.baseBranch || 'main') : 'Chưa kết nối') + '</span></div>' +
+      '<article class="record"><div class="record-top"><div><b>🧪 Kiểm tra mã nguồn và bản phát hành</b><small class="muted">' +
+      escapeHtml(workflowState.message || 'Chưa có dữ liệu CI.') + '</small></div>' +
+      (workflowState.connected ? '<span class="status completed">READ ONLY</span>' : '<span class="status pending">CHƯA XÁC MINH</span>') + '</div>' +
+      (workflowRuns.length ? workflowRuns.map(item => {
+        const url = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[0-9]+$/.test(String(item.url || '')) ? String(item.url) : '';
+        const ok = item.conclusion === 'success';
+        const failed = item.conclusion === 'failure';
+        const stateClass = ok ? 'completed' : 'pending';
+        const when = item.updatedAt || item.createdAt || '';
+        return '<div class="record-top"><div><b>' + escapeHtml(item.name || 'GitHub Actions') + ' · #' + escapeHtml(item.runNumber || item.id || '') +
+          '</b><small class="muted">' + escapeHtml(item.displayTitle || '') + ' · ' + escapeHtml(item.branch || '') + ' · ' +
+          escapeHtml(item.sha || '') + ' · ' + escapeHtml(when) + '</small></div><span class="status ' + stateClass + '">' +
+          escapeHtml(workflowRunLabel(item)) + '</span></div>' +
+          (url ? '<a class="tiny-btn" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Xem log và Jobs ↗</a>' : '');
+      }).join('') : '<p class="small muted">Chưa có lần chạy phù hợp trên nhánh đã cấu hình.</p>') +
+      (actionsUrl ? '<div class="two-col"><a class="tiny-btn" href="' + escapeHtml(actionsUrl) + '" target="_blank" rel="noopener noreferrer">Mở lịch sử Actions ↗</a>' +
+        '<a class="tiny-btn" href="' + escapeHtml(actionsUrl + '/workflows/hendy-monorepo-ci.yml') + '" target="_blank" rel="noopener noreferrer">Chạy kiểm tra thủ công ↗</a></div>' : '') +
+      '<p class="small muted">Trạng thái CI chỉ phản ánh kiểm tra mã nguồn. Không xác nhận Render đã deploy, secrets đã đủ, binary đã được quét/ký hoặc bản phát hành đã được công khai.</p></article>';
+
     const releaseRows = products.filter(item => item.metadata && item.metadata.storeRelease && item.metadata.storeRelease.filename)
       .map(item => {
         const r = item.metadata.storeRelease;
@@ -1277,7 +1314,7 @@
         '<div class="stat"><small>Có binary</small><b>' + withRelease + '</b></div>' +
         '<div class="stat"><small>Đang công khai</small><b>' + publishedCount + '</b></div>' +
         '<div class="stat"><small>Nháp / chờ duyệt</small><b>' + draftCount + '</b></div>' +
-      '</div>' +
+      '</div>' + workflowMonitor +
       '<div class="notice warn">Hãy tạo hoặc chỉnh sửa sản phẩm, điền tên nhà cung cấp, URL nguồn và trạng thái quyền phân phối ở mục Dịch vụ & sản phẩm. Chỉ sản phẩm đủ Supplier Readiness mới được công khai. Không có License/Crash Report demo hay số lượt tải giả.</div>' +
       '<div class="section-head"><h3>Chọn ứng dụng / sản phẩm</h3><span>' + readyCount + ' hồ sơ đủ điều kiện</span></div>' +
       '<div class="card form"><div class="field"><label>Sản phẩm hiện tại</label><select id="store-release-product-select" data-store-release-product-select>' +

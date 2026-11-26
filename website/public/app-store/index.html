@@ -35,7 +35,7 @@
         <p class="hero-description">Tìm ứng dụng theo nền tảng, xem thông tin phiên bản và tải các bản phát hành đã được kiểm tra và công khai.</p>
         <div class="hero-actions">
           <a class="button primary" href="#catalog"><i class="fa-solid fa-grid-2"></i> Khám phá ứng dụng</a>
-          <a class="button secondary" href="#update-api"><i class="fa-solid fa-code"></i> Auto-update API</a>
+          <a class="button secondary" href="/miniapp/"><i class="fa-solid fa-user"></i> Khu vực thành viên</a>
         </div>
         <div class="device-hint" id="device-hint" aria-live="polite">Đang nhận diện thiết bị…</div>
       </div>
@@ -94,14 +94,7 @@
       <div class="trust-card"><span><i class="fa-solid fa-fingerprint"></i></span><div><b>SHA-256 checksum</b><small>Kiểm tra tính toàn vẹn của tệp tải xuống trước khi cài đặt.</small></div></div>
       <div class="trust-card"><span><i class="fa-solid fa-mobile-screen-button"></i></span><div><b>Đa nền tảng</b><small>Hướng dẫn tải được điều chỉnh theo Android, Windows, macOS, iOS và Linux.</small></div></div>
     </section>
-    <section id="update-api" class="api-section">
-      <div class="api-copy"><span class="eyebrow">02 / DEVELOPER INTEGRATION</span><h2>Ứng dụng tự kiểm tra <em>cập nhật</em></h2><p>Client Desktop hoặc Mobile có thể hỏi HENDY xem ứng dụng đã có phiên bản mới hay chưa. API chỉ trả về bản phát hành đã công khai.</p></div>
-      <div class="api-card">
-        <div class="api-card-head"><span><i class="fa-solid fa-terminal"></i> UPDATE CHECK</span><button id="copy-api-example" type="button"><i class="fa-regular fa-copy"></i> Sao chép</button></div>
-        <code id="api-example">GET /api/public/releases/check?appId=your-app-slug&amp;currentVersion=1.0.0&amp;platform=windows</code>
-        <small>Client nên tải tệp, tự tính SHA-256 và so sánh với kết quả API trước khi mở trình cài đặt.</small>
-      </div>
-    </section>
+
   </main>
   <footer class="footer"><div class="footer-inner">
     <a class="brand footer-brand" href="/app-store/"><span class="brand-mark">H</span><span class="brand-copy"><b>HENDY</b><small>APP STORE</small></span></a>

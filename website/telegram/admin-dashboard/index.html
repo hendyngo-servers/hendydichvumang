@@ -1268,7 +1268,7 @@
     const workflowState = state.adminData.storeReleaseWorkflows || {};
     const workflowRuns = Array.isArray(workflowState.runs) ? workflowState.runs : [];
     const repositoryName = String(workflowState.repository || '');
-    const validRepository = /^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$/.test(repositoryName);
+    const validRepository = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repositoryName);
     const actionsUrl = validRepository ? 'https://github.com/' + repositoryName + '/actions' : '';
     const workflowRunLabel = item => {
       if (item.conclusion === 'success') return 'Thành công';
@@ -1284,7 +1284,7 @@
       escapeHtml(workflowState.message || 'Chưa có dữ liệu CI.') + '</small></div>' +
       (workflowState.connected ? '<span class="status completed">READ ONLY</span>' : '<span class="status pending">CHƯA XÁC MINH</span>') + '</div>' +
       (workflowRuns.length ? workflowRuns.map(item => {
-        const url = /^https:\\/\\/github\\.com\\/[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+\\/actions\\/runs\\/[0-9]+$/.test(String(item.url || '')) ? String(item.url) : '';
+        const url = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[0-9]+$/.test(String(item.url || '')) ? String(item.url) : '';
         const ok = item.conclusion === 'success';
         const failed = item.conclusion === 'failure';
         const stateClass = ok ? 'completed' : 'pending';

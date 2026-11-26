@@ -54,6 +54,10 @@ $configValidatorSource = file_get_contents(dirname(__DIR__) . '/bin/validate-con
 $providerRegistryUiSource = file_get_contents(dirname(__DIR__, 2) . '/website/telegram/admin-dashboard/index.html');
 $providerRegistrySource = file_get_contents(dirname(__DIR__) . '/app/ProviderRegistryService.php');
 
+$sourceControlWorkflowSource = file_get_contents(dirname(__DIR__) . '/app/SourceControlService.php');
+$assert(str_contains($sourceControlWorkflowSource, 'function workflowRuns') && str_contains($sourceControlWorkflowSource, '/actions/runs?per_page=') && str_contains($sourceControlWorkflowSource, "'Actions: read'"), 'GitHub Actions monitor returns only a bounded, allow-listed read-only run summary');
+$assert(str_contains($sourceControlWorkflowSource, "html_url") && str_contains($sourceControlWorkflowSource, "head_sha") && str_contains($sourceControlWorkflowSource, "conclusion"), 'GitHub Actions monitor exposes safe run metadata without tokens or raw API payloads');
+
 $productReadinessBase = [
     'is_active' => true, 'stock' => 3,
     'supplier_name' => 'HENDY inventory',
@@ -444,6 +448,7 @@ $assert(str_contains($releaseControllerSource, 'NeonStorage::presignedDownloadUr
 $assert(str_contains($releaseControllerSource, 'storeReleasePublished') && str_contains($releaseControllerSource, 'ProductReadinessService::isSellable($candidate)') && str_contains($releaseControllerSource, 'store.release.auto_unpublish'), 'an Admin cannot publish a release before supplier readiness and releases are hidden when a product becomes unsellable');
 $assert(str_contains($neonStorageSource, 'store-releases/') && str_contains($neonStorageSource, '/store-release/presign') && str_contains($neonStorageSource, 'application/vnd.android.package-archive'), 'Neon PHP storage bridge accepts only the dedicated private release namespace and platform binary MIME types');
 $assert(str_contains($neonFunctionSource, '/store-release/presign') && str_contains($neonFunctionSource, 'storeRelease') && str_contains($neonFunctionSource, 'application/vnd.android.package-archive'), 'Neon Function signs release object URLs through a separate prefix-restricted route');
+$assert(str_contains($releaseControllerSource, '/api/admin/source-control/workflows') && str_contains($releaseUiSource, 'CI / BUILD MONITOR') && str_contains($releaseUiSource, '/api/admin/source-control/workflows?limit=10'), 'Release Studio includes a live, read-only GitHub Actions monitor with explicit production-verification caveats');
 $assert(str_contains($releaseUiSource, 'HENDY APP STORE · RELEASE STUDIO') && str_contains($releaseUiSource, 'data-admin-tab="store-releases"') && str_contains($releaseUiSource, 'function adminStoreReleases()') && str_contains($releaseUiSource, 'store-release-upload-form') && str_contains($releaseUiSource, 'data-store-release-publish') && str_contains($releaseUiSource, '/release-upload') && str_contains($releaseUiSource, "'Authorization':'tma ' + initData"), 'Admin has a dedicated authenticated App Store Release Studio with upload, publish and hide controls');
 $assert(str_contains($releaseWebsiteSource, 'href="/app-store/"') && str_contains($releaseWebsiteSource, 'Mở HENDY App Store') && !str_contains($releaseWebsiteSource, 'id="downloads"'), 'Homepage links to the dedicated App Store and does not render a duplicate downloads catalogue');
 $assert(!str_contains($releaseWebsiteSource, 'loadPublicReleases') && !str_contains($releaseWebsiteSource, 'data-release-platform'), 'Homepage avoids a duplicate release API request; the dedicated App Store owns download rendering');

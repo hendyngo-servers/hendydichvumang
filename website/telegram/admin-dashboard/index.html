@@ -2053,6 +2053,14 @@
     });
   });
 
+  document.addEventListener('change', async event => {
+    const productSelect = event.target.closest('[data-store-release-product-select]');
+    if (!productSelect) return;
+    state.storeReleaseProductId = String(productSelect.value || '');
+    try { await renderPage(); }
+    catch (error) { toast(error.message, 'error'); }
+  });
+
   document.addEventListener('click', async event => {
     const pageButton = event.target.closest('[data-page]');
     if (pageButton) { navigate(pageButton.dataset.page); return; }
@@ -2131,8 +2139,6 @@
       } catch (error) { toast(error.message, 'error'); publishStoreRelease.disabled = false; }
       return;
     }
-    const storeReleaseUploadForm = event.target.closest('#store-release-upload-form');
-    if (storeReleaseUploadForm && storeReleaseUploadForm.dataset.submitting === 'true') return;
     const releaseForm = event.target.closest('#store-release-upload-form');
     if (releaseForm && releaseForm.dataset.submitting !== 'true') {
       event.preventDefault();

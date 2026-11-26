@@ -20,6 +20,20 @@ test('signs GET and DELETE requests and caps URL lifetime',()=>{
  const del=buildPresignedUrl({method:'DELETE',key:websiteKey,env,now});
  assert.equal(new URL(get.url).searchParams.get('X-Amz-Expires'),'900');assert.equal(del.method,'DELETE');
 });
+const storeReleaseKey='store-releases/42/12345678-1234-4123-8123-123456789abc.apk';
+test('signs private HENDY Store release PUT requests',()=>{
+ const r=buildPresignedUrl({method:'PUT',key:storeReleaseKey,contentType:'application/vnd.android.package-archive',env,now});
+ const u=new URL(r.url);
+ assert.equal(u.protocol,'https:');
+ assert.equal(u.pathname,'/uploads/'+storeReleaseKey);
+ assert.equal(u.searchParams.get('X-Amz-SignedHeaders'),'content-type;host');
+ assert.deepEqual(r.headers,{'Content-Type':'application/vnd.android.package-archive'});
+});
+test('restricts Store release object keys to product IDs and UUID filenames',()=>{
+ assert.throws(()=>buildPresignedUrl({method:'GET',key:'store-releases/../42/payload.apk',env,now}),/Invalid object key/);
+ assert.throws(()=>buildPresignedUrl({method:'GET',key:'store-releases/0/12345678-1234-4123-8123-123456789abc.apk',env,now}),/Invalid object key/);
+ assert.throws(()=>buildPresignedUrl({method:'GET',key:'store-releases/42/plain.apk',env,now}),/Invalid object key/);
+});
 test('rejects path traversal, PHP objects, bad MIME and non-Neon endpoints',()=>{
  assert.throws(()=>buildPresignedUrl({method:'GET',key:'../private.txt',env,now}),/Invalid object key/);
  assert.throws(()=>buildPresignedUrl({method:'PUT',key:moduleKey,contentType:'application/x-php',env,now}),/Unsupported content type/);

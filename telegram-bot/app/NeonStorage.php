@@ -24,9 +24,12 @@ final class NeonStorage
         if(!is_file($localPath)||!is_readable($localPath)) throw new RuntimeException('Không đọc được tệp cần tải lên.');
         if(!self::validObjectKey($objectKey)) throw new RuntimeException('Đường dẫn tệp lưu trữ không hợp lệ.');
         $isAiCover = str_starts_with($objectKey, 'ai-cover/');
+        $isStoreRelease = str_starts_with($objectKey, 'store-releases/');
         $allowedTypes = $isAiCover
             ? ['application/octet-stream','audio/mpeg','audio/wav','audio/x-wav','audio/flac','audio/mp4','audio/aac','audio/ogg','audio/opus']
-            : ['application/json','text/plain','text/css','text/html','image/svg+xml','image/png','image/jpeg','image/webp'];
+            : ($isStoreRelease
+                ? ['application/octet-stream','application/zip','application/vnd.android.package-archive','application/vnd.microsoft.portable-executable','application/x-msdownload','application/x-msi','application/x-apple-diskimage','application/x-apple-installer-package','application/x-iso9660-image','application/x-debian-package','application/vnd.debian.binary-package','application/x-rpm','application/gzip','application/x-gzip']
+                : ['application/json','text/plain','text/css','text/html','image/svg+xml','image/png','image/jpeg','image/webp']);
         if(!in_array($contentType,$allowedTypes,true))
             throw new RuntimeException('Loại tệp không được hỗ trợ cho Neon Storage.');
         $signed=self::requestPresignedUrl('upload',$objectKey,$contentType);
@@ -101,6 +104,7 @@ final class NeonStorage
     {
         if (strlen($key) > 1024) return false;
         if (preg_match('#\Amodules/[a-z][a-z0-9-]{1,62}/[A-Za-z0-9_-]{16,64}\.(?:json|md|txt|css|html|svg|png|jpg|jpeg|webp)\z#',$key) === 1) return true;
+        if (preg_match('#\\Astore-releases/[1-9][0-9]{0,17}/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(?:apk|exe|msi|msix|zip|dmg|pkg|ipa|appimage|deb|rpm|tar\\.gz)\\z#i', $key) === 1) return true;
         $uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
         if (preg_match('#\Aai-cover/sources/'.$uuid.'/source\.(?:mp3|wav|flac|m4a|aac|ogg|opus)\z#i',$key) === 1) return true;
         if (preg_match('#\Aai-cover/results/'.$uuid.'/cover\.mp3\z#i',$key) === 1) return true;
@@ -176,7 +180,7 @@ final class NeonStorage
         $baseUrl=rtrim((string)Env::get('NEON_STORAGE_FUNCTION_URL'),'/');
         $apiKey=(string)Env::get('NEON_STORAGE_FUNCTION_KEY');
         $payload=json_encode(['action'=>$action,'key'=>$objectKey,'contentType'=>$contentType,'expiresIn'=>max(1,min(900,$expiresIn))],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-        $presignPath = str_starts_with($objectKey, 'ai-cover/') ? '/ai-cover/presign' : '/presign';
+        $presignPath = str_starts_with($objectKey, 'ai-cover/') ? '/ai-cover/presign' : (str_starts_with($objectKey, 'store-releases/') ? '/store-release/presign' : '/presign');
         $curl=curl_init($baseUrl.$presignPath);
         if($curl===false) throw new RuntimeException('Không khởi tạo được yêu cầu tới Neon Function.');
         try{

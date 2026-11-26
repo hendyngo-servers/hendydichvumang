@@ -1108,6 +1108,22 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'POST' && $path === '/api/admin/source-control/workflows/dispatch') {
+            $result = SourceControlService::dispatchWorkflow();
+            if (empty($result['dispatched'])) {
+                throw new HttpException(503, (string) ($result['message'] ?? 'Không thể kích hoạt CI.'));
+            }
+            try {
+                $this->audit('source_control.workflow_dispatch', 'hendy-monorepo-ci.yml', [
+                    'branch' => (string) ($result['baseBranch'] ?? ''),
+                    'workflow' => 'hendy-monorepo-ci.yml',
+                    'dispatched' => true,
+                ]);
+            } catch (Throwable $error) {
+                error_log('[admin-workflow-dispatch-audit] ' . $error::class);
+            }
+            return self::response($result, 202);
+        }
         if ($method === 'GET' && $path === '/api/admin/source-control/workflows') {
             try {
                 return self::response(SourceControlService::workflowRuns((int) ($this->query['limit'] ?? 10)));

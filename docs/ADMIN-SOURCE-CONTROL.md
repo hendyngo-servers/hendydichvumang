@@ -21,9 +21,8 @@ Never add its value to Git, .env.example, chat messages or the Admin editor.
 Restrict the token to the single HENDY repository and grant only:
 
 - Metadata: read.
-- Contents: read and write (browse files, create Git blobs/trees/commits and
-  create a branch).
-- Pull requests: read and write (open a direct main commit).
+- Contents: read and write (browse files and create Git blobs/trees/commits).
+- Pull requests: not required.
 
 Do not grant Actions, Administration, Secrets, Environments, Variables,
 Deployments or workflow write permissions. Keep organization-wide access off.
@@ -43,8 +42,8 @@ Render service is compromised.
 4. The backend scans for common private-key, GitHub token, Telegram bot token,
    AWS access-key and Slack token patterns, then creates a commit on a unique
    branch and opens a **draft** Pull Request.
-5. GitHub Actions runs the repository checks. Review the diff, CI results and
-   migration/deployment impact before converting the draft or merging it.
+5. GitHub Actions runs the repository checks after the direct commit. Render
+   may deploy automatically if the repository's deploy workflow is configured.
 
 The editor limits a file to 512 KB, a batch to 20 files and 2 MB total. It
 supports common UTF-8 source/config/document formats, not binary assets or

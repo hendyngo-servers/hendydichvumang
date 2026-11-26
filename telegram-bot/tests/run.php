@@ -219,9 +219,10 @@ $assert(TelegramLink::normalize('https://user@t.me/HendySupportGroup') === '', '
 $assert(TelegramLink::normalize('https://t.me/hendy_cyber_bot?start=old') === 'https://t.me/hendy_cyber_bot', 'chuẩn hóa public URL bot và loại query có sẵn');
 $assert(TelegramLink::normalize('https://example.com/hendy_cyber_bot') === '', 'từ chối URL public bot ngoài Telegram');
 
-$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','tools','codes','otp','proxy','vip','matchmaking','vietsub','gift','ref','orders','history','ai-features','home'], 'menu chính chỉ hiển thị các luồng dịch vụ khách hàng đang sử dụng');
-$assert(BotMenuDefinition::LAYOUT === [['live','tools'],['codes'],['otp','proxy'],['vip'],['matchmaking','vietsub'],['gift'],['ref','orders'],['history'],['ai-features','home']], 'layout menu chính so le theo nhịp 2-1 giống thiết kế HENDY');
-$assert(!in_array('wallet', array_column(BotMenuDefinition::ITEMS, 'action'), true) && !in_array('customer', array_column(BotMenuDefinition::ITEMS, 'action'), true), 'menu chính ẩn các mục nạp tiền/trung tâm khách hàng riêng biệt đã được gom vào luồng đơn hàng và lệnh');
+$assert(array_column(BotMenuDefinition::ITEMS, 'action') === ['live','tools','codes','otp','proxy','vip','customer','vietsub','gift','ref','ai-features'], 'menu chính giữ các dịch vụ được chọn và thêm Trung tâm khách hàng HENDY');
+$assert(BotMenuDefinition::LAYOUT === [['live','tools'],['codes'],['otp','proxy'],['vip'],['customer'],['vietsub','gift'],['ref','ai-features']], 'layout menu chính so le 2-1 và đặt Trung tâm khách hàng HENDY riêng một hàng');
+$assert(!array_intersect(['matchmaking','orders','history','home'], array_column(BotMenuDefinition::ITEMS, 'action')), 'bốn nút Ghép đôi, Đơn hàng, Lịch sử và Menu chính không xuất hiện trên menu gốc');
+$assert(in_array('customer', array_column(BotMenuDefinition::ITEMS, 'action'), true), 'Trung tâm khách hàng HENDY được đăng ký trên menu gốc');
 $styles = array_column(BotMenuDefinition::ITEMS, 'style');
 $assert(count($styles) === count(BotMenuDefinition::ITEMS) && count(array_diff($styles, ['primary','success','danger'])) === 0, 'mọi nút menu chính đều có màu Telegram hợp lệ');
 $botServiceSource = file_get_contents(dirname(__DIR__) . '/app/BotService.php');

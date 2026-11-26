@@ -8,8 +8,8 @@ use Throwable;
 
 /**
  * Restricted GitHub source editor for the Admin console.
- * Edits are written to a new branch and submitted as a draft Pull Request.
- * Production files, Render services and database state are never modified directly.
+ * Edits are committed directly to the configured base branch using a fast-forward-only ref update.
+ * Every write is SHA-checked, secret-scanned and audited by the Admin API.
  */
 final class SourceControlService
 {
@@ -173,13 +173,13 @@ final class SourceControlService
      * Creates a Git commit on a new branch and opens a draft PR.
      * Each file is checked against the exact version originally loaded by Admin.
      */
-    public static function createPullRequest(array $input): array
+    public static function commitToMain(array $input): array
     {
         $config = self::configuration();
         self::requireConfigured($config);
         $files = $input['files'] ?? null;
         if (!is_array($files) || $files === [] || count($files) > self::MAX_BATCH_FILES) {
-            throw new RuntimeException('Chọn từ 1 đến ' . self::MAX_BATCH_FILES . ' tệp thay đổi cho mỗi Pull Request.');
+            throw new RuntimeException('Chọn từ 1 đến ' . self::MAX_BATCH_FILES . ' tệp thay đổi cho mỗi lần ghi.');
         }
 
         $expectedBaseSha = strtolower(trim((string) ($input['expectedBaseSha'] ?? '')));
@@ -249,7 +249,7 @@ final class SourceControlService
             $bytes = strlen($fileContent);
             if ($bytes > self::MAX_FILE_BYTES) throw new RuntimeException('Tệp ' . $path . ' vượt giới hạn 512 KB.');
             $totalBytes += $bytes;
-            if ($totalBytes > self::MAX_BATCH_BYTES) throw new RuntimeException('Tổng nội dung gửi lên vượt giới hạn 2 MB cho mỗi Pull Request.');
+            if ($totalBytes > self::MAX_BATCH_BYTES) throw new RuntimeException('Tổng nội dung gửi lên vượt giới hạn 2 MB cho mỗi lần ghi.');
             if (self::containsSecret($fileContent)) {
                 throw new RuntimeException('Phát hiện mẫu private key/token trong ' . $path . '. Hãy đưa credential vào Render Environment, không đưa vào mã nguồn.');
             }
@@ -262,7 +262,7 @@ final class SourceControlService
         }
 
         if ($needsConfirmation && !$sensitiveConfirmation) {
-            throw new RuntimeException('Có tệp SQL/migration hoặc cấu hình triển khai nhạy cảm. Hãy xác nhận đã rà soát tác động trước khi tạo Draft PR.');
+            throw new RuntimeException('Có tệp SQL/migration hoặc cấu hình triển khai nhạy cảm. Hãy xác nhận đã rà soát tác động trước khi ghi trực tiếp vào nhánh chính.');
         }
 
         $treeElements = [];
@@ -298,38 +298,31 @@ final class SourceControlService
         $commitSha = (string) ($commit['sha'] ?? '');
         if (!preg_match('/\A[0-9a-f]{40}\z/i', $commitSha)) throw new RuntimeException('GitHub không tạo được commit mới.');
 
-        $branchName = 'hendy/admin-editor-' . gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
-        self::request($config, 'POST', '/git/refs', [
-            'ref' => 'refs/heads/' . $branchName,
-            'sha' => $commitSha,
-        ]);
-
         $changedPaths = array_map(static fn(array $file): string => $file['path'], $normalized);
-        $prBody = trim($summary) . "\n\n"
-            . "## Source Editor safety\n"
-            . "- Submitted from the HENDY Admin source editor.\n"
-            . "- Base branch: " . $config['baseBranch'] . " at commit " . $baseSha . ".\n"
-            . "- No production files were changed directly.\n"
-            . "- This PR is opened as a draft and must pass repository CI and review before merge.\n"
-            . "- Files: " . implode(', ', $changedPaths) . "\n";
-        $pull = self::request($config, 'POST', '/pulls', [
-            'title' => $title,
-            'body' => $prBody,
-            'head' => $branchName,
-            'base' => $config['baseBranch'],
-            'draft' => true,
+        $commitMessage = trim((string) ($input['title'] ?? 'Update source from HENDY Admin'));
+        $commit = self::request($config, 'POST', '/git/commits', [
+            'message' => 'chore(admin-editor): ' . $commitMessage,
+            'tree' => $treeSha,
+            'parents' => [$baseSha],
+        ]);
+        $commitSha = (string) ($commit['sha'] ?? '');
+        if (!preg_match('/\A[0-9a-f]{40}\z/i', $commitSha)) {
+            throw new RuntimeException('GitHub không tạo được commit mới.');
+        }
+
+        // Fast-forward only: GitHub rejects the update if main moved since the
+        // tree/commit was prepared. Never force-push or overwrite another commit.
+        self::request($config, 'PATCH', '/git/refs/heads/' . rawurlencode($config['baseBranch']), [
+            'sha' => $commitSha,
+            'force' => false,
         ]);
 
         return [
-            'number' => (int) ($pull['number'] ?? 0),
-            'url' => (string) ($pull['html_url'] ?? ''),
-            'state' => (string) ($pull['state'] ?? 'open'),
-            'draft' => (bool) ($pull['draft'] ?? true),
-            'branch' => $branchName,
             'commitSha' => $commitSha,
             'baseSha' => $baseSha,
+            'branch' => $config['baseBranch'],
             'changedFiles' => $changedPaths,
-            'message' => 'Đã tạo Draft Pull Request. Chưa có thay đổi nào được đưa lên production.',
+            'message' => 'Đã ghi commit trực tiếp vào nhánh ' . $config['baseBranch'] . '. CI/CD có thể tự khởi chạy theo cấu hình repository.',
         ];
     }
 

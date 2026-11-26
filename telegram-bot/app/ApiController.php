@@ -1779,6 +1779,9 @@ final class ApiController
             $image = $this->text($this->body['imageUrl'] ?? '', 500);
             self::validateHttps($image, 'Ảnh sản phẩm phải dùng HTTPS.');
             $metadata = $brand !== '' ? ['brand' => $brand] : [];
+            if (array_key_exists('screenshots', $this->body)) {
+                $metadata['screenshots'] = $this->productScreenshotsInput($this->body['screenshots']);
+            }
             try {
                 $provider = $this->productProviderInput([]);
             } catch (RuntimeException $error) {
@@ -1818,6 +1821,9 @@ final class ApiController
                 $active = array_key_exists('isActive', $this->body) ? $this->toBool($this->body['isActive']) : $this->toBool($current['is_active']);
                 $image = array_key_exists('imageUrl', $this->body) ? $this->text($this->body['imageUrl'], 500) : (string) ($current['image_url'] ?? '');
                 $metadata = self::jsonArray($current['metadata'] ?? []);
+                if (array_key_exists('screenshots', $this->body)) {
+                    $metadata['screenshots'] = $this->productScreenshotsInput($this->body['screenshots']);
+                }
                 $brand = array_key_exists('brand', $this->body)
                     ? strtoupper($this->text($this->body['brand'], 24))
                     : strtoupper((string) ($metadata['brand'] ?? ''));
@@ -2408,6 +2414,35 @@ final class ApiController
         return [...self::publicProduct($row), ...ProductReadinessService::adminFields($row)];
     }
 
+    /**
+     * Store up to eight validated HTTPS screenshots in existing product JSONB metadata.
+     * Accepts a newline-separated text field from Admin or an array from API clients.
+     */
+    private function productScreenshotsInput(mixed $value): array
+    {
+        if (is_string($value)) {
+            $items = preg_split('/\\r\\n|\\r|\\n/', $value) ?: [];
+        } elseif (is_array($value)) {
+            $items = $value;
+        } else {
+            throw new HttpException(400, 'Danh sách ảnh chụp màn hình không hợp lệ.');
+        }
+        $urls = [];
+        foreach ($items as $item) {
+            if (!is_scalar($item)) throw new HttpException(400, 'URL ảnh chụp màn hình không hợp lệ.');
+            $url = trim((string) $item);
+            if ($url === '') continue;
+            try {
+                $url = ProductReadinessService::validateHttpsUrl($url, 'URL ảnh chụp màn hình');
+            } catch (RuntimeException $error) {
+                throw new HttpException(400, $error->getMessage());
+            }
+            if (!in_array($url, $urls, true)) $urls[] = $url;
+            if (count($urls) > 8) throw new HttpException(400, 'Mỗi ứng dụng chỉ được khai báo tối đa 8 ảnh HTTPS.');
+        }
+        return $urls;
+    }
+
     private static function safeReleaseUrl(string $url): string
     {
         $url = trim($url);
@@ -2711,6 +2746,10 @@ final class ApiController
             'releaseNotes' => mb_substr((string) ($release['releaseNotes'] ?? ''), 0, 2000),
             'manifestUrl' => $manifestUrl,
             'otaAvailable' => $platform === 'ios' && $manifestUrl !== '',
+            'screenshots' => array_values(array_filter(
+                array_slice(is_array($metadata['screenshots'] ?? null) ? $metadata['screenshots'] : [], 0, 8),
+                static fn($url): bool => is_string($url) && self::safePublicHttpsUrl($url) !== ''
+            )),
         ];
     }
 

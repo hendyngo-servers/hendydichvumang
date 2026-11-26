@@ -3,39 +3,51 @@ declare(strict_types=1);
 
 namespace Hendy;
 
-/** Canonical member menu. All creative AI tools are grouped behind one submenu. */
+/**
+ * Canonical member menu. Keep the home screen focused on the active customer
+ * journeys; secondary account, wallet and community actions remain available
+ * through their existing commands/submenus.
+ */
 final class BotMenuDefinition
 {
     public const ITEMS = [
-        ['action' => 'live', 'label' => '🚀 MINIGAME LIVE', 'description' => 'Chọn nhà cái, xem gói dịch vụ MiniGame Live và thanh toán bằng Ví Chính.', 'style' => 'primary'],
-        ['action' => 'otp', 'label' => '▦ OTP & PROXY', 'description' => 'Mở trung tâm OTP, Proxy và ví NYC.', 'style' => 'primary'],
-        ['action' => 'wallet', 'label' => '💳 NẠP TIỀN', 'description' => 'Tạo yêu cầu nạp và xem trạng thái VietQR.', 'style' => 'success'],
-        ['action' => 'vip', 'label' => '👑 TRUNG TÂM VIP', 'description' => 'Xem cấp VIP, quyền lợi và điểm danh.', 'style' => 'success'],
-        ['action' => 'codes', 'label' => '📡 CODE TELEGRAM', 'description' => 'Mở Code Telegram, chọn dịch vụ và gửi tên đăng nhập để nhận mã.', 'style' => 'success'],
-        ['action' => 'customer', 'label' => '💠 TRUNG TÂM KHÁCH HÀNG', 'description' => 'Hồ sơ, ví, đơn hàng và hỗ trợ khách hàng.', 'style' => 'primary'],
-        ['action' => 'ai-features', 'label' => '🤖 TÍNH NĂNG AI', 'description' => 'Mở AI Cover, tạo âm nhạc AI và chỉnh sửa ảnh AI.', 'style' => 'success'],
-        ['action' => 'group', 'label' => '🎊 NHÓM CHAT ↗', 'description' => 'Mở liên kết nhóm chat HENDY.', 'style' => 'primary'],
-        ['action' => 'news', 'label' => '📢 KÊNH THÔNG BÁO ↗', 'description' => 'Mở kênh thông báo HENDY.', 'style' => 'primary'],
-        ['action' => 'vip-coming-soon', 'label' => '👑 DỊCH VỤ SẮP TRIỂN KHAI', 'description' => 'Xem các dịch vụ mới đang được HENDY hoàn thiện.', 'style' => 'danger'],
+        ['action' => 'live', 'label' => '🎮 Mini Game Live', 'description' => 'Chọn nhà cái và đặt gói Mini Game Live.', 'style' => 'primary'],
+        ['action' => 'tools', 'label' => '🧰 Thuê Tool', 'description' => 'Xem danh mục công cụ và dịch vụ cho thuê.', 'style' => 'primary'],
+        ['action' => 'codes', 'label' => '📡 Code / mã dịch vụ', 'description' => 'Mở kho Code Telegram và các mã dịch vụ.', 'style' => 'primary'],
+        ['action' => 'otp', 'label' => '📱 OTP SMS', 'description' => 'Chọn dịch vụ OTP SMS đang được mở bán.', 'style' => 'primary'],
+        ['action' => 'proxy', 'label' => '🌐 Proxy', 'description' => 'Xem và đặt mua gói Proxy khả dụng.', 'style' => 'primary'],
+        ['action' => 'vip', 'label' => '👑 Sản phẩm VIP', 'description' => 'Xem kho sản phẩm VIP và quyền lợi thành viên.', 'style' => 'success'],
+        ['action' => 'matchmaking', 'label' => '⚔️ Ghép đôi', 'description' => 'Tìm đối thủ và quản lý trận ghép đôi.', 'style' => 'success'],
+        ['action' => 'vietsub', 'label' => '🎬 Vietsub', 'description' => 'Gửi liên kết video để tạo tác vụ phụ đề.', 'style' => 'primary'],
+        ['action' => 'gift', 'label' => '🎁 Giftcode', 'description' => 'Nhập mã Giftcode để nhận ưu đãi hợp lệ.', 'style' => 'success'],
+        ['action' => 'ref', 'label' => '🔗 Giới thiệu', 'description' => 'Lấy liên kết giới thiệu và xem thống kê REF.', 'style' => 'primary'],
+        ['action' => 'orders', 'label' => '📄 Đơn hàng', 'description' => 'Theo dõi đơn hàng và trạng thái xử lý.', 'style' => 'success'],
+        ['action' => 'history', 'label' => '🗂 Lịch sử', 'description' => 'Xem lịch sử giao dịch và tác vụ của bạn.', 'style' => 'primary'],
+        ['action' => 'ai-features', 'label' => '🤖 Tính năng AI', 'description' => 'Mở các công cụ AI đang được hệ thống cho phép.', 'style' => 'primary'],
+        ['action' => 'home', 'label' => '🏠 Menu chính', 'description' => 'Tải lại menu chính HENDY.', 'style' => 'danger'],
     ];
 
+    /**
+     * Alternating 2-1 rows create the staggered layout requested for Telegram.
+     * Admin remains appended separately and is only visible to administrators.
+     */
     public const LAYOUT = [
-        ['live', 'otp'],
-        ['wallet'],
-        ['vip', 'codes'],
-        ['customer'],
-        ['ai-features'],
-        ['group'],
-        ['news', 'vip-coming-soon'],
-        ['admin'],
+        ['live', 'tools'],
+        ['codes'],
+        ['otp', 'proxy'],
+        ['vip'],
+        ['matchmaking', 'vietsub'],
+        ['gift'],
+        ['ref', 'orders'],
+        ['history'],
+        ['ai-features', 'home'],
     ];
 
-    // Child actions are retained for callback dispatch and nested AI menus.
+    // Child/legacy actions stay registered for existing callback compatibility.
     public const ACTIONS = [
-        'live', 'otp', 'wallet', 'vip', 'codes', 'customer',
-        'ai-features', 'music-ai', 'image-ai', 'ai-cover',
-        'group', 'news', 'vip-coming-soon', 'admin',
-        'tools', 'viptools', 'miniapp', 'ref', 'vietsub',
-        'history', 'jobs', 'abcvip', 'gift', 'support', 'matchmaking',
+        'live', 'tools', 'codes', 'otp', 'proxy', 'vip', 'matchmaking',
+        'vietsub', 'gift', 'ref', 'orders', 'history', 'ai-features', 'home',
+        'music-ai', 'image-ai', 'ai-cover', 'group', 'news', 'admin',
+        'viptools', 'miniapp', 'jobs', 'abcvip', 'support',
     ];
 }

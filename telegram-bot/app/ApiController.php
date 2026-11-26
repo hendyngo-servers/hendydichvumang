@@ -811,28 +811,26 @@ final class ApiController
                 throw new HttpException(400, $error->getMessage());
             }
         }
-        if ($method === 'POST' && $path === '/api/admin/source-control/pull-requests') {
+        if ($method === 'POST' && $path === '/api/admin/source-control/commit') {
             try {
-                $result = SourceControlService::createPullRequest($this->body);
+                $result = SourceControlService::commitToMain($this->body);
             } catch (RuntimeException $error) {
                 throw new HttpException(409, $error->getMessage());
             } catch (Throwable $error) {
-                error_log('[admin-source-control-pr] ' . $error::class);
-                throw new HttpException(502, 'Không thể tạo Pull Request. Kiểm tra quyền GitHub App/token, repository và log máy chủ.');
+                error_log('[admin-source-control-commit] ' . $error::class);
+                throw new HttpException(502, 'Không thể ghi mã nguồn trực tiếp vào nhánh chính. Kiểm tra quyền GitHub token và log máy chủ.');
             }
             try {
-                $this->audit('source_control.pull_request.create', (string) ($result['number'] ?? ''), [
+                $this->audit('source_control.commit.main', (string) ($result['commitSha'] ?? ''), [
                     'branch' => (string) ($result['branch'] ?? ''),
-                    'commitSha' => (string) ($result['commitSha'] ?? ''),
+                    'baseSha' => (string) ($result['baseSha'] ?? ''),
                     'changedFiles' => $result['changedFiles'] ?? [],
-                    'draft' => true,
+                    'directMainWrite' => true,
                 ]);
             } catch (Throwable $error) {
-                // The GitHub PR already exists. Do not report a false failure that
-                // would encourage the browser to create a duplicate on retry.
                 error_log('[admin-source-control-audit] ' . $error::class);
             }
-            return self::response(['pullRequest' => $result], 201);
+            return self::response(['commit' => $result], 201);
         }
 
         if ($method === 'GET' && $path === '/api/admin/database/readiness') {

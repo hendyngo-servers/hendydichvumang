@@ -146,13 +146,24 @@
   }
   function filteredReleases() {
     const term = String($('#search-input')?.value || '').trim().toLocaleLowerCase('vi');
-    return state.releases.filter(item => {
+    const items = state.releases.filter(it
+      const categoryMatch = state.category === 'all' || String(item.category || '') === state.category;
+      const platformMatch = state.platform === 'all' || String(item.platform || '') === state.platform;
+      const searchable = [item.name,item.description,item.version,item.platform,item.category,item.channel,item.filename,item.releaseNotes]
+        .map(value => String(value || '').toLocaleLowerCase('vi')).join(' ');
+em => {
       const categoryMatch = state.category === 'all' || String(item.category || '') === state.category;
       const platformMatch = state.platform === 'all' || String(item.platform || '') === state.platform;
       const searchable = [item.name,item.description,item.version,item.platform,item.category,item.channel,item.filename,item.releaseNotes]
         .map(value => String(value || '').toLocaleLowerCase('vi')).join(' ');
       return categoryMatch && platformMatch && (!term || searchable.includes(term));
     });
+    const sort = String($('#sort-select')?.value || 'default');
+    const collator = new Intl.Collator('vi', {numeric:true, sensitivity:'base'});
+    if (sort === 'name') items.sort((a,b) => collator.compare(String(a.name || ''), String(b.name || '')));
+    if (sort === 'version') items.sort((a,b) => collator.compare(String(b.version || ''), String(a.version || '')));
+    if (sort === 'platform') items.sort((a,b) => collator.compare(String(platformNames[a.platform] || a.platform || ''), String(platformNames[b.platform] || b.platform || '')));
+    return items;
   }
   function renderCatalog() {
     const grid = $('#app-grid');
@@ -328,6 +339,7 @@
   if (deviceHint) deviceHint.textContent = 'Đã nhận diện: ' + (platformNames[device.os] || 'trình duyệt') + ' · ' + (device.mobile ? 'thiết bị di động' : 'thiết bị máy tính') + '. Bạn vẫn có thể chọn nền tảng khác.';
   $('#year').textContent = String(new Date().getFullYear());
   $('#search-input')?.addEventListener('input', renderCatalog);
+  $('#sort-select')?.addEventListener('change', renderCatalog);
   $$('[data-category]').forEach(button => button.addEventListener('click', () => setFilter('category', button.dataset.category || 'all')));
   $$('[data-platform]').forEach(button => button.addEventListener('click', () => setFilter('platform', button.dataset.platform || 'all')));
   $('#refresh-catalog')?.addEventListener('click', loadReleases);

@@ -1121,6 +1121,9 @@
     const selectOptions = (items, current, fallback) => items.map(item => '<option value="' + item[0] + '"' + (String(current || fallback) === item[0] ? ' selected' : '') + '>' + item[1] + '</option>').join('');
     const minigameBrands = ['QQ88','HI88','78WIN','RR88','MM88','GG88','ABCVIP','XX8','U888','J88','ABC8','88CLB','AD88','SC88','C168','CM88','F8BET'];
     const selectedBrand = String(editing && editing.metadata ? editing.metadata.brand || '' : '').toUpperCase();
+    const storeRelease = editing && editing.metadata && editing.metadata.storeRelease && typeof editing.metadata.storeRelease === 'object' ? editing.metadata.storeRelease : {};
+    const releaseValue = (key, fallback = '') => storeRelease[key] != null ? escapeHtml(storeRelease[key]) : fallback;
+    const releasePublished = storeRelease.published === true ? 'true' : 'false';
     const brandOptions = '<option value="">— Chọn nhà cái —</option>' + minigameBrands.map(brand => '<option value="' + brand + '"' + (selectedBrand === brand ? ' selected' : '') + '>' + brand + '</option>').join('');
     const permissionOptions = selectOptions([['pending','Chờ xác minh'],['authorized','Đã xác minh quyền phân phối'],['rejected','Không được phép']],value('sourcePermissionStatus',''), 'pending');
     const supplierOptions = selectOptions([['pending','Chờ xác minh nhà cung cấp'],['verified','Đã xác minh quyền truy cập'],['revoked','Đã thu hồi quyền truy cập']],value('supplierAccessStatus',''), 'pending');
@@ -1171,15 +1174,28 @@
       '<div class="two-col"><div class="field"><label>Phương thức bàn giao</label><select name="fulfillmentMode">' + fulfillmentOptions + '</select></div>' +
       '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" value="' + value('credentialEnvKey','') + '" placeholder="OTP_PROVIDER_API_KEY"></div></div>' +
       '<div class="notice warn">Chỉ nhập URL và thông tin mô tả nhà cung cấp. Không dán API Key, mật khẩu, cookie hay OTP vào đây. Khi thay nhà cung cấp hoặc URL nguồn, hệ thống tự đưa xác minh tương ứng về trạng thái chờ. Chế độ API vẫn khóa đến khi có adapter riêng được kiểm thử.</div>' +
+      (editing ? '<div class="section-head"><h3>HENDY APP STORE · RELEASE MANAGER</h3><span>' + (storeRelease.published === true ? 'Đang công khai' : (storeRelease.objectKey ? 'Bản nháp' : 'Chưa có bản phát hành')) + '</span></div>' +
+        '<div class="card"><div class="record-top"><div><b>' + escapeHtml(storeRelease.filename || 'Chưa tải binary') + '</b><small>Phiên bản ' + escapeHtml(storeRelease.version || '—') + ' · ' + escapeHtml(storeRelease.platform || '—') + ' · ' + escapeHtml(storeRelease.channel || '—') + '</small></div><span class="status ' + (storeRelease.published === true ? 'completed' : 'pending') + '">' + (storeRelease.published === true ? 'Đang công khai' : 'Nháp / chưa xuất bản') + '</span></div>' +
+        (storeRelease.sha256 ? '<p class="small muted">SHA-256: <code>' + escapeHtml(storeRelease.sha256) + '</code></p>' : '') +
+        (storeRelease.sizeBytes ? '<p class="small muted">Dung lượng: ' + (Number(storeRelease.sizeBytes) / 1048576).toFixed(2) + ' MB</p>' : '') +
+        '<div class="two-col"><div class="field"><label>Trạng thái phát hành</label><select name="storeReleasePublished"><option value="false"' + (releasePublished === 'false' ? ' selected' : '') + '>Bản nháp / ẩn khỏi Store</option><option value="true"' + (releasePublished === 'true' ? ' selected' : '') + '>Công khai sau kiểm tra</option></select></div><div class="field"><label>Manifest iOS OTA (HTTPS, tùy chọn)</label><input name="storeReleaseManifestUrl" type="url" maxlength="1000" value="' + releaseValue('manifestUrl') + '" placeholder="https://.../manifest.plist"></div></div>' +
+        '<div class="notice warn">Upload lưu file ở Neon Object Storage riêng tư. Bản tải mới luôn ở trạng thái nháp; cần xác minh hồ sơ nhà cung cấp/quyền nguồn rồi mới chọn Công khai. iOS OTA chỉ hiển thị khi có manifest HTTPS và IPA đã ký phù hợp. SHA-256 dùng để kiểm tra tính toàn vẹn, không thay thế kiểm tra chữ ký hoặc quét mã độc.</div></div>' +
+        '<div class="card form" id="product-release-upload-panel"><b>＋ Tải binary mới</b><div class="two-col"><div class="field"><label>Nền tảng</label><select id="release-upload-platform"><option value="android">Android APK</option><option value="windows">Windows EXE / MSI / MSIX / ZIP</option><option value="macos">macOS DMG / PKG / ZIP</option><option value="ios">iOS IPA</option><option value="linux">Linux AppImage / DEB / RPM / TAR.GZ</option><option value="web">Web ZIP</option></select></div><div class="field"><label>Phiên bản</label><input id="release-upload-version" maxlength="64" value="' + releaseValue('version') + '" placeholder="v1.0.0" required></div></div>' +
+        '<div class="two-col"><div class="field"><label>Kênh phát hành</label><select id="release-upload-channel"><option value="stable">Stable</option><option value="beta">Beta</option><option value="nightly">Nightly</option></select></div><div class="field"><label>Tệp cài đặt (tối đa 200 MB)</label><input id="release-upload-file" type="file" required accept=".apk,.exe,.msi,.msix,.zip,.dmg,.pkg,.ipa,.appimage,.deb,.rpm,.tar.gz"></div></div>' +
+        '<div class="field"><label>Release notes</label><textarea id="release-upload-notes" maxlength="2000" rows="3" placeholder="Các thay đổi trong phiên bản này…"></textarea></div>' +
+        '<button type="button" class="secondary" data-upload-product-release>⬆ Upload binary lên Neon Storage</button><p class="small muted">Chỉ Admin được upload. Tệp phải khớp chữ ký định dạng cơ bản, có SHA-256 và được giữ riêng tư đến khi được xuất bản.</p></div>'
+        : '<div class="notice">Tạo sản phẩm trước, lưu hồ sơ quyền nguồn/nhà cung cấp; sau đó mở chỉnh sửa sản phẩm để tải binary và phát hành lên HENDY App Store.</div>') +
       '<div class="two-col"><button class="primary"' + (supplierSchemaReady ? '' : ' disabled title="Cần hoàn tất migration Supplier Readiness trước khi lưu"') + '>' + (supplierSchemaReady ? (editing ? 'Lưu thay đổi' : '＋ Tạo sản phẩm') : 'Chờ đồng bộ database') + '</button>' +
       (editing ? '<button type="button" class="secondary" data-cancel-product-edit>Hủy chỉnh sửa</button>' : '') + '</div></form>' +
       '<div class="section-head"><h3>Danh sách sản phẩm</h3><span>' + products.length + ' sản phẩm</span></div>' +
       (products.length ? products.map(product => {
         const sellable = Boolean(product.isSellable);
         const reasons = Array.isArray(product.readinessReasons) ? product.readinessReasons.join(' · ') : '';
+        const release = product.metadata && product.metadata.storeRelease && typeof product.metadata.storeRelease === 'object' ? product.metadata.storeRelease : {};
         return '<article class="record"><div class="record-top"><div><b>' + escapeHtml(product.name) + '</b><small class="muted">#' + product.id + ' · ' + escapeHtml(labels[product.category] || product.category) + (product.metadata && product.metadata.brand ? ' · ' + escapeHtml(product.metadata.brand) : '') + '</small></div>' +
         '<span class="status ' + (sellable ? 'completed' : 'pending') + '">' + (sellable ? 'Đủ điều kiện bán' : (product.isActive ? 'Đang khóa' : 'Đã ẩn')) + '</span></div>' +
         '<p>' + money(product.price) + ' · Kho: ' + (product.stock == null ? 'Không giới hạn' : product.stock) + (product.durationDays ? ' · ' + product.durationDays + ' ngày' : '') + '</p>' +
+        (release.filename ? '<p class="small muted">App Store: ' + escapeHtml(release.platform || '') + ' · ' + escapeHtml(release.version || '') + ' · ' + (release.published === true ? 'Đang công khai' : 'Bản nháp') + '</p>' : '') +
         (reasons ? '<p class="small muted">Cần xử lý: ' + escapeHtml(reasons) + '</p>' : '<p class="small muted">Đã có hồ sơ và xác minh bắt buộc.</p>') +
         '<div class="two-col"><button class="tiny-btn" data-edit-product="' + escapeHtml(product.id) + '">Chỉnh sửa hồ sơ</button>' +
         '<button class="tiny-btn" data-toggle-product="' + escapeHtml(product.id) + '" data-active="' + String(Boolean(product.isActive)) + '">' + (product.isActive ? 'Ẩn sản phẩm' : 'Bật cờ hiển thị') + '</button></div></article>';
@@ -1964,6 +1980,36 @@
         await adminLoad('multi-agent');
         await renderPage();
       } catch (error) { toast(error.message, 'error'); multiAction.disabled = false; }
+      return;
+    }
+    const uploadProductRelease = event.target.closest('[data-upload-product-release]');
+    if (uploadProductRelease) {
+      const productForm = document.getElementById('admin-product-form');
+      const productId = productForm?.dataset.productId || '';
+      const file = document.getElementById('release-upload-file')?.files?.[0];
+      if (!productId) { toast('Hãy lưu sản phẩm trước khi tải binary.', 'error'); return; }
+      if (!file) { toast('Chọn tệp phát hành trước khi upload.', 'error'); return; }
+      if (file.size > 209715200) { toast('Tệp vượt giới hạn 200 MB.', 'error'); return; }
+      const payload = new FormData();
+      payload.append('releaseFile', file, file.name);
+      payload.append('platform', document.getElementById('release-upload-platform')?.value || '');
+      payload.append('version', document.getElementById('release-upload-version')?.value || '');
+      payload.append('channel', document.getElementById('release-upload-channel')?.value || 'stable');
+      payload.append('releaseNotes', document.getElementById('release-upload-notes')?.value || '');
+      uploadProductRelease.disabled = true;
+      try {
+        const response = await fetch('/api/admin/products/' + encodeURIComponent(productId) + '/release-upload', {
+          method:'POST', body:payload, credentials:'same-origin', headers:{'Accept':'application/json'}, cache:'no-store'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Không thể upload binary.');
+        toast(result.message || 'Đã lưu bản phát hành ở trạng thái nháp.');
+        await adminLoad('products');
+        await renderPage();
+      } catch (error) {
+        toast(error.message, 'error');
+        uploadProductRelease.disabled = false;
+      }
       return;
     }
     const sourceRefresh = event.target.closest('[data-source-refresh]');

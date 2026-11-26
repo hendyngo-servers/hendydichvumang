@@ -30,8 +30,12 @@ jobs:
           test -s website/public/app-store/style.css
           test -s website/public/app-store/app.js
           test -s website/public/app-store/config.js
+          test -s website/public/app-store/security.js
+          test -s website/public/app-store/api-client.js
           grep -q 'HENDY APP STORE' website/public/app-store/index.html
-          grep -q '/api/public/releases' website/public/app-store/app.js
+          grep -q '/api/v1/store/releases' website/public/app-store/api-client.js
+          grep -q 'credentials: .omit.' website/public/app-store/api-client.js
+          grep -q 'safeHttps' website/public/app-store/security.js
           ! find website/public -type f -name '*.php' | grep .
           ! find website/public -type f \( -name '*.env' -o -name '*.sql' -o -name '*.pem' -o -name '*.key' \) | grep .
           grep -q 'HENDY DIGITAL' website/public/index.html

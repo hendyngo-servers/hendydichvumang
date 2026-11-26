@@ -28,7 +28,7 @@ final class NeonStorage
         $allowedTypes = $isAiCover
             ? ['application/octet-stream','audio/mpeg','audio/wav','audio/x-wav','audio/flac','audio/mp4','audio/aac','audio/ogg','audio/opus']
             : ($isStoreRelease
-                ? ['application/octet-stream','application/zip','application/vnd.android.package-archive','application/vnd.microsoft.portable-executable','application/x-msdownload','application/x-msi','application/x-apple-diskimage','application/x-apple-installer-package','application/x-iso9660-image','application/x-debian-package','application/vnd.debian.binary-package','application/x-rpm','application/gzip','application/x-gzip']
+                ? ['application/octet-stream','application/zip','application/vnd.android.package-archive','application/vnd.microsoft.portable-executable','application/x-msdownload','application/x-dosexec','application/x-executable','application/x-elf','application/x-msi','application/x-ole-storage','application/x-apple-diskimage','application/x-apple-installer-package','application/x-iso9660-image','application/x-debian-package','application/vnd.debian.binary-package','application/x-rpm','application/gzip','application/x-gzip']
                 : ['application/json','text/plain','text/css','text/html','image/svg+xml','image/png','image/jpeg','image/webp']);
         if(!in_array($contentType,$allowedTypes,true))
             throw new RuntimeException('Loại tệp không được hỗ trợ cho Neon Storage.');

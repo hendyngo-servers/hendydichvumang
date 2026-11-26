@@ -368,7 +368,7 @@ final class ApiController
             ]);
         }
 
-        if ($method === 'GET' && in_array($path, ['/api/v1/store/releases', '/api/public/releases'], true)) {
+        if ($method === 'GET' && in_array($path, ['/api/store/releases', '/api/v1/store/releases', '/api/public/releases'], true)) {
             $category = trim((string) ($this->query['category'] ?? ''));
             if ($category !== '' && !in_array($category, self::CATEGORIES, true)) {
                 throw new HttpException(400, 'Danh mục không hợp lệ.');
@@ -382,7 +382,7 @@ final class ApiController
             return self::response(['ok' => true, 'releases' => $releases, 'generatedAt' => gmdate(DATE_ATOM)]);
         }
 
-        if ($method === 'GET' && in_array($path, ['/api/v1/store/releases/check', '/api/public/releases/check'], true)) {
+        if ($method === 'GET' && in_array($path, ['/api/store/releases/check', '/api/v1/store/releases/check', '/api/public/releases/check'], true)) {
             $appId = $this->text($this->query['appId'] ?? '', 100);
             $currentVersion = $this->text($this->query['currentVersion'] ?? '', 64);
             $platform = strtolower($this->text($this->query['platform'] ?? '', 16));

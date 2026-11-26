@@ -23,7 +23,7 @@ Restrict the token to the single HENDY repository and grant only:
 - Metadata: read.
 - Contents: read and write (browse files, create Git blobs/trees/commits and
   create a branch).
-- Pull requests: read and write (open a draft PR).
+- Pull requests: read and write (open a direct main commit).
 
 Do not grant Actions, Administration, Secrets, Environments, Variables,
 Deployments or workflow write permissions. Keep organization-wide access off.
@@ -62,7 +62,7 @@ large generated files.
 - No code is executed in the Admin process. There is no shell/terminal endpoint,
   automatic merge, direct push to the base branch, Render deploy trigger or
   database migration action.
-- Draft PRs still require normal GitHub review and branch-protection rules.
+- commit trực tiếp vào mains still require normal GitHub review and branch-protection rules.
   A PR is not a production deployment; the deployed Render service changes
   only after the repository's normal merge/deploy path completes.
 
@@ -77,5 +77,10 @@ large generated files.
 - **Stale file/base commit:** reload the repository tree and reopen the file.
   The editor intentionally rejects a stale update instead of overwriting a
   newer commit.
-- **CI fails:** inspect the draft PR checks and fix the failed tests before
-  merging. The editor does not bypass CI or branch protection.
+- **CI fails:** inspect the direct main commit checks and fix the failed tests before
+  merging. The editor does not force-push. The GitHub ref update must be a fast-forward; configured CI/CD may run automatically after the commit.
+
+
+## Direct write to main
+
+The Admin editor now creates one Git commit on the configured base branch. It verifies the base commit SHA and every changed file SHA, scans for secrets, then advances the branch ref with `force=false`. If main has moved, GitHub rejects the non-fast-forward update; reload and reapply changes instead of overwriting another commit. A successful write may automatically trigger repository CI/CD and Render deployment depending on the existing repository configuration. Review SQL/migrations and deployment changes carefully before confirming.

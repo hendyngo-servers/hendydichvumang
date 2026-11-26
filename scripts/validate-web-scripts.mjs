@@ -49,4 +49,4 @@ if (failures.length) {
   for (const failure of failures) process.stderr.write('FAIL ' + failure + '\n');
   process.exit(1);
 }
-process.stdout.write('Đã kiểm tra cú pháp ' + checked + ' inline browser script(s) trên ' + files.length + ' trang.\n');
+process.stdout.write('Đã kiểm tra cú pháp ' + checked + ' browser script(s) trên ' + files.length + ' trang.\n');

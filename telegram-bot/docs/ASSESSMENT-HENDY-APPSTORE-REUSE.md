@@ -91,3 +91,37 @@ Theo dõi ít nhất:
 - PostgreSQL query latency, connection pool saturation, slow query và CPU/RAM.
 
 Chỉ dùng số liệu đo thật để đặt SLA; hiện chưa có phép đo production p50/p95 được ghi nhận.
+
+
+## Đối chiếu repository hiện tại: hendyngo-servers/HendyAppStore
+
+Ngày đối chiếu bổ sung: 2026-11-26. Đã kiểm tra trực tiếp cây mã nguồn nhánh `main`, README, Telegram Worker, Backend API, Access verifier, schema migration, Admin UI và CI workflow.
+
+### Những module đã xác nhận có thể học/tái sử dụng
+
+| Thành phần trong HendyAppStore | Giá trị có thể đưa vào HENDY | Ranh giới tích hợp |
+|---|---|---|
+| `workers/backend-api/src/access.js` | Mẫu xác thực Cloudflare Access JWT RS256, issuer, audience, expiry và email allow-list | Chỉ dùng nếu HENDY bổ sung Cloudflare Access ở edge; không thay thế Telegram WebApp initData hoặc Admin session hiện tại |
+| `apps/web-admin/src/components/BuildStatusMonitor.js` | UI theo dõi workflow/build và trạng thái phát hành | Nối GitHub Actions/Render status vào Admin hiện có; không đưa Cloudflare deploy controls vào khi chưa cấu hình |
+| `apps/web-admin/src/components/FileTreeVisualizer.js`, `CodePasteZone.js`, `FileUploadZone.js` | Mẫu duyệt cây tệp, upload nhiều tệp và kiểm tra dữ liệu đầu vào | Dùng ý tưởng UI; giữ SourceControlService PHP, SHA guard, secret scan và direct-main policy hiện có |
+| `workers/backend-api/src/index.js` | Mẫu kiểm tra đuôi tệp theo nền tảng, giới hạn dung lượng, SHA-256 và upload artifact ở trạng thái draft | Có thể mở rộng kho Code/ứng dụng; không coi artifact upload là sản phẩm đã phát hành hoặc đã ký |
+| `workers/telegram-bot/src/index.js` | Mẫu tìm kiếm danh mục và lọc bản phát hành theo nền tảng, kiểm tra HTTPS URL, HTML escaping | Chuyển logic tìm kiếm/filter phù hợp sang CodeTelegramService hoặc catalog HENDY; không thay bot PHP/PostgreSQL |
+| `packages/shared-types`, `packages/db-schema` | Mẫu schema/type contract và migration validation | Chuyển thành API contract/type tương thích; không áp migration D1 vào Neon |
+| `workers/self-healing-bot` | Mẫu phân tích log và đề xuất bản vá có giới hạn | Chỉ dùng dạng đề xuất để Admin duyệt; không tự động chạy code hoặc sửa workflow/secret/production |
+| `tests/telegram-bot.test.mjs`, `tests/access.test.mjs`, `tests/artifact-upload.test.mjs` | Bộ test tham khảo cho menu, xác thực, URL, upload và security boundary | Viết lại test bằng PHPUnit/PHP test harness hiện tại hoặc test contract API |
+
+### Không tích hợp nguyên khối
+
+- HendyAppStore là Cloudflare-first (Workers, D1, KV, R2, Queues, Pages); HENDY đang chạy PHP 8.3/Apache trên Render và PostgreSQL/Neon.
+- Telegram Worker trong HendyAppStore chỉ phục vụ App Store: Kho ứng dụng, Tìm ứng dụng, Bản phát hành, Tải theo nền tảng, mở Store và Trợ giúp. README của repo cũng xác nhận không có backend cho OTP, Proxy, Mini Game, Tool thuê, VIP, Ghép đôi, Giftcode hay đơn hàng.
+- Không sao chép bảng ví, user, order hoặc payment từ D1 sang Neon; không dual-write giao dịch.
+- Native build/signing, Apple/Google store upload và self-healing LLM chưa được xác minh có credential/deploy production; chỉ là module trong source.
+- CI của HendyAppStore có workflow riêng; kết quả CI của repo đó không xác nhận CI hoặc deploy của HENDY.
+
+### Hướng tích hợp được chọn
+
+1. Giữ HENDY PHP + Neon/PostgreSQL là nguồn dữ liệu chuẩn cho người dùng, ví, đơn hàng, Code Telegram và menu.
+2. Giữ các service đã có (CodeTelegramService, ProviderRegistry, ProductReadiness, ProxyService, MatchmakingService, VideoJobService, AI services) làm backend cho từng menu.
+3. Tái sử dụng có chọn lọc các mẫu search/filter, artifact metadata/checksum, build monitor và test cases từ HendyAppStore.
+4. Chỉ thêm tính năng lên menu khi action đã có dispatcher và backend tương ứng; trạng thái nhà cung cấp chưa xác minh phải tiếp tục khóa mua hàng.
+5. Không thêm D1, Cloudflare Worker, R2 hoặc Queue mới chỉ để làm menu; mỗi hạ tầng mới cần quyết định triển khai riêng và kiểm thử vận hành.

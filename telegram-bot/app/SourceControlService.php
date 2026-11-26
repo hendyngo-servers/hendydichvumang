@@ -190,10 +190,10 @@ final class SourceControlService
         $title = trim((string) ($input['title'] ?? ''));
         $summary = trim((string) ($input['summary'] ?? ''));
         if ($title === '' || mb_strlen($title) > 120) {
-            throw new RuntimeException('Tiêu đề Pull Request phải có từ 1 đến 120 ký tự.');
+            throw new RuntimeException('Thông điệp commit phải có từ 1 đến 120 ký tự.');
         }
         if (mb_strlen($summary) > 8000) {
-            throw new RuntimeException('Mô tả Pull Request không được vượt quá 8.000 ký tự.');
+            throw new RuntimeException('Mô tả thay đổi không được vượt quá 8.000 ký tự.');
         }
 
         [$baseSha, $baseTree] = self::currentTree($config);
@@ -289,14 +289,6 @@ final class SourceControlService
         ]);
         $treeSha = (string) ($tree['sha'] ?? '');
         if (!preg_match('/\A[0-9a-f]{40}\z/i', $treeSha)) throw new RuntimeException('GitHub không tạo được cây mã nguồn mới.');
-
-        $commit = self::request($config, 'POST', '/git/commits', [
-            'message' => 'chore(admin-editor): ' . $title,
-            'tree' => $treeSha,
-            'parents' => [$baseSha],
-        ]);
-        $commitSha = (string) ($commit['sha'] ?? '');
-        if (!preg_match('/\A[0-9a-f]{40}\z/i', $commitSha)) throw new RuntimeException('GitHub không tạo được commit mới.');
 
         $changedPaths = array_map(static fn(array $file): string => $file['path'], $normalized);
         $commitMessage = trim((string) ($input['title'] ?? 'Update source from HENDY Admin'));

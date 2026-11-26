@@ -171,3 +171,26 @@ Release upload requires NEON_STORAGE_FUNCTION_URL and NEON_STORAGE_FUNCTION_KEY
 in Render, plus HENDY_FUNCTION_API_KEY and the Neon S3 endpoint/access/secret/region
 inside the Neon Function. Do not report production downloads as working until
 those configuration/runtime checks and a real binary upload/download test succeed.
+
+
+### Giao diện đã được tích hợp vào Website và Admin (2026-11-26)
+
+- Tạo Website độc lập tại `/app-store/` trong `website/public/app-store/`:
+  - Hero/visual theo phong cách storefront VIP dark.
+  - Catalog card, tìm kiếm, lọc category/platform, modal chi tiết, release notes.
+  - Nhận diện thiết bị để hiển thị khuyến nghị nền tảng; người dùng vẫn có thể chọn nền tảng khác.
+  - Tải theo APK/EXE/MSI/MSIX/DMG/PKG/IPA/AppImage/DEB/RPM/Web ZIP; iOS OTA chỉ xuất hiện khi backend báo đủ điều kiện và có HTTPS manifest.
+  - Hiển thị tới 8 ảnh chụp màn hình, icon, checksum SHA-256 và API update-check.
+  - Render metadata bằng DOM nodes/textContent; không dùng innerHTML cho dữ liệu ứng dụng.
+- Điều hướng Website chính đã được chuyển sang `/app-store/`; sitemap đã được bổ sung URL này.
+- Tách `HENDY APP STORE · RELEASE STUDIO` thành mục sidebar Admin riêng:
+  - Chọn sản phẩm; xem tình trạng Product Supplier Readiness; mở hồ sơ nguồn/nhà cung cấp.
+  - Upload binary vào Neon riêng tư, version/channel/release notes; mỗi upload luôn là draft.
+  - Xem SHA-256, dung lượng, lịch sử, lưu iOS manifest, công khai/ẩn bản phát hành.
+  - Multipart upload dùng Telegram WebApp initData và bot key qua backend; không tạo token Admin riêng.
+- Thêm metadata ảnh chụp màn hình vào cột JSONB `products.metadata`, tối đa 8 URL HTTPS. Không tạo migration mới và không thay đổi bảng ví, user, order hoặc payment.
+- CI static validation đã được bổ sung để parse cú pháp hai file `app-store/app.js` và `app-store/config.js`, đồng thời kiểm tra asset tồn tại.
+
+### Phân biệt “toàn bộ mã nguồn” và phần được chuyển
+
+Không thể an toàn khi sao chép nguyên thư mục demo và chạy Express backend của app-downloader-server trong Render. Repository nguồn không có stylesheet công khai hợp lệ ở `public/style.css` (nội dung file bị trùng với markup Admin), đồng thời backend chứa lỗi bảo mật đã nêu ở phần trên. HENDY chuyển toàn bộ luồng/giao diện hữu ích thành phiên bản mới tương thích API/Neon hiện có, không giữ nguyên backend demo, tài khoản Admin mặc định hay mock License/Crash data. Các component HendyAppStore được viết lại/ghép tương ứng với kiến trúc PHP/Render/Neon, thay vì nhập Cloudflare D1/R2/Workers.

@@ -342,6 +342,7 @@
       <button class="menu-item" type="button" data-admin-tab="orders"><span class="menu-icon">🧾</span>Duyệt & xử lý đơn hàng</button>
       <button class="menu-item" type="button" data-admin-tab="payments"><span class="menu-icon">💳</span>Duyệt nạp tiền</button>
       <button class="menu-item" type="button" data-admin-tab="products"><span class="menu-icon">📦</span>Dịch vụ & sản phẩm</button>
+      <button class="menu-item" type="button" data-admin-tab="store-releases"><span class="menu-icon">🚀</span>HENDY App Store · Releases</button>
       <button class="menu-item" type="button" data-admin-tab="service-readiness"><span class="menu-icon">🧭</span>Nguồn & tình trạng dịch vụ</button>
       <button class="menu-item" type="button" data-admin-tab="provider-registry"><span class="menu-icon">🔌</span>Provider & Service Registry</button>
       <button class="menu-item" type="button" data-admin-tab="tickets"><span class="menu-icon">🎧</span>Ticket khách hàng</button>
@@ -415,7 +416,7 @@
   let welcomeSloganTimer = null;
   let welcomeSloganSwap = null;
   const requestedView = new URLSearchParams(window.location.search).get('view') || (window.location.pathname.startsWith('/admin') ? 'admin' : '');
-  const state = { boot:null, page:requestedView === 'admin' ? 'admin' : (requestedView === 'customer' ? 'customer' : 'home'), category:'minigame', adminTab:'overview', wallet:null, orders:[], tickets:[], adminData:{}, editingProductId:null, homeProxyStatus:null, homeProxyResult:null, sourceEditor:{activeFile:null,drafts:{},buffers:{},showDiff:false} };
+  const state = { boot:null, page:requestedView === 'admin' ? 'admin' : (requestedView === 'customer' ? 'customer' : 'home'), category:'minigame', adminTab:'overview', wallet:null, orders:[], tickets:[], adminData:{}, editingProductId:null, storeReleaseProductId:null, homeProxyStatus:null, homeProxyResult:null, sourceEditor:{activeFile:null,drafts:{},buffers:{},showDiff:false} };
 
   function hapticImpact(style='light'){
     try{if(typeof tg?.HapticFeedback?.impactOccurred==='function')tg.HapticFeedback.impactOccurred(style);}catch(_){}
@@ -1007,6 +1008,18 @@
       state.adminData.products = productData.products || [];
       state.adminData.databaseReadiness = databaseReadiness;
     }
+    if (tab === 'store-releases') {
+      const [productData, databaseReadiness] = await Promise.all([
+        api('/api/admin/products'),
+        api('/api/admin/database/readiness').catch(error => ({available:false,message:error.message}))
+      ]);
+      state.adminData.storeReleaseProducts = productData.products || [];
+      state.adminData.storeReleaseDatabaseReadiness = databaseReadiness;
+      const products = state.adminData.storeReleaseProducts;
+      if (!state.storeReleaseProductId || !products.some(item => String(item.id) === String(state.storeReleaseProductId))) {
+        state.storeReleaseProductId = products[0] ? String(products[0].id) : '';
+      }
+    }
     if (tab === 'service-readiness') state.adminData.serviceReadiness = await api('/api/admin/service-readiness');
     if (tab === 'provider-registry') state.adminData.providerRegistry = await api('/api/admin/provider-registry');
     if (tab === 'source-control') {
@@ -1121,6 +1134,7 @@
     const selectOptions = (items, current, fallback) => items.map(item => '<option value="' + item[0] + '"' + (String(current || fallback) === item[0] ? ' selected' : '') + '>' + item[1] + '</option>').join('');
     const minigameBrands = ['QQ88','HI88','78WIN','RR88','MM88','GG88','ABCVIP','XX8','U888','J88','ABC8','88CLB','AD88','SC88','C168','CM88','F8BET'];
     const selectedBrand = String(editing && editing.metadata ? editing.metadata.brand || '' : '').toUpperCase();
+    const screenshotsValue = editing && editing.metadata && Array.isArray(editing.metadata.screenshots) ? editing.metadata.screenshots.join('\n') : '';
     const storeRelease = editing && editing.metadata && editing.metadata.storeRelease && typeof editing.metadata.storeRelease === 'object' ? editing.metadata.storeRelease : {};
     const storeReleaseHistory = editing && editing.metadata && Array.isArray(editing.metadata.storeReleaseHistory) ? editing.metadata.storeReleaseHistory : [];
     const releaseValue = (key, fallback = '') => storeRelease[key] != null ? escapeHtml(storeRelease[key]) : fallback;
@@ -1165,6 +1179,7 @@
       '<div class="field"><label>Tồn kho (để trống = không giới hạn)</label><input name="stock" type="number" min="0" value="' + (editing && editing.stock != null ? escapeHtml(editing.stock) : '') + '"></div></div>' +
       '<div class="two-col"><div class="field"><label>Cấp VIP khi hoàn tất (0-3)</label><input name="vipLevel" type="number" min="0" max="3" value="' + value('vipLevel',0) + '"></div>' +
       '<div class="field"><label>URL ảnh HTTPS</label><input name="imageUrl" type="url" placeholder="https://..." value="' + value('imageUrl','') + '"></div></div>' +
+      '<div class="field"><label>Ảnh chụp màn hình ứng dụng (tối đa 8 URL HTTPS, mỗi dòng một URL)</label><textarea name="screenshots" maxlength="5000" rows="3" placeholder="https://example.com/screenshot-1.png\nhttps://example.com/screenshot-2.png">' + escapeHtml(screenshotsValue) + '</textarea><small class="muted">Website App Store dùng các ảnh này trong trang chi tiết ứng dụng. Chỉ lưu URL HTTPS, không upload ảnh vào mã nguồn.</small></div>' +
       '<div class="section-head"><h3>Nhà cung cấp & quyền nguồn</h3><span>Kiểm duyệt trước mở bán</span></div>' +
       '<div class="field"><label>Tên nhà cung cấp / đơn vị sở hữu kho</label><input name="supplierName" maxlength="120" value="' + value('supplierName','') + '" placeholder="Tên đối tác hoặc kho do HENDY sở hữu"></div>' +
       '<div class="two-col"><div class="field"><label>Trang nhà cung cấp (HTTPS)</label><input name="supplierUrl" type="url" placeholder="https://..." value="' + value('supplierUrl','') + '"></div>' +
@@ -1175,18 +1190,6 @@
       '<div class="two-col"><div class="field"><label>Phương thức bàn giao</label><select name="fulfillmentMode">' + fulfillmentOptions + '</select></div>' +
       '<div class="field"><label>Tên biến Environment (không phải secret)</label><input name="credentialEnvKey" maxlength="64" value="' + value('credentialEnvKey','') + '" placeholder="OTP_PROVIDER_API_KEY"></div></div>' +
       '<div class="notice warn">Chỉ nhập URL và thông tin mô tả nhà cung cấp. Không dán API Key, mật khẩu, cookie hay OTP vào đây. Khi thay nhà cung cấp hoặc URL nguồn, hệ thống tự đưa xác minh tương ứng về trạng thái chờ. Chế độ API vẫn khóa đến khi có adapter riêng được kiểm thử.</div>' +
-      (editing ? '<div class="section-head"><h3>HENDY APP STORE · RELEASE MANAGER</h3><span>' + (storeRelease.published === true ? 'Đang công khai' : (storeRelease.objectKey ? 'Bản nháp' : 'Chưa có bản phát hành')) + '</span></div>' +
-        '<div class="card"><div class="record-top"><div><b>' + escapeHtml(storeRelease.filename || 'Chưa tải binary') + '</b><small>Phiên bản ' + escapeHtml(storeRelease.version || '—') + ' · ' + escapeHtml(storeRelease.platform || '—') + ' · ' + escapeHtml(storeRelease.channel || '—') + '</small></div><span class="status ' + (storeRelease.published === true ? 'completed' : 'pending') + '">' + (storeRelease.published === true ? 'Đang công khai' : 'Nháp / chưa xuất bản') + '</span></div>' +
-        (storeRelease.sha256 ? '<p class="small muted">SHA-256: <code>' + escapeHtml(storeRelease.sha256) + '</code></p>' : '') +
-        (storeRelease.sizeBytes ? '<p class="small muted">Dung lượng: ' + (Number(storeRelease.sizeBytes) / 1048576).toFixed(2) + ' MB</p>' : '') +
-        (storeReleaseHistory.length ? '<div class="section-head"><h3>Lịch sử bản phát hành</h3><span>' + storeReleaseHistory.length + ' bản trước</span></div>' + storeReleaseHistory.map(item => '<div class="list-row"><div><b>' + escapeHtml(item.version || '—') + ' · ' + escapeHtml(item.platform || '—') + '</b><small>SHA-256: ' + escapeHtml(item.sha256 || '—') + ' · ' + escapeHtml(item.uploadedAt || '') + '</small></div><span class="status ' + (item.published === true ? 'completed' : 'pending') + '">' + (item.published === true ? 'Đã từng công khai' : 'Bản nháp') + '</span></div>').join('') : '') +
-        '<div class="two-col"><div class="field"><label>Trạng thái phát hành</label><select name="storeReleasePublished"><option value="false"' + (releasePublished === 'false' ? ' selected' : '') + '>Bản nháp / ẩn khỏi Store</option><option value="true"' + (releasePublished === 'true' ? ' selected' : '') + '>Công khai sau kiểm tra</option></select></div><div class="field"><label>Manifest iOS OTA (HTTPS, tùy chọn)</label><input name="storeReleaseManifestUrl" type="url" maxlength="1000" value="' + releaseValue('manifestUrl') + '" placeholder="https://.../manifest.plist"></div></div>' +
-        '<div class="notice warn">Upload lưu file ở Neon Object Storage riêng tư. Bản tải mới luôn ở trạng thái nháp; cần xác minh hồ sơ nhà cung cấp/quyền nguồn rồi mới chọn Công khai. iOS OTA chỉ hiển thị khi có manifest HTTPS và IPA đã ký phù hợp. SHA-256 dùng để kiểm tra tính toàn vẹn, không thay thế kiểm tra chữ ký hoặc quét mã độc.</div></div>' +
-        '<div class="card form" id="product-release-upload-panel"><b>＋ Tải binary mới</b><div class="two-col"><div class="field"><label>Nền tảng</label><select id="release-upload-platform"><option value="android">Android APK</option><option value="windows">Windows EXE / MSI / MSIX / ZIP</option><option value="macos">macOS DMG / PKG / ZIP</option><option value="ios">iOS IPA</option><option value="linux">Linux AppImage / DEB / RPM / TAR.GZ</option><option value="web">Web ZIP</option></select></div><div class="field"><label>Phiên bản</label><input id="release-upload-version" maxlength="64" value="' + releaseValue('version') + '" placeholder="v1.0.0" required></div></div>' +
-        '<div class="two-col"><div class="field"><label>Kênh phát hành</label><select id="release-upload-channel"><option value="stable">Stable</option><option value="beta">Beta</option><option value="nightly">Nightly</option></select></div><div class="field"><label>Tệp cài đặt (tối đa 200 MB)</label><input id="release-upload-file" type="file" required accept=".apk,.exe,.msi,.msix,.zip,.dmg,.pkg,.ipa,.appimage,.deb,.rpm,.tar.gz"></div></div>' +
-        '<div class="field"><label>Release notes</label><textarea id="release-upload-notes" maxlength="2000" rows="3" placeholder="Các thay đổi trong phiên bản này…"></textarea></div>' +
-        '<button type="button" class="secondary" data-upload-product-release>⬆ Upload binary lên Neon Storage</button><p class="small muted">Chỉ Admin được upload. Tệp phải khớp chữ ký định dạng cơ bản, có SHA-256 và được giữ riêng tư đến khi được xuất bản.</p></div>'
-        : '<div class="notice">Tạo sản phẩm trước, lưu hồ sơ quyền nguồn/nhà cung cấp; sau đó mở chỉnh sửa sản phẩm để tải binary và phát hành lên HENDY App Store.</div>') +
       '<div class="two-col"><button class="primary"' + (supplierSchemaReady ? '' : ' disabled title="Cần hoàn tất migration Supplier Readiness trước khi lưu"') + '>' + (supplierSchemaReady ? (editing ? 'Lưu thay đổi' : '＋ Tạo sản phẩm') : 'Chờ đồng bộ database') + '</button>' +
       (editing ? '<button type="button" class="secondary" data-cancel-product-edit>Hủy chỉnh sửa</button>' : '') + '</div></form>' +
       '<div class="section-head"><h3>Danh sách sản phẩm</h3><span>' + products.length + ' sản phẩm</span></div>' +
@@ -1202,6 +1205,106 @@
         '<div class="two-col"><button class="tiny-btn" data-edit-product="' + escapeHtml(product.id) + '">Chỉnh sửa hồ sơ</button>' +
         '<button class="tiny-btn" data-toggle-product="' + escapeHtml(product.id) + '" data-active="' + String(Boolean(product.isActive)) + '">' + (product.isActive ? 'Ẩn sản phẩm' : 'Bật cờ hiển thị') + '</button></div></article>';
       }).join('') : empty('Chưa có sản phẩm','Tạo hồ sơ thật, ghi nhận quyền nguồn/nhà cung cấp và xác minh trước khi mở bán.'));
+  }
+
+  function adminStoreReleases() {
+    const products = state.adminData.storeReleaseProducts || [];
+    const selectedId = String(state.storeReleaseProductId || '');
+    const selected = products.find(item => String(item.id) === selectedId) || null;
+    const metadata = selected && selected.metadata && typeof selected.metadata === 'object' ? selected.metadata : {};
+    const release = metadata.storeRelease && typeof metadata.storeRelease === 'object' ? metadata.storeRelease : {};
+    const history = Array.isArray(metadata.storeReleaseHistory) ? metadata.storeReleaseHistory : [];
+    const published = release.published === true;
+    const ready = Boolean(selected && selected.isSellable);
+    const readyCount = products.filter(item => Boolean(item.isSellable)).length;
+    const withRelease = products.filter(item => item.metadata && item.metadata.storeRelease && item.metadata.storeRelease.filename).length;
+    const publishedCount = products.filter(item => item.metadata && item.metadata.storeRelease && item.metadata.storeRelease.published === true).length;
+    const draftCount = Math.max(0, withRelease - publishedCount);
+    const options = products.map(item => '<option value="' + escapeHtml(item.id) + '"' + (String(item.id) === selectedId ? ' selected' : '') + '>' +
+      escapeHtml(item.name) + ' · #' + escapeHtml(item.id) + ' · ' + (item.isSellable ? 'Đủ điều kiện' : 'Chưa sẵn sàng') + '</option>').join('');
+    const sizeLabel = bytes => {
+      const value = Number(bytes || 0);
+      if (!Number.isFinite(value) || value <= 0) return '—';
+      if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB';
+      if (value < 1024 * 1024 * 1024) return (value / 1024 / 1024).toFixed(2) + ' MB';
+      return (value / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    };
+    const platformLabel = {android:'Android',windows:'Windows',macos:'macOS',ios:'iOS',linux:'Linux',web:'Web'};
+    const status = published
+      ? '<span class="status completed">Đang công khai</span>'
+      : (release.filename ? '<span class="status pending">Bản nháp</span>' : '<span class="status pending">Chưa có binary</span>');
+    const reasons = selected && Array.isArray(selected.readinessReasons) ? selected.readinessReasons : [];
+    const currentPanel = selected
+      ? '<article class="record"><div class="record-top"><div><b>' + escapeHtml(selected.name) + '</b><small class="muted">Sản phẩm #' + escapeHtml(selected.id) + ' · ' + escapeHtml(labels[selected.category] || selected.category) + ' · ' + escapeHtml(selected.slug || '') + '</small></div>' + (ready ? '<span class="status completed">Supplier Readiness đạt</span>' : '<span class="status pending">Đang khóa phát hành</span>') + '</div>' +
+        '<p class="small muted">' + (selected.imageUrl ? 'Ảnh biểu tượng đã cấu hình' : 'Chưa có ảnh biểu tượng') + ' · ' + (Array.isArray(metadata.screenshots) ? metadata.screenshots.length : 0) + '/8 ảnh chụp màn hình</p>' +
+        (reasons.length ? '<div class="notice warn"><b>Chưa đủ điều kiện công khai:</b><br>' + reasons.map(escapeHtml).join('<br>') + '</div>' : '<div class="notice good">Hồ sơ quyền nguồn, nhà cung cấp và phương thức bàn giao đáp ứng điều kiện hiện tại.</div>') +
+        '<div class="two-col"><button type="button" class="tiny-btn" data-edit-product="' + escapeHtml(selected.id) + '">Mở hồ sơ sản phẩm / nhà cung cấp</button><button type="button" class="tiny-btn" data-store-release-refresh>Làm mới dữ liệu</button></div></article>'
+      : empty('Chưa có sản phẩm', 'Tạo sản phẩm trước trong mục Dịch vụ & sản phẩm, sau đó quay lại đây để tải binary.');
+
+    const currentRelease = selected && release.filename
+      ? '<article class="record"><div class="record-top"><div><b>' + escapeHtml(release.filename) + '</b><small class="muted">' +
+        escapeHtml(platformLabel[release.platform] || release.platform || '—') + ' · ' + escapeHtml(release.version || '—') + ' · ' + escapeHtml(String(release.channel || 'stable').toUpperCase()) +
+        '</small></div>' + status + '</div>' +
+        '<div class="list-row"><span>Dung lượng</span><b>' + sizeLabel(release.sizeBytes) + '</b></div>' +
+        '<div class="list-row"><span>SHA-256</span><code class="small">' + escapeHtml(release.sha256 || '—') + '</code></div>' +
+        '<div class="list-row"><span>Object Storage</span><span class="small">' + (release.objectKey ? 'Neon private bucket' : 'External HTTPS') + '</span></div>' +
+        (release.releaseNotes ? '<p class="small muted">' + escapeHtml(release.releaseNotes) + '</p>' : '') +
+        '<div class="field"><label>iOS OTA manifest URL (HTTPS, tùy chọn)</label><input id="store-release-manifest" type="url" maxlength="1000" value="' + escapeHtml(release.manifestUrl || '') + '" placeholder="https://example.com/manifest.plist"></div>' +
+        '<div class="two-col">' +
+        (published
+          ? '<button type="button" class="secondary" data-store-release-publish="false">Ẩn bản phát hành</button>'
+          : '<button type="button" class="primary" data-store-release-publish="true"' + (ready ? '' : ' disabled title="Cần hoàn tất Supplier Readiness trước khi công khai"') + '>Công khai sau kiểm tra</button>') +
+        '<button type="button" class="tiny-btn" data-store-release-save-manifest>Lưu manifest</button></div>' +
+        '<div class="notice warn">SHA-256 chỉ xác minh tính toàn vẹn sau tải xuống. Không thay thế ký số nhà phát hành, quét mã độc hoặc kiểm tra chứng thư hệ điều hành.</div></article>'
+      : '<div class="notice">Chưa có binary cho sản phẩm này. Chọn nền tảng, phiên bản và tải gói cài đặt bên dưới. Mọi upload mới tự động ở trạng thái nháp.</div>';
+
+    const historyPanel = history.length
+      ? '<div class="section-head"><h3>Lịch sử phát hành</h3><span>' + history.length + ' bản trước</span></div>' +
+        history.map(item => '<article class="record"><div class="record-top"><div><b>' + escapeHtml(item.filename || item.version || 'Bản phát hành trước') + '</b><small class="muted">' +
+          escapeHtml(platformLabel[item.platform] || item.platform || '—') + ' · ' + escapeHtml(item.version || '—') + ' · ' + escapeHtml(item.uploadedAt || '') +
+          '</small></div><span class="status ' + (item.published === true ? 'completed' : 'pending') + '">' + (item.published === true ? 'Đã từng công khai' : 'Lịch sử / nháp') + '</span></div>' +
+          '<p class="small muted">SHA-256: ' + escapeHtml(item.sha256 || '—') + '</p></article>').join('')
+      : '<p class="small muted">Chưa có lịch sử bản phát hành trước. HENDY sẽ giữ tối đa 10 bản ghi khi thay thế binary.</p>';
+
+    const releaseRows = products.filter(item => item.metadata && item.metadata.storeRelease && item.metadata.storeRelease.filename)
+      .map(item => {
+        const r = item.metadata.storeRelease;
+        return '<article class="record"><div class="record-top"><div><b>' + escapeHtml(item.name) + '</b><small class="muted">#' + escapeHtml(item.id) + ' · ' +
+          escapeHtml(platformLabel[r.platform] || r.platform || '—') + ' · ' + escapeHtml(r.version || '—') + ' · ' + escapeHtml(String(r.channel || 'stable').toUpperCase()) +
+          '</small></div><span class="status ' + (r.published === true ? 'completed' : 'pending') + '">' + (r.published === true ? 'Đang công khai' : 'Bản nháp') + '</span></div>' +
+          '<div class="two-col"><span class="small muted">' + escapeHtml(r.filename || '') + ' · ' + sizeLabel(r.sizeBytes) + '</span><button type="button" class="tiny-btn" data-store-release-select="' + escapeHtml(item.id) + '">Quản lý bản này</button></div></article>';
+      }).join('');
+
+    return '<div class="app-banner"><div><b>🚀 HENDY APP STORE · RELEASE STUDIO</b><small>Quản lý metadata, binary đa nền tảng, phiên bản, kênh phát hành, checksum và công khai có kiểm duyệt. Giao diện quản trị riêng; không phụ thuộc bộ đăng nhập demo của kho nguồn.</small></div><span class="banner-icon">📲</span></div>' +
+      '<div class="stat-grid">' +
+        '<div class="stat"><small>Sản phẩm trong danh mục</small><b>' + products.length + '</b></div>' +
+        '<div class="stat"><small>Có binary</small><b>' + withRelease + '</b></div>' +
+        '<div class="stat"><small>Đang công khai</small><b>' + publishedCount + '</b></div>' +
+        '<div class="stat"><small>Nháp / chờ duyệt</small><b>' + draftCount + '</b></div>' +
+      '</div>' +
+      '<div class="notice warn">Hãy tạo hoặc chỉnh sửa sản phẩm, điền tên nhà cung cấp, URL nguồn và trạng thái quyền phân phối ở mục Dịch vụ & sản phẩm. Chỉ sản phẩm đủ Supplier Readiness mới được công khai. Không có License/Crash Report demo hay số lượt tải giả.</div>' +
+      '<div class="section-head"><h3>Chọn ứng dụng / sản phẩm</h3><span>' + readyCount + ' hồ sơ đủ điều kiện</span></div>' +
+      '<div class="card form"><div class="field"><label>Sản phẩm hiện tại</label><select id="store-release-product-select" data-store-release-product-select>' +
+        (options || '<option value="">Chưa có sản phẩm</option>') + '</select></div>' + currentPanel + '</div>' +
+      '<div class="grid-2">' +
+        '<div><div class="section-head"><h3>Bản phát hành hiện tại</h3><span>' + (selected ? 'Sản phẩm #' + escapeHtml(selected.id) : '—') + '</span></div>' + currentRelease + '</div>' +
+        '<div><div class="section-head"><h3>＋ Upload binary mới</h3><span>PRIVATE DRAFT</span></div>' +
+          (selected ? '<form class="card form" id="store-release-upload-form" data-product-id="' + escapeHtml(selected.id) + '">' +
+            '<div class="field"><label>Nền tảng</label><select name="platform" required><option value="android">Android APK</option><option value="windows">Windows EXE / MSI / MSIX / ZIP</option><option value="macos">macOS DMG / PKG / ZIP</option><option value="ios">iOS IPA</option><option value="linux">Linux AppImage / DEB / RPM / TAR.GZ</option><option value="web">Web ZIP</option></select></div>' +
+            '<div class="two-col"><div class="field"><label>Phiên bản</label><input name="version" maxlength="64" placeholder="v1.0.0" required></div><div class="field"><label>Kênh phát hành</label><select name="channel"><option value="stable">Stable</option><option value="beta">Beta</option><option value="nightly">Nightly</option></select></div></div>' +
+            '<div class="field"><label>Tệp cài đặt (tối đa 200 MB)</label><input name="releaseFile" type="file" required accept=".apk,.exe,.msi,.msix,.zip,.dmg,.pkg,.ipa,.appimage,.deb,.rpm,.tar.gz"></div>' +
+            '<div class="field"><label>Release notes</label><textarea name="releaseNotes" maxlength="2000" rows="4" placeholder="Các thay đổi trong phiên bản này…"></textarea></div>' +
+            '<div class="field"><label>Manifest iOS OTA (HTTPS, tùy chọn)</label><input name="manifestUrl" type="url" maxlength="1000" placeholder="https://example.com/manifest.plist"></div>' +
+            '<button class="primary" type="submit"' + (ready ? '' : ' disabled title="Cần hoàn tất Supplier Readiness trước khi phát hành"') + '>⬆ Upload binary lên Neon Storage</button>' +
+            '<p class="small muted">Tệp tải lên được kiểm tra extension/MIME/chữ ký cơ bản và SHA-256. HENDY không thực thi tệp và không đưa binary vào thư mục công khai.</p>' +
+            '</form>'
+          : empty('Chọn sản phẩm trước', 'Cần có hồ sơ sản phẩm trước khi upload binary.')) +
+        '</div>' +
+      '</div>' +
+      '<div class="section-head"><h3>Danh sách bản phát hành</h3><span>' + withRelease + ' bản ghi</span></div>' +
+      (releaseRows || empty('Chưa có binary','Sau khi Admin upload, bản nháp sẽ hiển thị ở đây để rà soát và công khai.')) +
+      '<div class="section-head"><h3>Lịch sử của sản phẩm đang chọn</h3></div>' + historyPanel +
+      '<div class="notice">HENDYAppStore tham chiếu các ý tưởng về device detection, platform download, metadata và matrix build. Build/signing pipeline phải được chạy và xác minh riêng; trạng thái CI không đồng nghĩa đã phát hành binary.</div>';
   }
 
   function adminServiceReadiness() {
@@ -1776,6 +1879,7 @@
     if (state.adminTab === 'overview') body = adminOverview();
     if (state.adminTab === 'modules') body = adminModules();
     if (state.adminTab === 'products') body = adminProducts();
+    if (state.adminTab === 'store-releases') body = adminStoreReleases();
     if (state.adminTab === 'service-readiness') body = adminServiceReadiness();
     if (state.adminTab === 'provider-registry') body = adminProviderRegistry();
     if (state.adminTab === 'source-control') body = adminSourceControl();
@@ -1984,33 +2088,80 @@
       } catch (error) { toast(error.message, 'error'); multiAction.disabled = false; }
       return;
     }
-    const uploadProductRelease = event.target.closest('[data-upload-product-release]');
-    if (uploadProductRelease) {
-      const productForm = document.getElementById('admin-product-form');
-      const productId = productForm?.dataset.productId || '';
-      const file = document.getElementById('release-upload-file')?.files?.[0];
-      if (!productId) { toast('Hãy lưu sản phẩm trước khi tải binary.', 'error'); return; }
-      if (!file) { toast('Chọn tệp phát hành trước khi upload.', 'error'); return; }
-      if (file.size > 209715200) { toast('Tệp vượt giới hạn 200 MB.', 'error'); return; }
-      const payload = new FormData();
-      payload.append('releaseFile', file, file.name);
-      payload.append('platform', document.getElementById('release-upload-platform')?.value || '');
-      payload.append('version', document.getElementById('release-upload-version')?.value || '');
-      payload.append('channel', document.getElementById('release-upload-channel')?.value || 'stable');
-      payload.append('releaseNotes', document.getElementById('release-upload-notes')?.value || '');
-      uploadProductRelease.disabled = true;
+    const storeReleaseSelect = event.target.closest('[data-store-release-select]');
+    if (storeReleaseSelect) {
+      state.storeReleaseProductId = String(storeReleaseSelect.dataset.storeReleaseSelect || '');
+      await renderPage();
+      return;
+    }
+    const storeReleaseRefresh = event.target.closest('[data-store-release-refresh]');
+    if (storeReleaseRefresh) {
+      storeReleaseRefresh.disabled = true;
+      try { await adminLoad('store-releases'); await renderPage(); }
+      catch (error) { toast(error.message, 'error'); storeReleaseRefresh.disabled = false; }
+      return;
+    }
+    const saveStoreManifest = event.target.closest('[data-store-release-save-manifest]');
+    if (saveStoreManifest) {
+      const productId = String(state.storeReleaseProductId || '');
+      const manifestUrl = document.getElementById('store-release-manifest')?.value || '';
+      saveStoreManifest.disabled = true;
+      try {
+        const result = await api('/api/admin/products/' + encodeURIComponent(productId), 'PATCH', {storeReleaseManifestUrl:manifestUrl});
+        toast('Đã lưu manifest OTA.');
+        await renderPage();
+      } catch (error) { toast(error.message, 'error'); saveStoreManifest.disabled = false; }
+      return;
+    }
+    const publishStoreRelease = event.target.closest('[data-store-release-publish]');
+    if (publishStoreRelease) {
+      const productId = String(state.storeReleaseProductId || '');
+      const next = publishStoreRelease.dataset.storeReleasePublish === 'true';
+      const manifestUrl = document.getElementById('store-release-manifest')?.value || '';
+      if (next && !window.confirm('Xác nhận công khai bản phát hành này? Kiểm tra trước khi người dùng có thể tải binary.')) return;
+      if (!next && !window.confirm('Ẩn bản phát hành khỏi Website HENDY App Store?')) return;
+      publishStoreRelease.disabled = true;
+      try {
+        const result = await api('/api/admin/products/' + encodeURIComponent(productId), 'PATCH', {
+          storeReleasePublished:next,
+          storeReleaseManifestUrl:manifestUrl
+        });
+        toast(next ? 'Đã công khai bản phát hành.' : 'Đã ẩn bản phát hành khỏi Store.');
+        await renderPage();
+      } catch (error) { toast(error.message, 'error'); publishStoreRelease.disabled = false; }
+      return;
+    }
+    const storeReleaseUploadForm = event.target.closest('#store-release-upload-form');
+    if (storeReleaseUploadForm && storeReleaseUploadForm.dataset.submitting === 'true') return;
+    const releaseForm = event.target.closest('#store-release-upload-form');
+    if (releaseForm && releaseForm.dataset.submitting !== 'true') {
+      event.preventDefault();
+      const productId = releaseForm.dataset.productId || '';
+      const file = releaseForm.querySelector('[name="releaseFile"]')?.files?.[0];
+      if (!productId || !file) { toast('Chọn sản phẩm và tệp binary trước khi upload.', 'error'); return; }
+      if (file.size < 16 || file.size > 209715200) { toast('Tệp phải từ 16 byte đến 200 MB.', 'error'); return; }
+      const formData = new FormData(releaseForm);
+      formData.delete('manifestUrl');
+      const manifestUrl = String(releaseForm.querySelector('[name="manifestUrl"]')?.value || '');
+      const submit = releaseForm.querySelector('button[type="submit"]');
+      releaseForm.dataset.submitting = 'true';
+      if (submit) { submit.disabled = true; submit.textContent = 'Đang upload binary…'; }
       try {
         const response = await fetch('/api/admin/products/' + encodeURIComponent(productId) + '/release-upload', {
-          method:'POST', body:payload, credentials:'same-origin', headers:{'Accept':'application/json'}, cache:'no-store'
+          method:'POST', body:formData, credentials:'same-origin',
+          headers:{'Accept':'application/json', ...(initData ? {'Authorization':'tma ' + initData} : {}), 'X-Telegram-Bot-Key':botKey},
+          cache:'no-store'
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Không thể upload binary.');
-        toast(result.message || 'Đã lưu bản phát hành ở trạng thái nháp.');
-        await adminLoad('products');
+        if (!response.ok) throw new Error(result.error || 'Không thể upload binary. Kiểm tra Neon Object Storage và cấu hình Render.');
+        if (manifestUrl) await api('/api/admin/products/' + encodeURIComponent(productId), 'PATCH', {storeReleaseManifestUrl:manifestUrl});
+        toast(result.message || 'Đã lưu binary ở trạng thái nháp. Kiểm tra và công khai khi sẵn sàng.');
+        state.storeReleaseProductId = productId;
         await renderPage();
       } catch (error) {
         toast(error.message, 'error');
-        uploadProductRelease.disabled = false;
+        releaseForm.dataset.submitting = 'false';
+        if (submit) { submit.disabled = false; submit.textContent = '⬆ Upload binary lên Neon Storage'; }
       }
       return;
     }

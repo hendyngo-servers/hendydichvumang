@@ -262,7 +262,7 @@
     .source-diff{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px}
     .source-diff pre{max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#050811;border:1px solid var(--panel-border);padding:10px;border-radius:9px;color:#c8d8ef;font:10px/1.5 ui-monospace,monospace}
     .source-pill{display:inline-flex;align-items:center;border:1px solid var(--panel-border);border-radius:99px;padding:4px 8px;color:#a9b8d2;font-size:9px;font-weight:850}
-    .source-pr-form{margin-top:12px}
+    .source-commit-form{margin-top:12px}
     .source-empty{padding:24px 12px;color:var(--text-muted);font-size:11px;text-align:center}
     @media(max-width:900px){.source-editor-grid{grid-template-columns:1fr}.source-file-list{max-height:260px}.source-diff{grid-template-columns:1fr}.source-editor-area{min-height:340px}}
 </style>
@@ -1310,7 +1310,7 @@
     }).join('');
     const stagedMarkup = draftPaths.length ? draftPaths.map(path => {
       const item = drafts[path];
-      return '<div class="list-row"><div><b>' + escapeHtml(path) + '</b><small>' + (item.deleted ? 'Sẽ xóa trong Draft PR' : 'Thay đổi đang chờ · ' + Math.max(0, Number(item.content?.length || 0)) + ' ký tự') + '</small></div><button type="button" class="source-action" data-source-unstage="' + escapeHtml(path) + '">Bỏ</button></div>';
+      return '<div class="list-row"><div><b>' + escapeHtml(path) + '</b><small>' + (item.deleted ? 'Sẽ xóa trong commit trực tiếp' : 'Thay đổi đang chờ · ' + Math.max(0, Number(item.content?.length || 0)) + ' ký tự') + '</small></div><button type="button" class="source-action" data-source-unstage="' + escapeHtml(path) + '">Bỏ</button></div>';
     }).join('') : '<div class="source-empty">Chưa có tệp nào được đưa vào danh sách thay đổi.</div>';
     const editorPanel = active
       ? '<div class="source-panel"><div class="source-panel-head"><div><b>' + escapeHtml(active.path) + '</b><div class="source-pill">' + (active.sha ? 'Tệp hiện có' : 'Tệp mới') + (active.requiresConfirmation || activeDraft?.requiresConfirmation ? ' · Cần xác nhận' : '') + '</div></div><span class="source-pill">' + (activeDraft ? 'Đã staging' : 'Đang chỉnh sửa') + '</span></div>' +
@@ -1321,21 +1321,21 @@
         (activeDraft?.deleted ? '<div class="source-empty">Tệp này đang được đánh dấu xóa. Bỏ thay đổi để khôi phục bản gốc.</div>' :
           '<textarea class="source-editor-area" id="source-editor-content" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Nội dung mã nguồn">' + escapeHtml(displayContent) + '</textarea>') +
         (editor.showDiff && activeDraft && !activeDraft.deleted ? '<div class="source-diff"><div><b class="small muted">Bản trên nhánh ' + escapeHtml(tree.baseBranch || 'main') + '</b><pre>' + escapeHtml(active.content || '') + '</pre></div><div><b class="small muted">Bản đang staging</b><pre>' + escapeHtml(activeDraft.content || '') + '</pre></div></div>' : '') +
-        '<div class="notice">Trình soạn thảo lưu bản thay đổi trong phiên trình duyệt cho đến khi tạo Draft PR. Đổi tệp không tự ghi đè repository.</div></div>'
+        '<div class="notice">Trình soạn thảo lưu bản thay đổi trong phiên trình duyệt cho đến khi tạo commit trực tiếp. Đổi tệp không tự ghi đè repository.</div></div>'
       : '<div class="source-panel source-empty">Chọn một tệp ở danh sách bên trái hoặc tạo tệp mới để bắt đầu chỉnh sửa.</div>';
     const connected = status.configured === true && status.connected === true;
     const connectionPanel = !status.configured
       ? '<div class="notice warn"><b>Chưa kết nối GitHub.</b> Đặt HENDY_GITHUB_TOKEN tại Render Environment. Token chỉ nằm ở máy chủ, không nhập vào giao diện và không lưu trong PostgreSQL. Sau khi thêm biến, deploy Bot rồi nhấn Kiểm tra kết nối.</div>'
       : (!status.connected
         ? '<div class="notice warn"><b>Không kết nối được GitHub.</b> ' + escapeHtml(status.message || 'Kiểm tra token/repository.') + '</div>'
-        : '<div class="notice good">Đã kết nối ' + escapeHtml(status.repository || '') + ' · nhánh gốc ' + escapeHtml(status.baseBranch || '') + '. Editor chỉ tạo branch và Draft PR; không commit trực tiếp vào main.</div>');
-    const prResult = state.sourceEditor.lastPullRequest
-      ? '<div class="notice good"><b>Đã tạo Draft Pull Request #' + Number(state.sourceEditor.lastPullRequest.number || 0) + '.</b> ' + escapeHtml(state.sourceEditor.lastPullRequest.message || '') + '<br><a href="' + escapeHtml(state.sourceEditor.lastPullRequest.url || '#') + '" target="_blank" rel="noopener noreferrer">Mở Pull Request trên GitHub ↗</a></div>'
+        : '<div class="notice good">Đã kết nối ' + escapeHtml(status.repository || '') + ' · nhánh gốc ' + escapeHtml(status.baseBranch || '') + '. Editor chỉ tạo branch và commit trực tiếp; không commit trực tiếp vào main.</div>');
+    const prResult = state.sourceEditor.lastCommit
+      ? '<div class="notice good"><b>Đã tạo commit trực tiếp vào main #' + Number(state.sourceEditor.lastCommit.commitSha?.slice(0,7) || '') + '.</b> ' + escapeHtml(state.sourceEditor.lastCommit.message || '') + '<br><a href="' + escapeHtml('https://github.com/hendyngo-servers/hendydichvumang/commit/' + encodeURIComponent(state.sourceEditor.lastCommit.commitSha || '')) + '" target="_blank" rel="noopener noreferrer">Xem commit trên GitHub ↗</a></div>'
       : '';
     return '<div class="app-banner"><div><b>🧑‍💻 HENDY · SOURCE CODE CONTROL</b><small>Duyệt, tìm, chỉnh sửa nhiều tệp mã nguồn và gửi thành Pull Request để CI/review. Không cập nhật trực tiếp tệp đang chạy.</small></div><span class="banner-icon">⌘</span></div>' +
       '<div class="stat-grid"><div class="stat"><small>Repository</small><b style="font-size:13px">' + escapeHtml(status.repository || 'hendydichvumang') + '</b></div><div class="stat"><small>Nhánh gốc</small><b>' + escapeHtml(status.baseBranch || 'main') + '</b></div><div class="stat"><small>Tệp có thể duyệt</small><b>' + Number(tree.count || 0) + '</b></div><div class="stat"><small>Thay đổi đang chờ</small><b>' + stagedCount + '</b></div></div>' +
       connectionPanel + prResult +
-      '<div class="notice warn"><b>Quy tắc an toàn:</b> Không hiển thị .env/credential/private key; không cho chỉnh workflow CI/CD; không thực thi lệnh hoặc chạy code trong Admin. Mọi sửa đổi đi qua Draft PR, CI và review. Tệp SQL, migration, Dockerfile, render.yaml và lockfile yêu cầu xác nhận riêng.</div>' +
+      '<div class="notice warn"><b>Quy tắc an toàn:</b> Không hiển thị .env/credential/private key; không cho chỉnh workflow CI/CD; không thực thi lệnh hoặc chạy code trong Admin. Mọi sửa đổi đi qua commit trực tiếp, CI và review. Tệp SQL, migration, Dockerfile, render.yaml và lockfile yêu cầu xác nhận riêng.</div>' +
       (connected ? '<div class="source-editor-grid">' +
         '<div class="source-panel"><div class="source-panel-head"><b>Repository files</b><span class="source-pill">' + files.length + ' mục</span></div>' +
         '<div class="source-toolbar"><input type="search" id="source-file-filter" placeholder="Lọc theo đường dẫn/tên tệp…" aria-label="Lọc tệp mã nguồn"><button type="button" data-source-refresh>↻</button><button type="button" data-source-new>＋ Tệp mới</button></div>' +
@@ -1343,12 +1343,12 @@
         (tree.count > files.length ? '<div class="source-empty">Đang hiển thị 1.200 tệp đầu tiên. Hãy lọc theo tên/đường dẫn.</div>' : '') + '</div>' +
         '<div>' + editorPanel +
           '<div class="source-panel" style="margin-top:12px"><div class="source-panel-head"><b>Thay đổi đang chờ</b><span class="source-pill">' + stagedCount + ' tệp</span></div><div style="padding:8px 12px">' + stagedMarkup + '</div>' +
-          '<form class="form source-pr-form" id="source-pr-form" style="padding:12px"><div class="field"><label>Tiêu đề Pull Request</label><input name="title" maxlength="120" value="Update HENDY source from Admin" required></div>' +
-          '<div class="field"><label>Mô tả / phạm vi thay đổi</label><textarea name="summary" maxlength="8000" rows="3" placeholder="Mô tả tính năng, file đã thay đổi và cách kiểm thử"></textarea></div>' +
-          (needsConfirmation ? '<label class="notice warn" style="display:block"><input type="checkbox" name="sensitiveConfirmation" required> Tôi đã rà soát tác động của SQL/migration, cấu hình triển khai hoặc dependency lockfile trong thay đổi này.</label>' : '') +
-          '<button class="primary" type="submit"' + (stagedCount ? '' : ' disabled') + '>Tạo Draft Pull Request (' + stagedCount + ' tệp)</button></form></div>' +
+          '<form class="form source-commit-form" id="source-commit-form" style="padding:12px"><div class="field"><label>Thông điệp commit</label><input name="title" maxlength="120" value="Update HENDY source from Admin" required></div>' +
+          '<div class="field"><label>Thông điệp commit / phạm vi thay đổi</label><textarea name="summary" maxlength="8000" rows="3" placeholder="Mô tả thay đổi sẽ được ghi thẳng vào nhánh main"></textarea></div>' +
+          (needsConfirmation ? '<label class="notice warn" style="display:block"><input type="checkbox" name="sensitiveConfirmation" required> Tôi xác nhận ghi trực tiếp thay đổi nhạy cảm vào main; CI/CD/Render có thể tự chạy.</label>' : '') +
+          '<button class="primary" type="submit"' + (stagedCount ? '' : ' disabled') + '>Ghi trực tiếp vào nhánh chính (' + stagedCount + ' tệp)</button></form></div>' +
         '</div></div>' : '') +
-      '<div class="notice">Quyền GitHub cần cấp cho token: Metadata (read), Contents (read/write), Pull requests (read/write), chỉ giới hạn ở repository hendydichvumang. Không cấp Actions, Administration hoặc Secrets write.</div>';
+      '<div class="notice">Quyền GitHub cần cấp cho token: Metadata (read), Contents (read/write), không cần quyền Pull requests, chỉ giới hạn ở repository hendydichvumang. Không cấp Actions, Administration hoặc Secrets write.</div>';
   }
 
   function adminOrders() {
@@ -2048,7 +2048,7 @@
       };
       state.sourceEditor.buffers[active.path] = '';
       state.sourceEditor.showDiff = false;
-      toast('Đã đánh dấu tệp để xóa trong Draft PR.');
+      toast('Đã đánh dấu tệp để xóa trong commit trực tiếp.');
       await renderPage();
       return;
     }
@@ -2404,27 +2404,27 @@
       submitButton.disabled = true;
     }
     try {
-      if (form.id === 'source-pr-form') {
+      if (form.id === 'source-commit-form') {
         const stagedFiles = Object.values(state.sourceEditor.drafts || {}).map(item => ({
           path:item.path,
           sha:item.sha || '',
           content:item.deleted ? '' : item.content,
           deleted:Boolean(item.deleted)
         }));
-        if (!stagedFiles.length) throw new Error('Chưa có thay đổi nào để tạo Pull Request.');
-        const result = await api('/api/admin/source-control/pull-requests','POST',{
+        if (!stagedFiles.length) throw new Error('Chưa có thay đổi nào để ghi vào nhánh chính.');
+        const result = await api('/api/admin/source-control/commit','POST',{
           expectedBaseSha:state.adminData.sourceControlTree?.baseSha || '',
           title:String(data.title || '').trim(),
           summary:String(data.summary || '').trim(),
           sensitiveConfirmation:Boolean(data.sensitiveConfirmation),
           files:stagedFiles
         });
-        state.sourceEditor.lastPullRequest = result.pullRequest || null;
+        state.sourceEditor.lastCommit = result.commit || null;
         state.sourceEditor.drafts = {};
         state.sourceEditor.buffers = {};
         state.sourceEditor.activeFile = null;
         state.sourceEditor.showDiff = false;
-        toast(result.pullRequest?.message || 'Đã tạo Draft Pull Request.');
+        toast(result.pullRequest?.message || 'Đã tạo commit trực tiếp vào main.');
         await renderPage();
       } else if (form.id === 'admin-provider-form') {
         const payload = {

@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Validate inline browser JavaScript
+      - name: Validate browser JavaScript
         run: node scripts/validate-web-scripts.mjs
       - name: Validate published assets
         run: |

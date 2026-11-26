@@ -178,7 +178,21 @@ try {
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
-        readfile(dirname(__DIR__, 2) . '/website/telegram/customer-center/index.html');
+        readfile(dirname(__DIR__, 2) . '/website/public/miniapp/index.html');
+        exit;
+    }
+
+    // Mini App assets are served from the canonical public frontend on the Bot hostname too.
+    if ($method === 'GET' && in_array($path, ['/miniapp/style.css', '/miniapp/app.js', '/miniapp/config.js'], true)) {
+        $miniAppAssets = [
+            '/miniapp/style.css' => ['style.css', 'text/css; charset=utf-8'],
+            '/miniapp/app.js' => ['app.js', 'application/javascript; charset=utf-8'],
+            '/miniapp/config.js' => ['config.js', 'application/javascript; charset=utf-8'],
+        ];
+        [$assetFile, $contentType] = $miniAppAssets[$path];
+        header('Content-Type: ' . $contentType);
+        header('Cache-Control: public, max-age=300');
+        readfile(dirname(__DIR__, 2) . '/website/public/miniapp/' . $assetFile);
         exit;
     }
 
@@ -229,7 +243,7 @@ try {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('X-Robots-Tag: noindex, nofollow');
-        readfile(dirname(__DIR__, 2) . '/website/telegram/customer-center/index.html');
+        readfile(dirname(__DIR__, 2) . '/website/public/miniapp/index.html');
         exit;
     }
 

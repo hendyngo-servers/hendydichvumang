@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const API_BASE = String(window.HENDY_STORE_CONFIG?.apiBaseUrl || 'https://hendydichvumang-telegram-bot.onrender.com').replace(/\/+$/, '');
+  const API_BASE = String(window.HENDY_STORE_CONFIG?.apiBaseUrl ?? '').replace(/\/+$/, '');
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const state = { releases: [], category: 'all', platform: 'all', previousFocus: null };

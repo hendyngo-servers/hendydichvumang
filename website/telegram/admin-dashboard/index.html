@@ -1135,10 +1135,6 @@
     const minigameBrands = ['QQ88','HI88','78WIN','RR88','MM88','GG88','ABCVIP','XX8','U888','J88','ABC8','88CLB','AD88','SC88','C168','CM88','F8BET'];
     const selectedBrand = String(editing && editing.metadata ? editing.metadata.brand || '' : '').toUpperCase();
     const screenshotsValue = editing && editing.metadata && Array.isArray(editing.metadata.screenshots) ? editing.metadata.screenshots.join('\n') : '';
-    const storeRelease = editing && editing.metadata && editing.metadata.storeRelease && typeof editing.metadata.storeRelease === 'object' ? editing.metadata.storeRelease : {};
-    const storeReleaseHistory = editing && editing.metadata && Array.isArray(editing.metadata.storeReleaseHistory) ? editing.metadata.storeReleaseHistory : [];
-    const releaseValue = (key, fallback = '') => storeRelease[key] != null ? escapeHtml(storeRelease[key]) : fallback;
-    const releasePublished = storeRelease.published === true ? 'true' : 'false';
     const brandOptions = '<option value="">— Chọn nhà cái —</option>' + minigameBrands.map(brand => '<option value="' + brand + '"' + (selectedBrand === brand ? ' selected' : '') + '>' + brand + '</option>').join('');
     const permissionOptions = selectOptions([['pending','Chờ xác minh'],['authorized','Đã xác minh quyền phân phối'],['rejected','Không được phép']],value('sourcePermissionStatus',''), 'pending');
     const supplierOptions = selectOptions([['pending','Chờ xác minh nhà cung cấp'],['verified','Đã xác minh quyền truy cập'],['revoked','Đã thu hồi quyền truy cập']],value('supplierAccessStatus',''), 'pending');

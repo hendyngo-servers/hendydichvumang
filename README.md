@@ -16,6 +16,8 @@ The clean hostname `https://hendydichvumang.onrender.com` currently resolves to 
 
 Everything under `website/public/` is public static content: HTML, CSS, JavaScript, SVG, robots, sitemap and legal pages. It does not connect to PostgreSQL, process payments, or contain Bot credentials.
 
+The App Store's separated frontend/API/security boundary, versioned API contract, release validation rules and Render deployment constraints are documented in [docs/APP-STORE-REBUILD.md](docs/APP-STORE-REBUILD.md).
+
 Public tabs: Trang chủ, App Store, Dịch vụ mạng, AI Studio, Code Telegram, Giới thiệu. The public navigation intentionally does not expose "Trung tâm khách hàng".
 
 ## Telegram Bot

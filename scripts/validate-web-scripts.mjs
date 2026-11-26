@@ -35,6 +35,8 @@ const externalScripts = [
   'website/public/assets/site.js',
   'website/public/assets/site.config.js',
   'website/public/app-store/config.js',
+  'website/public/app-store/security.js',
+  'website/public/app-store/api-client.js',
   'website/public/app-store/app.js',
   'website/public/miniapp/config.js',
   'website/public/miniapp/app.js',

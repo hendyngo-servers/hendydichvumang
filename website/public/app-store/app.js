@@ -1,36 +1,12 @@
 (() => {
   'use strict';
-  const API_BASE = String(window.HENDY_STORE_CONFIG?.apiBaseUrl ?? '').replace(/\/+$/, '');
+  const storeApi = window.HENDY_STORE_API.create(window.HENDY_STORE_CONFIG || {});
+  const { safeHttps, fileExtension, validRelease } = window.HENDY_RELEASE_POLICY;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const state = { releases: [], category: 'all', platform: 'all', previousFocus: null };
   const platformNames = { android:'Android', windows:'Windows', macos:'macOS', ios:'iOS', linux:'Linux', web:'Web' };
   const platformIcons = { android:'fa-brands fa-android', windows:'fa-brands fa-windows', macos:'fa-brands fa-apple', ios:'fa-brands fa-apple', linux:'fa-brands fa-linux', web:'fa-solid fa-globe' };
-  const extensions = { android:['apk'], windows:['exe','msi','msix','zip'], macos:['dmg','pkg','zip'], ios:['ipa'], linux:['appimage','deb','rpm','tar.gz'], web:['zip'] };
-
-  function safeHttps(value) {
-    const raw = String(value || '').trim();
-    if (!raw || /[\u0000-\u0020\u007f\\]/.test(raw) || raw.startsWith('//')) return '';
-    try {
-      const url = new URL(raw);
-      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return '';
-      return url.href;
-    } catch (_) { return ''; }
-  }
-  function fileExtension(filename) {
-    const name = String(filename || '').toLowerCase();
-    return name.endsWith('.tar.gz') ? 'tar.gz' : name.split('.').pop();
-  }
-  function validRelease(item) {
-    const platform = String(item?.platform || '').toLowerCase();
-    const extension = fileExtension(item?.filename);
-    return Boolean(item && typeof item === 'object' &&
-      Object.prototype.hasOwnProperty.call(extensions, platform) &&
-      extensions[platform].includes(extension) &&
-      safeHttps(item.downloadUrl) &&
-      /^[a-f0-9]{64}$/i.test(String(item.sha256 || '')) &&
-      String(item.version || '').trim());
-  }
   function formatBytes(value) {
     const bytes = Number(value);
     if (!Number.isFinite(bytes) || bytes < 0) return '—';
@@ -302,14 +278,7 @@
     if (refresh) refresh.disabled = true;
     setApiStatus('Đang kết nối API', 'pending');
     try {
-      const response = await fetch(API_BASE + '/api/public/releases', {
-        method:'GET', mode:'cors', credentials:'omit',
-        headers:{Accept:'application/json'}, cache:'no-store'
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || payload.ok !== true || !Array.isArray(payload.releases)) {
-        throw new Error(payload.error || 'Không thể đọc danh mục phát hành từ HENDY API.');
-      }
+      const payload = await storeApi.listReleases();
       state.releases = payload.releases.filter(validRelease);
       setApiStatus('API đã kết nối', 'online');
       renderCatalog();

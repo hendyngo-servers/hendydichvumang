@@ -4,8 +4,9 @@ import vm from 'node:vm';
 const files = [
   'website/telegram/admin-dashboard/index.html',
   'website/telegram/admin-dashboard/legacy-login.html',
-  'website/telegram/customer-center/index.html',
   'website/public/index.html',
+  'website/public/app-store/index.html',
+  'website/public/miniapp/index.html',
 ];
 
 let checked = 0;
@@ -31,8 +32,12 @@ for (const file of files) {
   }
 }
 const externalScripts = [
+  'website/public/assets/site.js',
+  'website/public/assets/site.config.js',
   'website/public/app-store/config.js',
   'website/public/app-store/app.js',
+  'website/public/miniapp/config.js',
+  'website/public/miniapp/app.js',
 ];
 for (const file of externalScripts) {
   try {
@@ -40,6 +45,19 @@ for (const file of externalScripts) {
     if (!source.trim()) throw new Error('File is empty.');
     checked += 1;
     new vm.Script(source, { filename:file });
+  } catch (error) {
+    failures.push(file + ': ' + (error.stack || error.message));
+  }
+}
+const styleFiles = [
+  'website/public/assets/site.css',
+  'website/public/app-store/style.css',
+  'website/public/miniapp/style.css',
+];
+for (const file of styleFiles) {
+  try {
+    const source = readFileSync(file, 'utf8');
+    if (!source.trim()) throw new Error('File is empty.');
   } catch (error) {
     failures.push(file + ': ' + (error.stack || error.message));
   }

@@ -86,6 +86,86 @@ final class SourceControlService
         }
     }
 
+    /**
+     * Read the latest GitHub Actions runs for the configured source repository.
+     * Only a small, allow-listed summary is returned to the Admin UI.
+     * The GitHub token is never included in the response or logs.
+     */
+    public static function workflowRuns(int $limit = 10): array
+    {
+        $config = self::configuration();
+        $limit = max(1, min(20, $limit));
+        if ($config['token'] === '') {
+            return [
+                'configured' => false,
+                'connected' => false,
+                'repository' => $config['repository'],
+                'baseBranch' => $config['baseBranch'],
+                'runs' => [],
+                'message' => 'Chưa cấu hình HENDY_GITHUB_TOKEN trên Render.',
+                'permissionsRequired' => ['Actions: read'],
+            ];
+        }
+
+        try {
+            $query = '/actions/runs?per_page=' . $limit . '&branch=' . rawurlencode($config['baseBranch']);
+            $payload = self::request($config, 'GET', $query);
+            $rawRuns = is_array($payload['workflow_runs'] ?? null) ? $payload['workflow_runs'] : [];
+            $runs = [];
+            foreach (array_slice($rawRuns, 0, $limit) as $run) {
+                if (!is_array($run)) continue;
+                $id = (int) ($run['id'] ?? 0);
+                $url = (string) ($run['html_url'] ?? '');
+                if ($id < 1 || !preg_match('#\\Ahttps://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[0-9]+\\z#D', $url)) {
+                    $url = '';
+                }
+                $status = (string) ($run['status'] ?? 'unknown');
+                if (!in_array($status, ['queued', 'in_progress', 'completed', 'waiting', 'pending', 'requested'], true)) {
+                    $status = 'unknown';
+                }
+                $conclusion = $run['conclusion'] ?? null;
+                if (!is_string($conclusion) || !in_array($conclusion, ['success', 'failure', 'cancelled', 'skipped', 'timed_out', 'action_required', 'neutral', 'stale'], true)) {
+                    $conclusion = null;
+                }
+                $sha = strtolower((string) ($run['head_sha'] ?? ''));
+                $runs[] = [
+                    'id' => $id,
+                    'name' => mb_substr((string) ($run['name'] ?? 'GitHub Actions'), 0, 140),
+                    'displayTitle' => mb_substr((string) ($run['display_title'] ?? $run['name'] ?? 'Workflow run'), 0, 180),
+                    'runNumber' => (int) ($run['run_number'] ?? 0),
+                    'event' => mb_substr((string) ($run['event'] ?? ''), 0, 40),
+                    'branch' => mb_substr((string) ($run['head_branch'] ?? ''), 0, 120),
+                    'sha' => preg_match('/\\A[0-9a-f]{40}\\z/D', $sha) ? substr($sha, 0, 12) : '',
+                    'status' => $status,
+                    'conclusion' => $conclusion,
+                    'createdAt' => (string) ($run['created_at'] ?? ''),
+                    'updatedAt' => (string) ($run['updated_at'] ?? ''),
+                    'url' => $url,
+                ];
+            }
+            return [
+                'configured' => true,
+                'connected' => true,
+                'repository' => $config['repository'],
+                'baseBranch' => $config['baseBranch'],
+                'checkedAt' => gmdate(DATE_ATOM),
+                'runs' => $runs,
+                'message' => 'Đã đọc trạng thái GitHub Actions ở chế độ chỉ đọc.',
+                'permissionsRequired' => ['Actions: read'],
+            ];
+        } catch (Throwable $error) {
+            return [
+                'configured' => true,
+                'connected' => false,
+                'repository' => $config['repository'],
+                'baseBranch' => $config['baseBranch'],
+                'runs' => [],
+                'message' => $error->getMessage(),
+                'permissionsRequired' => ['Actions: read'],
+            ];
+        }
+    }
+
     /** Returns repository files; secret files and generated directories are hidden. */
     public static function tree(string $prefix = ''): array
     {

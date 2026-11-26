@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 const BUCKET = 'uploads';
 const MAX_EXPIRES_SECONDS = 900;
-const TYPES = new Set(['application/json','text/plain','text/css','text/html','image/svg+xml','image/png','image/jpeg','image/webp','image/gif','application/octet-stream','audio/mpeg','audio/wav','audio/x-wav','audio/flac','audio/mp4','audio/aac','audio/ogg','audio/opus']);
+const TYPES = new Set(['application/json','text/plain','text/css','text/html','image/svg+xml','image/png','image/jpeg','image/webp','image/gif','application/octet-stream','application/zip','application/vnd.android.package-archive','application/vnd.microsoft.portable-executable','application/x-msdownload','application/x-msi','application/x-apple-diskimage','application/x-apple-installer-package','application/x-iso9660-image','application/x-debian-package','application/vnd.debian.binary-package','application/x-rpm','application/gzip','application/x-gzip','audio/mpeg','audio/wav','audio/x-wav','audio/flac','audio/mp4','audio/aac','audio/ogg','audio/opus']);
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const hmac=(key,value,encoding)=>createHmac('sha256',key).update(value).digest(encoding);
 const sha256Hex=(value)=>createHash('sha256').update(value).digest('hex');
@@ -11,6 +11,7 @@ function allowedKey(key){
  if(typeof key!=='string'||key.length>1024)return false;
  const uuid='[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
  return /^modules\/[a-z][a-z0-9-]{1,62}\/[A-Za-z0-9_-]{16,64}\.(json|md|txt|css|html|svg|png|jpg|jpeg|webp)$/.test(key)
+ || /^store-releases\/[1-9][0-9]{0,17}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(apk|exe|msi|msix|zip|dmg|pkg|ipa|appimage|deb|rpm|tar\.gz)$/i.test(key)
  || /^website\/screenshots\/[a-f0-9]{32}\.(jpg|png|webp|gif)$/.test(key)
  || new RegExp('^ai-cover/sources/'+uuid+'/source\\.(mp3|wav|flac|m4a|aac|ogg|opus)$','i').test(key)
  || new RegExp('^ai-cover/results/'+uuid+'/cover\\.mp3$','i').test(key)
@@ -51,8 +52,9 @@ export default {async fetch(request){
  }
  const website=url.pathname.endsWith('/website/presign');
  const aiCover=!website&&url.pathname.endsWith('/ai-cover/presign');
- const bot=!website&&!aiCover&&url.pathname.endsWith('/presign');
- if(request.method!=='POST'||(!website&&!aiCover&&!bot))return json({error:'Not found'},404);
+ const storeRelease=!website&&!aiCover&&url.pathname.endsWith('/store-release/presign');
+ const bot=!website&&!aiCover&&!storeRelease&&url.pathname.endsWith('/presign');
+ if(request.method!=='POST'||(!website&&!aiCover&&!storeRelease&&!bot))return json({error:'Not found'},404);
  const secret=website?(process.env.HENDY_WEBSITE_STORAGE_KEY||''):(process.env.HENDY_FUNCTION_API_KEY||'');
  if(!secret||!authorized(request,secret))return json({error:'Unauthorized'},401);
  if(Number(request.headers.get('content-length')||0)>4096)return json({error:'Payload too large'},413);
@@ -62,6 +64,7 @@ export default {async fetch(request){
   const key=String(input.key||'');
   if(website&&!key.startsWith('website/screenshots/'))return json({error:'Invalid website object key'},400);
   if(bot&&!key.startsWith('modules/'))return json({error:'Invalid module object key'},400);
+  if(storeRelease&&!key.startsWith('store-releases/'))return json({error:'Invalid store release object key'},400);
   if(aiCover&&!key.startsWith('ai-cover/'))return json({error:'Invalid AI Cover object key'},400);
   if(aiCover&&method==='PUT'&&!['application/octet-stream','audio/mpeg','audio/wav','audio/x-wav','audio/flac','audio/mp4','audio/aac','audio/ogg','audio/opus'].includes(String(input.contentType||'')))return json({error:'Unsupported AI Cover content type'},400);
   return json(buildPresignedUrl({method,key,contentType:method==='PUT'?String(input.contentType||''):'',expiresIn:input.expiresIn}));

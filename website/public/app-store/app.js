@@ -160,7 +160,7 @@
     const items = filteredReleases();
     grid.replaceChildren(...(items.length ? items.map(makeCard) : [createEmptyState(
       state.releases.length ? 'Không tìm thấy ứng dụng phù hợp' : 'Chưa có bản phát hành công khai',
-      state.releases.length ? 'Hãy đổi từ khóa hoặc bộ lọc nền tảng/danh mục.' : 'Bản phát hành sẽ xuất hiện tại đây sau khi Admin hoàn tất hồ sơ và công khai trong Release Manager.'
+      state.releases.length ? 'Hãy đổi từ khóa hoặc bộ lọc nền tảng/danh mục.' : 'Bản phát hành sẽ xuất hiện tại đây sau khi hồ sơ sản phẩm, tệp cài đặt và kiểm duyệt đã hoàn tất.'
     )]));
     const count = $('#catalog-count');
     if (count) count.textContent = 'Đang hiển thị ' + items.length + ' / ' + state.releases.length + ' bản phát hành';

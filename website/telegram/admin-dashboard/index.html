@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="hendy-build" content="2026.11.07.2">
+  <meta name="hendy-build" content="2026.11.26.1">
   <meta name="theme-color" content="#05050a">
-  <meta name="description" content="HENDY CYBERTECH — Bảng điều khiển quản trị hệ thống">
-  <title>HENDY ADMIN DASHBOARD PRO</title>
+  <meta name="description" content="HENDY Commerce Workspace — không gian vận hành sản phẩm, ứng dụng và dịch vụ số.">
+  <title>HENDY COMMERCE WORKSPACE</title>
   <style>
     :root {
       color-scheme: light;
@@ -265,7 +265,199 @@
     .source-commit-form{margin-top:12px}
     .source-empty{padding:24px 12px;color:var(--text-muted);font-size:11px;text-align:center}
     @media(max-width:900px){.source-editor-grid{grid-template-columns:1fr}.source-file-list{max-height:260px}.source-diff{grid-template-columns:1fr}.source-editor-area{min-height:340px}}
-</style>
+/* HENDY COMMERCE WORKSPACE — visual system refresh (business logic retained) */
+    :root{
+      --bg-color:#07111f;
+      --panel-bg:rgba(14,27,44,.96);
+      --panel-border:#273b53;
+      --primary:#ff315d;
+      --secondary:#69aaff;
+      --success:#31d4a0;
+      --warning:#f0b85b;
+      --danger:#ff647b;
+      --text-main:#eff5fc;
+      --text-muted:#9bacbf;
+    }
+    html{scroll-behavior:smooth;background:#07111f}
+    body{
+      background:
+        radial-gradient(ellipse at 78% -12%,rgba(47,119,183,.20),transparent 42%),
+        radial-gradient(ellipse at 4% 48%,rgba(25,80,112,.16),transparent 38%),
+        linear-gradient(145deg,#07111f,#091827 58%,#08121f);
+      color:var(--text-main);
+    }
+    body:before{opacity:.34;background-size:52px 52px;mask-image:linear-gradient(to bottom,#000,transparent 82%)}
+    .sidebar{
+      width:276px;
+      background:linear-gradient(180deg,#0d1b2d 0%,#0a1625 56%,#08121e 100%);
+      border-right:1px solid #29425a;
+      box-shadow:16px 0 45px rgba(0,0,0,.22);
+    }
+    .sidebar-header{padding:22px 20px;border-bottom:1px solid #253a50}
+    .logo-icon{
+      width:44px;height:44px;border-radius:14px;transform:none;
+      border:1px solid #5f9bc6;background:linear-gradient(145deg,#1b5a82,#14334f 72%,#15283d);
+      color:#c9f5ff;box-shadow:0 8px 24px rgba(34,129,176,.22);
+    }
+    .logo-icon span{transform:none}
+    .sidebar-header h2{font-size:15px;letter-spacing:.1em}
+    .sidebar-header h2 span{background:linear-gradient(120deg,#78d9ea,#79aaff);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .sidebar-header small{color:#7792ae;font-size:9px;letter-spacing:.13em}
+    .sidebar-menu{padding:16px 0 22px}
+    .menu-title{padding:0 19px;color:#6e9db6;font-size:9px;letter-spacing:.17em;margin:20px 0 8px}
+    .menu-item{
+      width:calc(100% - 16px);margin:2px 8px;padding:11px 12px;
+      border:1px solid transparent;border-left:3px solid transparent;border-radius:10px;
+      color:#a9b9cb;font-size:11px;font-weight:700;transition:background .16s,border-color .16s,color .16s;
+    }
+    .menu-item .menu-icon{width:24px;font-size:15px}
+    .menu-item:hover,.menu-item.active{
+      color:#f4fbff;border-color:#244963;
+      border-left-color:#59c6de;
+      background:linear-gradient(100deg,rgba(34,103,142,.28),rgba(23,57,83,.12));
+      box-shadow:inset 0 0 18px rgba(63,162,197,.06);
+    }
+    .menu-item.active .menu-icon{color:#79d9e7;filter:none}
+    .sidebar-footer{border-top:1px solid #253a50}
+    .sidebar-footer a{border-color:#29455d;background:#0e2032;color:#c5d9e8}
+    .sidebar-footer a:hover{border-color:#58a9ce;color:#fff}
+    .main-content{margin-left:276px;min-width:0}
+    .top-header{
+      min-height:70px;height:auto;padding:12px 30px;
+      background:rgba(7,17,30,.88);border-bottom:1px solid #263d54;
+      box-shadow:0 8px 24px rgba(0,0,0,.12);
+    }
+    .top-header-title{color:#d7f0fa;font-size:12px;font-weight:900;letter-spacing:.07em}
+    .top-header-subtitle{color:#7896b1;font-size:9px;letter-spacing:.12em}
+    .menu-toggle{border-color:#31536d;background:#10243a;color:#e4f6ff;border-radius:11px}
+    .admin-profile{border-left-color:#2a435b}
+    .admin-avatar{background:linear-gradient(145deg,#25688e,#173a5c);color:#d8f7ff}
+    .admin-info strong{color:#f0f6fc}
+    .admin-info small{color:#69dcb6}
+    .content-body{width:min(100%,1640px);padding:30px clamp(16px,2.6vw,40px) 64px}
+    .page-title{margin-bottom:8px}
+    .page-title h1{font-size:clamp(23px,2.1vw,31px);letter-spacing:-.045em;color:#f2f7fc}
+    .page-title p{max-width:850px;color:#91a8bd;font-size:12px;line-height:1.65}
+    .live-indicator{border-color:#2d665b;background:rgba(31,145,111,.1);color:#83e2c1}
+    #app{margin-top:20px}
+    .admin-heading{
+      padding:22px 24px;border:1px solid #2d4c66;border-radius:18px;
+      background:linear-gradient(115deg,rgba(19,65,91,.82),rgba(17,36,58,.92) 62%,rgba(28,38,66,.72));
+      box-shadow:0 18px 44px rgba(0,0,0,.22);
+    }
+    .admin-heading h1,.admin-heading h2,.admin-heading h3{color:#f0f7fd}
+    .app-banner{
+      border:1px solid #315470;border-radius:18px;
+      background:linear-gradient(115deg,#123a55 0%,#102b45 58%,#182c4a 100%);
+      box-shadow:0 16px 36px rgba(0,0,0,.2);
+    }
+    .app-banner b{color:#f2fbff;letter-spacing:.025em}
+    .app-banner small{color:#b2c6d8}
+    .banner-icon{background:rgba(104,202,226,.12);border:1px solid rgba(116,218,234,.26);border-radius:14px}
+    .stat-grid{gap:12px}
+    .stat,.card,.record,.panel,.chart-card,.shortcut-card,.source-panel{
+      border:1px solid #263d55;
+      border-radius:15px;
+      background:linear-gradient(145deg,rgba(17,34,53,.98),rgba(12,25,41,.98));
+      box-shadow:0 12px 28px rgba(0,0,0,.16);
+    }
+    .stat{border-top:2px solid #377b9c;padding:16px}
+    .stat small{color:#8fa9bf;font-size:10px}
+    .stat b{color:#eff8ff;font-size:clamp(19px,2vw,25px);letter-spacing:-.04em}
+    .card,.record,.panel{padding:16px}
+    .record{margin-bottom:11px}
+    .record-top{gap:14px}
+    .record b,.card b{color:#edf5fc}
+    .record p,.record small,.muted,.json-help{color:#9bb0c4}
+    .section-head{margin:24px 1px 12px}
+    .section-head h3,.section-head h2{color:#e8f4fc;font-size:14px;letter-spacing:-.01em}
+    .section-head span{color:#86a2ba}
+    .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+    .two-col{gap:10px}
+    .service-grid,.admin-shortcuts{gap:12px}
+    .shortcut-card{transition:transform .18s,border-color .18s}
+    .shortcut-card:hover{transform:translateY(-2px);border-color:#4d8bad}
+    .field{gap:7px}
+    .field label{color:#bad0e1;font-size:11px;font-weight:800}
+    input:not([type=checkbox]),textarea,select{
+      width:100%;min-width:0;border:1px solid #314b64!important;border-radius:11px!important;
+      background:#091827!important;color:#eef7ff!important;padding:11px 12px;
+    }
+    input::placeholder,textarea::placeholder{color:#65829b}
+    input:focus,textarea:focus,select:focus{border-color:#6cb9d9!important;box-shadow:0 0 0 3px rgba(70,157,198,.16)!important;outline:none}
+    input[type=file]{padding:10px;background:#0a1b2b!important}
+    input[type=checkbox]{accent-color:#5ac6dc}
+    button.primary,.primary{
+      border:1px solid #478fb0;color:#fff;
+      background:linear-gradient(110deg,#1f739c,#2366a4 70%,#594da6);
+      box-shadow:0 8px 20px rgba(31,109,153,.22);
+    }
+    button.primary:hover,.primary:hover{filter:brightness(1.12)}
+    button.secondary,.secondary{border:1px solid #375a78;background:#102d47;color:#c9e8f8}
+    .tiny-btn{border:1px solid #31516b;background:#102a40;color:#a9d4e8}
+    .danger{border-color:#744052;background:#3a1b2a;color:#ffbac7}
+    .notice{border:1px solid #31516b;border-radius:12px;background:rgba(29,89,122,.18);color:#b8d9ea}
+    .notice.warn{border-color:#6a5230;background:rgba(134,91,29,.16);color:#f3d39b}
+    .notice.good{border-color:#286b56;background:rgba(25,123,88,.15);color:#9be8c9}
+    .status{border:1px solid #344b61;background:#1b2f43;color:#c2d5e5}
+    .status.pending{border-color:#6a5530;background:#3b2d16;color:#f2d18e}
+    .status.processing{border-color:#365c8d;background:#162c48;color:#b4d4ff}
+    .status.completed,.status.resolved{border-color:#24684f;background:#123b30;color:#90e8c1}
+    .status.rejected,.status.cancelled,.status.closed{border-color:#744052;background:#401e2a;color:#ffb7c4}
+    table{width:100%;border-collapse:collapse;color:#deedf8}
+    th{background:#142b41;color:#9fd9eb;border-bottom:1px solid #36546b}
+    td{border-bottom:1px solid #253c52}
+    code,.source-file{overflow-wrap:anywhere}
+    .source-panel-head{border-bottom-color:#29445d;color:#c2e3f1}
+    .source-file{color:#c1d8e7}
+    .source-file:hover{background:#15344b}
+    .source-editor-grid{grid-template-columns:minmax(220px,27%) minmax(0,1fr)}
+    .sidebar-footer a:focus-visible,.menu-item:focus-visible,.menu-toggle:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #81d8ec;outline-offset:2px}
+    #toast{border:1px solid #355b76;background:#10273c;color:#eff9ff;box-shadow:0 14px 34px rgba(0,0,0,.32)}
+    @media(min-width:1500px){
+      .sidebar{width:292px}
+      .main-content{margin-left:292px}
+      .content-body{padding-left:42px;padding-right:42px}
+    }
+    @media(max-width:1100px){
+      .sidebar{width:250px}
+      .main-content{margin-left:250px}
+      .content-body{padding-left:20px;padding-right:20px}
+      .grid-2{gap:12px}
+    }
+    @media(max-width:760px){
+      .sidebar{width:min(300px,86vw);transform:translateX(-105%);z-index:120;box-shadow:22px 0 52px rgba(0,0,0,.45)}
+      .main-content{margin-left:0}
+      .menu-toggle{display:grid;place-items:center}
+      .top-header{min-height:62px;padding:9px 14px}
+      .content-body{padding:20px 14px 48px}
+      .admin-profile{padding-left:8px}
+      .admin-info small{font-size:9px}
+      .admin-heading{align-items:flex-start;flex-direction:column}
+      .grid-2{grid-template-columns:1fr}
+      body.sidebar-open .sidebar{transform:translateX(0)}
+      body.sidebar-open:after{content:"";position:fixed;inset:0;background:rgba(2,8,15,.72);backdrop-filter:blur(2px);z-index:110}
+    }
+    @media(max-width:520px){
+      .top-header-title{font-size:10px;letter-spacing:.04em}
+      .top-header-subtitle{font-size:8px;letter-spacing:.06em}
+      .content-body{padding-left:11px;padding-right:11px}
+      .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+      .stat{padding:12px}
+      .stat b{font-size:18px}
+      .two-col{grid-template-columns:1fr}
+      .record-top{align-items:flex-start;flex-direction:column}
+      .admin-profile{max-width:145px}
+      .admin-info{min-width:0}
+      .admin-info strong{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .service-grid,.admin-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .source-editor-grid{grid-template-columns:1fr}
+      .source-file-list{max-height:32vh}
+    }
+    @media(prefers-reduced-motion:reduce){
+      *,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+    }
+  </style>
   <link rel="stylesheet" href="/styles/buttons.css">
 
   <style id="hendy-admin-brand-refresh">
@@ -331,13 +523,13 @@
   <aside class="sidebar" id="admin-sidebar" aria-label="Điều hướng quản trị HENDY">
     <div class="sidebar-header">
       <div class="logo-icon" aria-hidden="true"><span>🤖</span></div>
-      <div><h2>HENDY <span>ADMIN</span></h2><small>PRO CONTROL CENTER</small></div>
+      <div><h2>HENDY <span>COMMERCE</span></h2><small>PRIVATE OPERATIONS WORKSPACE</small></div>
     </div>
     <nav class="sidebar-menu">
-      <div class="menu-title">Bảng điều khiển</div>
+      <div class="menu-title">TỔNG QUAN</div>
       <button class="menu-item active" type="button" data-admin-tab="overview"><span class="menu-icon">📊</span>Tổng quan</button>
 
-      <div class="menu-title">Quản lý dữ liệu</div>
+      <div class="menu-title">THƯƠNG MẠI & PHÁT HÀNH</div>
       <button class="menu-item" type="button" data-admin-tab="users"><span class="menu-icon">👥</span>User & tài khoản liên kết</button>
       <button class="menu-item" type="button" data-admin-tab="orders"><span class="menu-icon">🧾</span>Duyệt & xử lý đơn hàng</button>
       <button class="menu-item" type="button" data-admin-tab="payments"><span class="menu-icon">💳</span>Duyệt nạp tiền</button>
@@ -349,7 +541,7 @@
       <button class="menu-item" type="button" data-admin-tab="vouchers"><span class="menu-icon">🎟️</span>Voucher 72H</button>
       <button class="menu-item" type="button" data-admin-tab="giftcodes"><span class="menu-icon">🎁</span>Giftcode</button>
 
-      <div class="menu-title">Hệ thống Bot</div>
+      <div class="menu-title">VẬN HÀNH NỀN TẢNG</div>
       <button class="menu-item" type="button" data-admin-tab="bot-menus"><span class="menu-icon">🎛️</span>Trình tạo Menu Bot</button>
       <button class="menu-item" type="button" data-admin-tab="runtime"><span class="menu-icon">🛰️</span>Trạng thái hệ thống</button>
       <button class="menu-item" type="button" data-admin-tab="operations"><span class="menu-icon">🛠️</span>Bảo trì & nâng cấp</button>
@@ -374,8 +566,8 @@
       <div class="top-header-left">
         <button class="menu-toggle" id="menu-button" type="button" aria-label="Mở menu quản trị">☰</button>
         <div>
-          <div class="top-header-title">Hệ sinh thái HENDY CYBERTECH</div>
-          <small class="top-header-subtitle" id="brand-name">HENDY ADMIN DASHBOARD PRO</small>
+          <div class="top-header-title">HENDY COMMERCE WORKSPACE</div>
+          <small class="top-header-subtitle" id="brand-name">STORE · PRODUCT · RELEASE OPERATIONS</small>
         </div>
       </div>
       <div class="admin-profile" id="profile-chip">
@@ -389,8 +581,8 @@
 
     <section class="content-body">
       <div class="page-title">
-        <h1 id="page-title">Bảng điều khiển quản trị</h1>
-        <p id="page-subtitle">Đang xác thực phiên Telegram và quyền Admin phía máy chủ…</p>
+        <h1 id="page-title">Trung tâm điều hành</h1>
+        <p id="page-subtitle">Đang xác thực quyền truy cập và tải dữ liệu hệ thống…</p>
       </div>
       <div class="live-indicator" id="live-indicator" aria-live="polite">● Realtime chưa xác thực</div>
       <div id="app"><div class="empty">Đang kết nối máy chủ quản trị…</div></div>

@@ -380,12 +380,12 @@ $assert(str_contains($adminUiSource, 'homeproxy-connect-form') && str_contains($
 $landingUiSource = file_get_contents(dirname(__DIR__, 2) . '/website/public/index.html');
 $assert(str_contains($landingUiSource, 'HENDY DIGITAL') && str_contains($landingUiSource, 'data-tab="store"'), 'trang chủ có cache-busting và release marker');
 $assert(str_contains($landingUiSource, 'HENDY DIGITAL') && str_contains($landingUiSource, 'href="#code"'), 'trang chủ giữ bố cục HENDY, liên kết Bot, Group và Channel');
-$assert(!str_contains($landingUiSource, 'Trung tâm khách hàng'), 'trang chủ đã bỏ hoàn toàn khối Features Tags Grid');
+$assert(str_contains($landingUiSource, 'Trung tâm khách hàng') && str_contains($landingUiSource, 'catalog-search') && str_contains($landingUiSource, 'data-catalog-filter'), 'trang chủ bổ sung liên kết Trung tâm khách hàng và giao diện kho ứng dụng có tìm kiếm/lọc');
 $publicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
 $assert(str_contains($publicRouterSource, "header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');"), 'trang chủ không giữ HTML cũ trong cache');
-$assert(str_contains($publicRouterSource, 'ProductReadinessService::sqlPredicate'), 'public Website catalog never lists unverified supplier products');
-$assert(str_contains($publicRouterSource, "'/api/v1/public/catalog'") && str_contains($publicRouterSource, 'WHERE is_active = TRUE') && str_contains($publicRouterSource, "category IN ('minigame','tools','codes','otp','proxy','vip')"), 'Static Site catalog API returns only active public product fields');
-$assert(str_contains($landingUiSource, "API_BASE+'/api/v1/public/catalog'") && str_contains($landingUiSource, 'createElement(\'article\')') && str_contains($landingUiSource, 'replaceChildren'), 'Static Website renders live catalog entries using safe DOM text nodes and keeps static fallback cards');
+$assert(str_contains($apiControllerSource, 'ProductReadinessService::sqlPredicate()') && str_contains($apiControllerSource, "'/api/public/catalog'"), 'public Website catalog uses the fail-closed supplier readiness predicate');
+$assert(str_contains($apiControllerSource, "'/api/public/catalog'") && str_contains($apiControllerSource, "'/api/public/config'") && str_contains($apiControllerSource, "'downloadUrl' => \$downloadUrl") && str_contains($apiControllerSource, "'checksumSha256' => \$checksum"), 'public catalog API returns curated product/release metadata and non-secret Bot config only');
+$assert(str_contains($landingUiSource, "API_BASE+'/api/public/catalog'") && str_contains($landingUiSource, 'createElement(\'article\')') && str_contains($landingUiSource, 'replaceChildren') && str_contains($landingUiSource, 'checksumSha256'), 'Static Website renders searchable live catalog cards and safe checksum-verified download links');
 $productionHost = 'https://hendydichvumang-telegram-bot.onrender.com';
 $repoRoot = dirname(__DIR__, 2);
 $landingSource = file_get_contents(dirname(__DIR__, 2) . '/website/public/index.html');

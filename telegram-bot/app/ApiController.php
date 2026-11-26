@@ -2684,7 +2684,7 @@ final class ApiController
         $objectKey = trim((string) ($release['objectKey'] ?? ''));
         if ($objectKey !== '') {
             try {
-                if (NeonStorage::configured()) $downloadUrl = NeonStorage::presignedDownloadUrl($objectKey, 600);
+                if (NeonStorage::configured()) $downloadUrl = NeonStorage::presignedDownloadUrl($objectKey, 900);
             } catch (Throwable $error) {
                 error_log('[public-store-release-sign] ' . $error::class);
             }

@@ -58,7 +58,7 @@ final class SourceControlService
                 'repository' => $config['repository'],
                 'baseBranch' => $config['baseBranch'],
                 'message' => 'Chưa cấu hình HENDY_GITHUB_TOKEN trong Render Environment. Trình biên tập đang ở chế độ chưa kết nối.',
-                'permissionsRequired' => ['Metadata: read', 'Contents: read/write', 'Pull requests: read/write'],
+                'permissionsRequired' => ['Metadata: read', 'Contents: read/write'],
             ];
         }
 
@@ -72,7 +72,7 @@ final class SourceControlService
                 'private' => (bool) ($repo['private'] ?? false),
                 'defaultBranch' => (string) ($repo['default_branch'] ?? ''),
                 'message' => 'Đã kết nối GitHub. Mọi thay đổi sẽ được gửi bằng Draft Pull Request.',
-                'permissionsRequired' => ['Metadata: read', 'Contents: read/write', 'Pull requests: read/write'],
+                'permissionsRequired' => ['Metadata: read', 'Contents: read/write'],
             ];
         } catch (Throwable $error) {
             return [
@@ -81,7 +81,7 @@ final class SourceControlService
                 'repository' => $config['repository'],
                 'baseBranch' => $config['baseBranch'],
                 'message' => $error->getMessage(),
-                'permissionsRequired' => ['Metadata: read', 'Contents: read/write', 'Pull requests: read/write'],
+                'permissionsRequired' => ['Metadata: read', 'Contents: read/write'],
             ];
         }
     }

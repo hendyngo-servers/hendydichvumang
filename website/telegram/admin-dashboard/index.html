@@ -2139,38 +2139,6 @@
       } catch (error) { toast(error.message, 'error'); publishStoreRelease.disabled = false; }
       return;
     }
-    const releaseForm = event.target.closest('#store-release-upload-form');
-    if (releaseForm && releaseForm.dataset.submitting !== 'true') {
-      event.preventDefault();
-      const productId = releaseForm.dataset.productId || '';
-      const file = releaseForm.querySelector('[name="releaseFile"]')?.files?.[0];
-      if (!productId || !file) { toast('Chọn sản phẩm và tệp binary trước khi upload.', 'error'); return; }
-      if (file.size < 16 || file.size > 209715200) { toast('Tệp phải từ 16 byte đến 200 MB.', 'error'); return; }
-      const formData = new FormData(releaseForm);
-      formData.delete('manifestUrl');
-      const manifestUrl = String(releaseForm.querySelector('[name="manifestUrl"]')?.value || '');
-      const submit = releaseForm.querySelector('button[type="submit"]');
-      releaseForm.dataset.submitting = 'true';
-      if (submit) { submit.disabled = true; submit.textContent = 'Đang upload binary…'; }
-      try {
-        const response = await fetch('/api/admin/products/' + encodeURIComponent(productId) + '/release-upload', {
-          method:'POST', body:formData, credentials:'same-origin',
-          headers:{'Accept':'application/json', ...(initData ? {'Authorization':'tma ' + initData} : {}), 'X-Telegram-Bot-Key':botKey},
-          cache:'no-store'
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Không thể upload binary. Kiểm tra Neon Object Storage và cấu hình Render.');
-        if (manifestUrl) await api('/api/admin/products/' + encodeURIComponent(productId), 'PATCH', {storeReleaseManifestUrl:manifestUrl});
-        toast(result.message || 'Đã lưu binary ở trạng thái nháp. Kiểm tra và công khai khi sẵn sàng.');
-        state.storeReleaseProductId = productId;
-        await renderPage();
-      } catch (error) {
-        toast(error.message, 'error');
-        releaseForm.dataset.submitting = 'false';
-        if (submit) { submit.disabled = false; submit.textContent = '⬆ Upload binary lên Neon Storage'; }
-      }
-      return;
-    }
     const sourceRefresh = event.target.closest('[data-source-refresh]');
     if (sourceRefresh) {
       sourceRefresh.disabled = true;
@@ -2609,7 +2577,26 @@
       submitButton.disabled = true;
     }
     try {
-      if (form.id === 'source-commit-form') {
+      if (form.id === 'store-release-upload-form') {
+        const productId = form.dataset.productId || '';
+        const file = form.querySelector('[name="releaseFile"]')?.files?.[0];
+        if (!productId || !file) throw new Error('Chọn sản phẩm và tệp binary trước khi upload.');
+        if (file.size < 16 || file.size > 209715200) throw new Error('Tệp phải từ 16 byte đến 200 MB.');
+        const formData = new FormData(form);
+        const manifestUrl = String(formData.get('manifestUrl') || '').trim();
+        formData.delete('manifestUrl');
+        const response = await fetch('/api/admin/products/' + encodeURIComponent(productId) + '/release-upload', {
+          method:'POST', body:formData, credentials:'same-origin',
+          headers:{'Accept':'application/json', ...(initData ? {'Authorization':'tma ' + initData} : {}), 'X-Telegram-Bot-Key':botKey},
+          cache:'no-store'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Không thể upload binary. Kiểm tra Neon Object Storage và cấu hình Render.');
+        if (manifestUrl) await api('/api/admin/products/' + encodeURIComponent(productId), 'PATCH', {storeReleaseManifestUrl:manifestUrl});
+        state.storeReleaseProductId = productId;
+        toast(result.message || 'Đã lưu binary ở trạng thái nháp. Kiểm tra và công khai khi sẵn sàng.');
+        await renderPage();
+      } else if (form.id === 'source-commit-form') {
         const stagedFiles = Object.values(state.sourceEditor.drafts || {}).map(item => ({
           path:item.path,
           sha:item.sha || '',

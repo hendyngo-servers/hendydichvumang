@@ -1108,6 +1108,13 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && $path === '/api/admin/source-control/workflows') {
+            try {
+                return self::response(SourceControlService::workflowRuns((int) ($this->query['limit'] ?? 10)));
+            } catch (RuntimeException $error) {
+                throw new HttpException(503, 'Không thể đọc trạng thái GitHub Actions: ' . $error->getMessage());
+            }
+        }
         if ($method === 'GET' && $path === '/api/admin/source-control/status') {
             try {
                 return self::response(SourceControlService::status());

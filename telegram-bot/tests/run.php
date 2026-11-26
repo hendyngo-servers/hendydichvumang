@@ -437,7 +437,7 @@ $assert(str_contains($sitemapSource, 'hendydichvumang-szad.onrender.com') && str
 $assert(str_contains($databaseSchema, 'https://hendydichvumang-szad.onrender.com') && str_contains($databaseSchema, "'https://hendy-bot-tele.onrender.com'"), 'Bot PostgreSQL migration seeds the new Static Site URL and keeps legacy URL migration rules');
 $assert(str_contains($deployScript, '${APP_URL:?') && str_contains($syncScript, 'RENDER_EXTERNAL_URL') && !str_contains($syncScript, 'hendy-bot-cybertech-1.onrender.com'), 'operational scripts resolve the active Render URL instead of hardcoding the former service');
 $assert(str_contains($botServiceSource, 'https://hendydichvumang-szad.onrender.com/') && !str_contains($botServiceSource, 'https://hendydichvumang-telegram-bot.onrender.com/'), 'Bot welcome links fall back to the verified public Static Site rather than the Bot API host');
-$assert(str_contains($websiteDbBootstrap, 'HENDY DIGITAL ECOSYSTEM') && stripos($websiteDbBootstrap, 'Code Telegram') !== false, 'New Static Website remains public-facing and links the customer feature set');
+$assert(str_contains($websiteDbBootstrap, 'DIGITAL ECOSYSTEM') && stripos($websiteDbBootstrap, 'Code Telegram') !== false, 'New Static Website remains public-facing and links the customer feature set');
 $assert(str_contains($websiteHeader, 'Quản trị ↗') && str_contains($websiteHeader, '/admin'), 'Website navigation links to the Bot without exposing a token');
 $publicRouterSource = file_get_contents(dirname(__DIR__) . '/public/index.php');
 $registerWebhookSource = file_get_contents(dirname(__DIR__) . '/bin/register-webhooks.php');

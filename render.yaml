@@ -55,6 +55,8 @@ services:
         value: "true"
       - key: NEON_STORAGE_FUNCTION_URL
         value: "https://br-wild-cell-az3siwry-hendystorage.compute.c-3.ap-southeast-1.aws.neon.tech"
+      - key: NEON_STORAGE_FUNCTION_KEY
+        sync: false
       - key: BANK_WEBHOOK_ENABLED
         value: "false"
       - key: WEBSOCKET_ENABLED

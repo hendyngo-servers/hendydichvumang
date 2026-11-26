@@ -39,7 +39,8 @@ jobs:
           grep -q 'hendydichvumang-szad.onrender.com/sitemap.xml' website/public/robots.txt
           grep -q 'hendydichvumang-szad.onrender.com/' website/public/sitemap.xml
           ! grep -R -q 'https://hendydichvumang.onrender.com' website/public
-          grep -q 'hendydichvumang-telegram-bot.onrender.com/admin' website/public/index.html
+          ! grep -q 'hendydichvumang-telegram-bot.onrender.com/admin' website/public/index.html
+          ! grep -q 'href="/admin' website/public/index.html
   telegram-bot:
     name: Telegram Bot lint and tests
     runs-on: ubuntu-latest

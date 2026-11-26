@@ -22,7 +22,7 @@ services:
         - CMD
         - php
         - -r
-        - "@file_get_contents('http://127.0.0.1:10000/healthz')===false?exit(1):exit(0);"
+        - "if (@file_get_contents('http://127.0.0.1:10000/healthz') === false) { exit(1); } exit(0);"
       interval: 30s
       timeout: 10s
       retries: 3

@@ -118,6 +118,20 @@ php bin/migrate.php --apply --expect-database='[confirmed database name]'
 
 The migration runner rejects pooled Neon URLs, the restricted `hendy_bot_app` role, database-name mismatches, partial base schemas and migration checksum drift. Each additive migration runs in its own transaction and is recorded in `schema_migrations`. The command defaults to dry-run and does not print the URL.
 
+
+## Ubuntu 26.04 VPS deployment (alternative)
+
+The VPS option reuses the same PHP Bot/API, PostgreSQL data model, member wallet,
+orders, Provider Registry and Supplier Readiness already present in this monorepo.
+It does not create a second bot backend or a separate wallet database. See
+[Ubuntu 26.04 deployment guide](deploy/ubuntu/README.md).
+
+The VPS is an alternative to the current Render Bot service. Keep
+`WEBHOOK_AUTO_REGISTER=false` during initial validation and follow the documented
+single-webhook cutover before switching the production Telegram bot token.
+Production schema migrations remain manual and must follow the existing database
+owner runbooks; ordinary startup keeps `RUN_MIGRATIONS_ON_START=false`.
+
 ## Local development
 
 1. Copy `telegram-bot/.env.example` to `telegram-bot/.env`.

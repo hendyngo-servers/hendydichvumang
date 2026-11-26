@@ -125,3 +125,49 @@ Ngày đối chiếu bổ sung: 2026-11-26. Đã kiểm tra trực tiếp cây m
 3. Tái sử dụng có chọn lọc các mẫu search/filter, artifact metadata/checksum, build monitor và test cases từ HendyAppStore.
 4. Chỉ thêm tính năng lên menu khi action đã có dispatcher và backend tương ứng; trạng thái nhà cung cấp chưa xác minh phải tiếp tục khóa mua hàng.
 5. Không thêm D1, Cloudflare Worker, R2 hoặc Queue mới chỉ để làm menu; mỗi hạ tầng mới cần quyết định triển khai riêng và kiểm thử vận hành.
+
+
+## Đối chiếu bổ sung: ngogiaidy56-eng/app-downloader-server
+
+Ngày kiểm tra: 2026-11-26. Đã đọc trực tiếp server.js, data.json, public/index.html,
+public/script.js và public/admin.html trên nhánh main.
+
+### Ý tưởng được tái sử dụng
+- Danh mục ứng dụng có version, category/platform, release channel, file size,
+  changelog và thông tin tải xuống.
+- Tìm kiếm/lọc ứng dụng theo tên, mô tả và nền tảng.
+- Luồng quản trị upload bản build, sửa metadata và kiểm tra cập nhật theo appId/version.
+- Trình quản lý release đa nền tảng được mở rộng theo mẫu PlatformDownloadActions
+  của HendyAppStore: APK, Windows installer, macOS package, IPA/manifest, Linux và Web ZIP.
+
+### Những gì không được sao chép nguyên trạng
+- server.js dùng CORS không giới hạn, JSON cục bộ, upload Multer không giới hạn
+  kích thước, upload/edit/delete không yêu cầu Admin session.
+- API login chứa mật khẩu mặc định admin123 và hard-code Admin token.
+- public/script.js đưa metadata vào innerHTML; trường name/description/changelog
+  có nguy cơ tạo stored XSS nếu dữ liệu do Admin hoặc nguồn ngoài cung cấp.
+- data.json tham chiếu tệp mẫu chưa phù hợp với đường dẫn tải do server tạo.
+- Hai tệp downloads/screen-ocr-setup.exe và downloads/telegram-app.apk được
+  repository trả về có dung lượng 1 byte; chúng không phải installer có thể phát hành.
+- License Manager và Crash Reports trong public/admin.html là hàng mẫu tĩnh;
+  không có API/table thực để tạo license, bind HWID hay nhận crash reports.
+- package.json tại đường dẫn gốc trả về JSON danh mục app thay vì package manifest Node.js chuẩn.
+
+### Kết quả tích hợp vào HENDY
+- Thêm Release Manager vào Admin sản phẩm hiện có.
+- Binary đặt trong Neon Object Storage riêng tư; PostgreSQL chỉ lưu metadata,
+  object key, SHA-256 và lịch sử release.
+- Admin session bắt buộc; upload kiểm tra size, extension theo platform, MIME,
+  header/signature cơ bản và SHA-256; mọi upload bắt đầu ở trạng thái draft.
+- Public listing/update-check chỉ trả release đã publish; signed download URL
+  có thời hạn; Website dùng DOM nodes an toàn và lọc platform.
+- Việc publish tiếp tục phụ thuộc Product Supplier Readiness. Khi sản phẩm bị
+  disable hoặc không còn sellable, release bị gỡ khỏi public listing.
+- Chưa sao chép License Manager/Crash Reports vì source chưa hỗ trợ backend thật.
+
+### Hạ tầng chưa được xác minh là đã triển khai
+Source changes alone do not deploy the Neon Storage Function or Render service.
+Release upload requires NEON_STORAGE_FUNCTION_URL and NEON_STORAGE_FUNCTION_KEY
+in Render, plus HENDY_FUNCTION_API_KEY and the Neon S3 endpoint/access/secret/region
+inside the Neon Function. Do not report production downloads as working until
+those configuration/runtime checks and a real binary upload/download test succeed.

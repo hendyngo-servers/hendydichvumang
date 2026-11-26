@@ -99,6 +99,72 @@ final class ApiController
             return $this->exchangeLegacySession();
         }
 
+        // Public storefront catalog: exposes sellable product fields only.
+        // Supplier credentials, proof URLs, private metadata and user/order data
+        // are never included in this unauthenticated response.
+        if ($method === 'GET' && $path === '/api/public/catalog') {
+            $category = trim((string) ($this->query['category'] ?? ''));
+            if ($category !== '' && !in_array($category, self::CATEGORIES, true)) {
+                throw new HttpException(400, 'Danh mục không hợp lệ.');
+            }
+            try {
+                $products = $this->listProducts($category !== '' ? $category : null, false);
+            } catch (Throwable $error) {
+                error_log('[public-catalog] ' . $error::class);
+                throw new HttpException(503, 'Kho sản phẩm hiện chưa sẵn sàng.');
+            }
+            $publicProducts = array_map(static function (array $product): array {
+                $metadata = is_array($product['metadata'] ?? null) ? $product['metadata'] : [];
+                $downloadUrl = trim((string) ($metadata['downloadUrl'] ?? $metadata['download_url'] ?? ''));
+                $parts = $downloadUrl !== '' ? parse_url($downloadUrl) : false;
+                if (!is_array($parts)
+                    || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+                    || empty($parts['host'])
+                    || isset($parts['user'])
+                    || isset($parts['pass'])) {
+                    $downloadUrl = '';
+                }
+                $checksum = strtolower(trim((string) ($metadata['checksumSha256'] ?? $metadata['sha256'] ?? '')));
+                if (!preg_match('/\A[a-f0-9]{64}\z/D', $checksum)) $checksum = '';
+                $platform = strtolower(trim((string) ($metadata['platform'] ?? '')));
+                if (!in_array($platform, ['android','windows','macos','ios','linux','web'], true)) $platform = '';
+                $brand = trim((string) ($metadata['brand'] ?? ''));
+                return [
+                    'id' => (string) ($product['id'] ?? ''),
+                    'slug' => (string) ($product['slug'] ?? ''),
+                    'name' => (string) ($product['name'] ?? ''),
+                    'brand' => mb_substr($brand, 0, 80),
+                    'category' => (string) ($product['category'] ?? ''),
+                    'description' => mb_substr((string) ($product['description'] ?? ''), 0, 500),
+                    'price' => (int) ($product['price'] ?? 0),
+                    'durationDays' => (int) ($product['durationDays'] ?? 0),
+                    'stock' => $product['stock'] ?? null,
+                    'vipLevel' => (int) ($product['vipLevel'] ?? 0),
+                    'imageUrl' => (string) ($product['imageUrl'] ?? ''),
+                    'isActive' => true,
+                    'isSellable' => true,
+                    'platform' => $platform,
+                    'version' => mb_substr(trim((string) ($metadata['version'] ?? '')), 0, 64),
+                    'downloadUrl' => $downloadUrl,
+                    'checksumSha256' => $checksum,
+                ];
+            }, $products);
+            return self::response([
+                'ok' => true,
+                'products' => $publicProducts,
+                'generatedAt' => gmdate(DATE_ATOM),
+            ]);
+        }
+
+        if ($method === 'GET' && $path === '/api/public/config') {
+            $botUrl = $this->publicBotUrl();
+            return self::response([
+                'ok' => true,
+                'botConfigured' => $botUrl !== '',
+                'botUrl' => $botUrl,
+            ]);
+        }
+
         if (!str_starts_with($path, '/api/')) {
             throw new HttpException(404, 'Không tìm thấy API.');
         }

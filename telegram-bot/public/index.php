@@ -533,6 +533,28 @@ try {
         respond($result['body'] ?? [], (int) ($result['status'] ?? 200));
     }
 
+    if ($method === 'POST' && preg_match('#^/api/admin/products/([1-9][0-9]{0,17})/release-upload$#', $path, $releaseUploadMatch)) {
+        $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
+        if (empty($_SERVER['HTTP_AUTHORIZATION'])) {
+            foreach ($headers as $name => $value) {
+                if (strcasecmp((string) $name, 'Authorization') === 0) {
+                    $_SERVER['HTTP_AUTHORIZATION'] = (string) $value;
+                    break;
+                }
+            }
+        }
+        if (empty($_SERVER['HTTP_AUTHORIZATION']) && !empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+            $_SERVER['HTTP_AUTHORIZATION'] = (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        }
+        $controller = new ApiController($_GET, [], $headers);
+        $result = $controller->uploadProductRelease(
+            $_FILES['releaseFile'] ?? [],
+            $_POST,
+            (string) $releaseUploadMatch[1]
+        );
+        respond($result['body'] ?? [], (int) ($result['status'] ?? 200));
+    }
+
     if ($method === 'POST' && $path === '/api/admin/modules/upload') {
         $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
         if (empty($_SERVER['HTTP_AUTHORIZATION'])) {

@@ -1328,14 +1328,14 @@
       ? '<div class="notice warn"><b>Chưa kết nối GitHub.</b> Đặt HENDY_GITHUB_TOKEN tại Render Environment. Token chỉ nằm ở máy chủ, không nhập vào giao diện và không lưu trong PostgreSQL. Sau khi thêm biến, deploy Bot rồi nhấn Kiểm tra kết nối.</div>'
       : (!status.connected
         ? '<div class="notice warn"><b>Không kết nối được GitHub.</b> ' + escapeHtml(status.message || 'Kiểm tra token/repository.') + '</div>'
-        : '<div class="notice good">Đã kết nối ' + escapeHtml(status.repository || '') + ' · nhánh gốc ' + escapeHtml(status.baseBranch || '') + '. Editor chỉ tạo branch và commit trực tiếp; không commit trực tiếp vào main.</div>');
+        : '<div class="notice good">Đã kết nối ' + escapeHtml(status.repository || '') + ' · nhánh gốc ' + escapeHtml(status.baseBranch || '') + '. Editor ghi commit trực tiếp vào nhánh chính.</div>');
     const prResult = state.sourceEditor.lastCommit
-      ? '<div class="notice good"><b>Đã tạo commit trực tiếp vào main #' + Number(state.sourceEditor.lastCommit.commitSha?.slice(0,7) || '') + '.</b> ' + escapeHtml(state.sourceEditor.lastCommit.message || '') + '<br><a href="' + escapeHtml('https://github.com/hendyngo-servers/hendydichvumang/commit/' + encodeURIComponent(state.sourceEditor.lastCommit.commitSha || '')) + '" target="_blank" rel="noopener noreferrer">Xem commit trên GitHub ↗</a></div>'
+      ? '<div class="notice good"><b>Đã ghi commit ' + escapeHtml(state.sourceEditor.lastCommit.commitSha?.slice(0,7) || '') + ' vào main + '.</b> ' + escapeHtml(state.sourceEditor.lastCommit.message || '') + '<br><a href="' + escapeHtml('https://github.com/hendyngo-servers/hendydichvumang/commit/' + encodeURIComponent(state.sourceEditor.lastCommit.commitSha || '')) + '" target="_blank" rel="noopener noreferrer">Xem commit trên GitHub ↗</a></div>'
       : '';
-    return '<div class="app-banner"><div><b>🧑‍💻 HENDY · SOURCE CODE CONTROL</b><small>Duyệt, tìm, chỉnh sửa nhiều tệp mã nguồn và gửi thành Pull Request để CI/review. Không cập nhật trực tiếp tệp đang chạy.</small></div><span class="banner-icon">⌘</span></div>' +
+    return '<div class="app-banner"><div><b>🧑‍💻 HENDY · SOURCE CODE CONTROL</b><small>Duyệt, tìm và chỉnh sửa nhiều tệp mã nguồn; ghi commit trực tiếp vào nhánh main.</small></div><span class="banner-icon">⌘</span></div>' +
       '<div class="stat-grid"><div class="stat"><small>Repository</small><b style="font-size:13px">' + escapeHtml(status.repository || 'hendydichvumang') + '</b></div><div class="stat"><small>Nhánh gốc</small><b>' + escapeHtml(status.baseBranch || 'main') + '</b></div><div class="stat"><small>Tệp có thể duyệt</small><b>' + Number(tree.count || 0) + '</b></div><div class="stat"><small>Thay đổi đang chờ</small><b>' + stagedCount + '</b></div></div>' +
       connectionPanel + prResult +
-      '<div class="notice warn"><b>Quy tắc an toàn:</b> Không hiển thị .env/credential/private key; không cho chỉnh workflow CI/CD; không thực thi lệnh hoặc chạy code trong Admin. Mọi sửa đổi đi qua commit trực tiếp, CI và review. Tệp SQL, migration, Dockerfile, render.yaml và lockfile yêu cầu xác nhận riêng.</div>' +
+      '<div class="notice warn"><b>Quy tắc an toàn:</b> Không hiển thị .env/credential/private key; không cho chỉnh workflow CI/CD; không thực thi lệnh hoặc chạy code trong Admin. Mọi sửa đổi được commit trực tiếp vào main; CI/CD có thể tự chạy. Tệp SQL, migration, Dockerfile, render.yaml và lockfile yêu cầu xác nhận riêng.</div>' +
       (connected ? '<div class="source-editor-grid">' +
         '<div class="source-panel"><div class="source-panel-head"><b>Repository files</b><span class="source-pill">' + files.length + ' mục</span></div>' +
         '<div class="source-toolbar"><input type="search" id="source-file-filter" placeholder="Lọc theo đường dẫn/tên tệp…" aria-label="Lọc tệp mã nguồn"><button type="button" data-source-refresh>↻</button><button type="button" data-source-new>＋ Tệp mới</button></div>' +
@@ -2424,7 +2424,7 @@
         state.sourceEditor.buffers = {};
         state.sourceEditor.activeFile = null;
         state.sourceEditor.showDiff = false;
-        toast(result.pullRequest?.message || 'Đã tạo commit trực tiếp vào main.');
+        toast(result.commit?.message || 'Đã ghi commit trực tiếp vào main.');
         await renderPage();
       } else if (form.id === 'admin-provider-form') {
         const payload = {

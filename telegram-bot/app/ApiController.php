@@ -101,13 +101,13 @@ final class ApiController
         }
 
         $header = file_get_contents($tmp, false, null, 0, 16);
-        if (!is_string($header) || !self::validReleaseSignature($extension, $header)) {
+        if (!is_string($header) || !self::validReleaseSignature($extension, $header, $tmp)) {
             throw new HttpException(400, 'Nội dung tệp không khớp định dạng đã chọn hoặc tệp bị hỏng.');
         }
         $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($tmp) ?: 'application/octet-stream';
         $allowedMimes = [
             'application/octet-stream','application/zip','application/vnd.android.package-archive',
-            'application/vnd.microsoft.portable-executable','application/x-msdownload','application/x-msi',
+            'application/vnd.microsoft.portable-executable','application/x-msdownload','application/x-dosexec','application/x-executable','application/x-elf','application/x-msi','application/x-ole-storage',
             'application/x-apple-diskimage','application/x-apple-installer-package','application/x-iso9660-image',
             'application/x-debian-package','application/vnd.debian.binary-package','application/x-rpm',
             'application/gzip','application/x-gzip',
@@ -204,8 +204,25 @@ final class ApiController
         ], 201);
     }
 
-    private static function validReleaseSignature(string $extension, string $header): bool
+    private static function validReleaseSignature(string $extension, string $header, string $path): bool
     {
+        $dmgValid = false;
+        if ($extension === 'dmg') {
+            $size = @filesize($path);
+            if (is_int($size) && $size >= 512) {
+                $handle = @fopen($path, 'rb');
+                if ($handle !== false) {
+                    try {
+                        if (@fseek($handle, -512, SEEK_END) === 0) {
+                            $footer = fread($handle, 512);
+                            $dmgValid = is_string($footer) && str_starts_with($footer, 'koly');
+                        }
+                    } finally {
+                        fclose($handle);
+                    }
+                }
+            }
+        }
         $checks = [
             'apk' => str_starts_with($header, "PK\x03\x04") || str_starts_with($header, "PK\x05\x06"),
             'ipa' => str_starts_with($header, "PK\x03\x04") || str_starts_with($header, "PK\x05\x06"),
@@ -218,7 +235,7 @@ final class ApiController
             'deb' => str_starts_with($header, "!<arch>\n"),
             'rpm' => str_starts_with($header, "\xED\xAB\xEE\xDB"),
             'tar.gz' => str_starts_with($header, "\x1F\x8B"),
-            'dmg' => strlen($header) >= 8,
+            'dmg' => $dmgValid,
         ];
         return $checks[$extension] ?? false;
     }

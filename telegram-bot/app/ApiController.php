@@ -207,17 +207,17 @@ final class ApiController
     private static function validReleaseSignature(string $extension, string $header): bool
     {
         $checks = [
-            'apk' => str_starts_with($header, "PK\\x03\\x04") || str_starts_with($header, "PK\\x05\\x06"),
-            'ipa' => str_starts_with($header, "PK\\x03\\x04") || str_starts_with($header, "PK\\x05\\x06"),
-            'zip' => str_starts_with($header, "PK\\x03\\x04") || str_starts_with($header, "PK\\x05\\x06"),
-            'msix' => str_starts_with($header, "PK\\x03\\x04"),
+            'apk' => str_starts_with($header, "PK\x03\x04") || str_starts_with($header, "PK\x05\x06"),
+            'ipa' => str_starts_with($header, "PK\x03\x04") || str_starts_with($header, "PK\x05\x06"),
+            'zip' => str_starts_with($header, "PK\x03\x04") || str_starts_with($header, "PK\x05\x06"),
+            'msix' => str_starts_with($header, "PK\x03\x04"),
             'exe' => str_starts_with($header, "MZ"),
-            'msi' => str_starts_with($header, "\\xD0\\xCF\\x11\\xE0\\xA1\\xB1\\x1A\\xE1"),
+            'msi' => str_starts_with($header, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"),
             'pkg' => str_starts_with($header, 'xar!'),
-            'appimage' => str_starts_with($header, "\\x7FELF"),
-            'deb' => str_starts_with($header, "!<arch>\\n"),
-            'rpm' => str_starts_with($header, "\\xED\\xAB\\xEE\\xDB"),
-            'tar.gz' => str_starts_with($header, "\\x1F\\x8B"),
+            'appimage' => str_starts_with($header, "\x7FELF"),
+            'deb' => str_starts_with($header, "!<arch>\n"),
+            'rpm' => str_starts_with($header, "\xED\xAB\xEE\xDB"),
+            'tar.gz' => str_starts_with($header, "\x1F\x8B"),
             'dmg' => strlen($header) >= 8,
         ];
         return $checks[$extension] ?? false;

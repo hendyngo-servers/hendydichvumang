@@ -87,6 +87,50 @@ final class SourceControlService
     }
 
     /**
+     * Dispatch the repository's fixed HENDY monorepo CI workflow on its configured base branch.
+     * This requires Actions: write. No user-supplied workflow file or ref is accepted.
+     */
+    public static function dispatchWorkflow(): array
+    {
+        $config = self::configuration();
+        if ($config['token'] === '') {
+            return [
+                'dispatched' => false,
+                'configured' => false,
+                'repository' => $config['repository'],
+                'baseBranch' => $config['baseBranch'],
+                'message' => 'Chưa cấu hình HENDY_GITHUB_TOKEN trên Render.',
+                'permissionsRequired' => ['Actions: write'],
+            ];
+        }
+
+        try {
+            self::request(
+                $config,
+                'POST',
+                '/actions/workflows/hendy-monorepo-ci.yml/dispatches',
+                ['ref' => $config['baseBranch']]
+            );
+            return [
+                'dispatched' => true,
+                'repository' => $config['repository'],
+                'baseBranch' => $config['baseBranch'],
+                'workflow' => 'hendy-monorepo-ci.yml',
+                'requestedAt' => gmdate(DATE_ATOM),
+                'message' => 'Đã gửi yêu cầu chạy HENDY monorepo CI. Mở CI / Build Monitor để theo dõi khi GitHub ghi nhận lần chạy.',
+            ];
+        } catch (Throwable $error) {
+            return [
+                'dispatched' => false,
+                'repository' => $config['repository'],
+                'baseBranch' => $config['baseBranch'],
+                'message' => 'Không thể kích hoạt CI. Hãy kiểm tra HENDY_GITHUB_TOKEN, quyền Actions: write và trạng thái workflow. ' . $error->getMessage(),
+                'permissionsRequired' => ['Actions: write'],
+            ];
+        }
+    }
+
+    /**
      * Read the latest GitHub Actions runs for the configured source repository.
      * Only a small, allow-listed summary is returned to the Admin UI.
      * The GitHub token is never included in the response or logs.
@@ -553,10 +597,13 @@ final class SourceControlService
         if (!is_string($body)) {
             throw new RuntimeException('Kết nối GitHub thất bại: ' . ($curlError !== '' ? $curlError : 'không có phản hồi.'));
         }
+        if ($status === 204 && trim($body) === '') {
+            return [];
+        }
         $decoded = json_decode($body, true);
         if ($status < 200 || $status >= 300 || !is_array($decoded)) {
             if ($status === 401 || $status === 403) {
-                throw new RuntimeException('GitHub từ chối token hoặc thiếu quyền. Cần Metadata read, Contents read/write và Pull requests read/write.');
+                throw new RuntimeException('GitHub từ chối token hoặc thiếu quyền. Cần quyền phù hợp với thao tác GitHub được yêu cầu, bao gồm Actions: read/write khi theo dõi hoặc kích hoạt workflow.');
             }
             if ($status === 404) throw new RuntimeException('Không tìm thấy repository/nhánh/tệp hoặc token không có quyền truy cập.');
             if ($status === 409 || $status === 422) {

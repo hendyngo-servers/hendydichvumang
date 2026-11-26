@@ -1296,7 +1296,7 @@
           (url ? '<a class="tiny-btn" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Xem log và Jobs ↗</a>' : '');
       }).join('') : '<p class="small muted">Chưa có lần chạy phù hợp trên nhánh đã cấu hình.</p>') +
       (actionsUrl ? '<div class="two-col"><a class="tiny-btn" href="' + escapeHtml(actionsUrl) + '" target="_blank" rel="noopener noreferrer">Mở lịch sử Actions ↗</a>' +
-        '<a class="tiny-btn" href="' + escapeHtml(actionsUrl + '/workflows/hendy-monorepo-ci.yml') + '" target="_blank" rel="noopener noreferrer">Chạy kiểm tra thủ công ↗</a></div>' : '') +
+        '<button class="tiny-btn" type="button" data-store-release-dispatch>Chạy CI ngay</button></div>' : '') +
       '<p class="small muted">Trạng thái CI chỉ phản ánh kiểm tra mã nguồn. Không xác nhận Render đã deploy, secrets đã đủ, binary đã được quét/ký hoặc bản phát hành đã được công khai.</p></article>';
 
     const releaseRows = products.filter(item => item.metadata && item.metadata.storeRelease && item.metadata.storeRelease.filename)
@@ -2140,6 +2140,21 @@
       storeReleaseRefresh.disabled = true;
       try { await adminLoad('store-releases'); await renderPage(); }
       catch (error) { toast(error.message, 'error'); storeReleaseRefresh.disabled = false; }
+      return;
+    }
+    const dispatchStoreWorkflow = event.target.closest('[data-store-release-dispatch]');
+    if (dispatchStoreWorkflow) {
+      if (!window.confirm('Gửi yêu cầu chạy HENDY monorepo CI trên nhánh đã cấu hình? Thao tác này chỉ chạy kiểm thử, không tự phát hành binary hoặc triển khai Render.')) return;
+      dispatchStoreWorkflow.disabled = true;
+      try {
+        const result = await api('/api/admin/source-control/workflows/dispatch', 'POST', {});
+        toast(result.message || 'Đã gửi yêu cầu chạy CI.');
+        await adminLoad('store-releases');
+        await renderPage();
+      } catch (error) {
+        toast(error.message, 'error');
+        dispatchStoreWorkflow.disabled = false;
+      }
       return;
     }
     const saveStoreManifest = event.target.closest('[data-store-release-save-manifest]');

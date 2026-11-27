@@ -470,7 +470,7 @@ $assert(str_contains($neonFunctionSource, '/store-release/presign') && str_conta
 $assert(str_contains($releaseControllerSource, '/api/admin/source-control/workflows/dispatch') && str_contains($releaseUiSource, 'data-store-release-dispatch') && str_contains($releaseUiSource, 'Chạy CI ngay'), 'Admin can dispatch the fixed HENDY CI workflow through authenticated backend code');
 $assert(str_contains($releaseControllerSource, '/api/admin/source-control/workflows') && str_contains($releaseUiSource, 'CI / BUILD MONITOR') && str_contains($releaseUiSource, '/api/admin/source-control/workflows?limit=10'), 'Release Studio includes a live, read-only GitHub Actions monitor with explicit production-verification caveats');
 $assert(str_contains($publicRouterSource, "path === '/styles/buttons.css'") && str_contains($publicRouterSource, "admin-dashboard/styles/buttons.css"), 'Admin button stylesheet is served through the backend asset route');
-$navStart = strpos($releaseUiSource, '<nav class="sidebar-menu">');
+$navStart = strpos($releaseUiSource, '<nav class="sidebar-menu"');
 $navEnd = $navStart === false ? false : strpos($releaseUiSource, '</nav>', $navStart);
 $adminNavigation = ($navStart !== false && $navEnd !== false) ? substr($releaseUiSource, $navStart, $navEnd - $navStart) : '';
 preg_match_all('/data-admin-tab="([a-z0-9-]+)"/', $adminNavigation, $adminNavMatches);

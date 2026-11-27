@@ -23,6 +23,12 @@ jobs:
       - name: Validate published assets
         run: |
           test -s website/public/index.html
+          test -s website/public/dich-vu/index.html
+          test -s website/public/dich-vu/services.css
+          grep -q 'Dịch vụ mạng' website/public/index.html
+          grep -q 'HENDY DIGITAL' website/public/dich-vu/index.html
+          ! grep -R -q 'icof5p1f.cloudfly.vn' website/public/dich-vu
+          ! grep -R -q '123 Đường Công Nghệ' website/public/dich-vu
           test -s website/public/healthz.html
           test -s website/public/robots.txt
           test -s website/public/sitemap.xml

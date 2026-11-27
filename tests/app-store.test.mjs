@@ -103,3 +103,35 @@ test('App Store API client rejects malformed or oversized catalog payloads', asy
   });
   await assert.rejects(() => oversizedApi.listReleases(), /Dữ liệu danh mục App Store không hợp lệ/);
 });
+
+
+test('store listing links are restricted to official platform stores', () => {
+  const policy = loadSecurity();
+  assert.equal(policy.safeStoreListing('https://apps.apple.com/app/example/id123'), 'https://apps.apple.com/app/example/id123');
+  assert.equal(policy.safeStoreListing('https://play.google.com/store/apps/details?id=com.example.app'), 'https://play.google.com/store/apps/details?id=com.example.app');
+  assert.equal(policy.safeStoreListing('https://attacker.example.test/'), '');
+  assert.equal(policy.safeStoreListing('javascript:alert(1)'), '');
+});
+
+test('App Store API client checks updates through the matching platform route', async () => {
+  let requestedUrl = '';
+  const api = loadApi({
+    apiBaseUrl: 'https://hendydichvumang-telegram-bot.onrender.com',
+    fetchImpl: async (url) => {
+      requestedUrl = url;
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ ok: true, hasUpdate: true, latestVersion: '2.0.0' })
+      };
+    }
+  });
+  const result = await api.checkUpdate('hendydesk', '1.0.0', 'windows');
+  const parsed = new URL(requestedUrl);
+  assert.equal(parsed.pathname, '/api/v1/store/releases/check');
+  assert.equal(parsed.searchParams.get('appId'), 'hendydesk');
+  assert.equal(parsed.searchParams.get('currentVersion'), '1.0.0');
+  assert.equal(parsed.searchParams.get('platform'), 'windows');
+  assert.equal(result.hasUpdate, true);
+});

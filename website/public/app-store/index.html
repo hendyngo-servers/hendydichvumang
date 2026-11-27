@@ -3,111 +3,157 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0a1020">
-  <meta name="description" content="HENDY App Store — kho ứng dụng, phần mềm và công cụ số đa nền tảng.">
+  <meta name="theme-color" content="#f4f7fb">
+  <meta name="description" content="HENDY App Store — tải ứng dụng và công cụ số chính hãng theo Windows, Android, iOS và các nền tảng khác.">
   <link rel="canonical" href="https://hendydichvumang-szad.onrender.com/app-store/">
   <link rel="icon" href="/favicon.svg">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="/app-store/style.css">
-  <title>HENDY App Store · Kho ứng dụng VIP PRO</title>
+  <title>HENDY App Store · Ứng dụng & công cụ số</title>
 </head>
 <body>
-  <div class="ambient ambient-one" aria-hidden="true"></div>
-  <div class="ambient ambient-two" aria-hidden="true"></div>
-  <header class="topbar">
-    <a class="brand" href="/app-store/" aria-label="HENDY App Store">
-      <span class="brand-mark">H</span>
-      <span class="brand-copy"><b>HENDY</b><small>APP STORE · VIP PRO</small></span>
-    </a>
-    <nav class="top-nav" aria-label="Điều hướng chính">
-      <a href="/">Hệ sinh thái</a>
-      <a class="active" href="/app-store/">Kho ứng dụng</a>
-      <a href="/miniapp/">Mini App</a><a href="https://t.me/hendy_dichvu_BOT" target="_blank" rel="noopener noreferrer">Telegram Bot ↗</a>
-    </nav>
-    <button id="mobile-menu-toggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-label="Mở menu"><i class="fa-solid fa-bars"></i></button>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/app-store/" aria-label="HENDY App Store">
+        <span class="brand-mark">H</span>
+        <span><b>HENDY</b><small>APP STORE</small></span>
+      </a>
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <a class="active" href="/app-store/">Khám phá</a>
+        <a href="#catalog">Ứng dụng</a>
+        <a href="#install-guide">Hướng dẫn cài đặt</a>
+      </nav>
+      <div class="header-actions">
+        <span id="api-status" class="api-status pending"><i></i> Đang kết nối kho</span>
+        <a class="member-link" href="/miniapp/">Khu vực thành viên <span aria-hidden="true">↗</span></a>
+      </div>
+      <button id="mobile-menu-toggle" class="menu-toggle" type="button" aria-label="Mở menu" aria-expanded="false">☰</button>
+    </div>
   </header>
-  <main class="page-shell">
+
+  <main>
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow"><i class="fa-solid fa-crown"></i> HENDY DIGITAL DISTRIBUTION</span>
-        <h1>KHO PHẦN MỀM <span>THƯỢNG HẠNG</span></h1>
-        <p class="hero-lead">Ứng dụng, công cụ và tiện ích số trong một kho tải tập trung.</p>
-        <p class="hero-description">Tìm ứng dụng theo nền tảng, xem thông tin phiên bản và tải các bản phát hành đã được kiểm tra và công khai.</p>
-        <div class="hero-actions">
-          <a class="button primary" href="#catalog"><i class="fa-solid fa-grid-2"></i> Khám phá ứng dụng</a>
-          <a class="button secondary" href="/miniapp/"><i class="fa-solid fa-user"></i> Khu vực thành viên</a>
+        <div class="eyebrow"><span class="eyebrow-dot"></span> HỆ SINH THÁI ỨNG DỤNG HENDY</div>
+        <h1>Công cụ phù hợp.<br><em>Đúng thiết bị.</em></h1>
+        <p class="hero-lead">Khám phá ứng dụng và tools dành cho công việc mỗi ngày. Chọn đúng gói cho Windows, Android hoặc iPhone — xem thông tin phát hành, kiểm tra tệp và hướng dẫn cài đặt trước khi sử dụng.</p>
+        <div class="hero-search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input id="search-input" type="search" placeholder="Tìm ứng dụng, công cụ, phiên bản..." autocomplete="off" aria-label="Tìm kiếm ứng dụng">
+          <kbd>/</kbd>
         </div>
-        <div class="device-hint" id="device-hint" aria-live="polite">Đang nhận diện thiết bị…</div>
-      </div>
-      <div class="hero-visual" aria-hidden="true">
-        <div class="halo halo-a"></div><div class="halo halo-b"></div>
-        <div class="store-window">
-          <div class="window-bar"><span></span><span></span><span></span><small>HENDY / STORE</small></div>
-          <div class="window-brand"><div class="window-logo">H</div><div><b>APP STORE</b><small>SECURE RELEASE CHANNEL</small></div></div>
-          <div class="window-line"><i class="fa-brands fa-windows"></i><span>Windows</span><b>Verified release</b></div>
-          <div class="window-line"><i class="fa-brands fa-android"></i><span>Android</span><b>APK</b></div>
-          <div class="window-line"><i class="fa-brands fa-apple"></i><span>Apple platforms</span><b>iOS / macOS</b></div>
-          <div class="window-foot"><i class="fa-solid fa-shield-halved"></i> PRIVATE STORAGE · SHA-256</div>
+        <div class="hero-meta">
+          <span><b id="hero-count">—</b> gói phát hành</span>
+          <span class="meta-separator"></span>
+          <span id="device-hint">Đang nhận diện thiết bị…</span>
         </div>
-        <span class="floating-label label-top">MULTI PLATFORM</span>
-        <span class="floating-label label-bottom">RELEASE MANAGER</span>
       </div>
-    </section>
-    <section id="catalog" class="catalog-section">
-      <div class="section-heading">
-        <div><span class="eyebrow">01 / APPLICATION LIBRARY</span><h2>Khám phá <em>ứng dụng</em></h2><p>Chỉ hiển thị bản phát hành đã được duyệt và công khai.</p></div>
-        <span id="api-status" class="api-status pending" role="status" aria-live="polite"><i class="fa-solid fa-circle"></i> Đang kết nối API</span>
-      </div>
-      <div class="catalog-toolbar">
-        <label class="search-box" for="search-input"><i class="fa-solid fa-magnifying-glass"></i><input id="search-input" type="search" placeholder="Tìm ứng dụng, phiên bản, nền tảng…" autocomplete="off"><kbd>/</kbd></label>
-        <div class="catalog-sort"><label for="sort-select">Sắp xếp</label><select id="sort-select"><option value="default">Thứ tự đề xuất</option><option value="name">Tên A–Z</option><option value="version">Phiên bản cao nhất</option><option value="platform">Nền tảng</option></select></div>
-        <div class="filter-row">
-          <div class="filter-group" role="group" aria-label="Lọc danh mục">
-            <span class="filter-label">Danh mục</span>
-            <button class="filter-chip active" type="button" data-category="all">Tất cả</button>
-            <button class="filter-chip" type="button" data-category="tools">Công cụ</button>
-            <button class="filter-chip" type="button" data-category="codes">Code</button>
-            <button class="filter-chip" type="button" data-category="vip">VIP</button>
-            <button class="filter-chip" type="button" data-category="minigame">Mini Game</button>
-            <button class="filter-chip" type="button" data-category="otp">OTP</button>
-            <button class="filter-chip" type="button" data-category="proxy">Proxy</button>
-          </div>
-          <div class="filter-group" role="group" aria-label="Lọc nền tảng">
-            <span class="filter-label">Nền tảng</span>
-            <button class="filter-chip active" type="button" data-platform="all">Tất cả</button>
-            <button class="filter-chip" type="button" data-platform="windows">Windows</button>
-            <button class="filter-chip" type="button" data-platform="android">Android</button>
-            <button class="filter-chip" type="button" data-platform="macos">macOS</button>
-            <button class="filter-chip" type="button" data-platform="ios">iOS</button>
-            <button class="filter-chip" type="button" data-platform="linux">Linux</button>
-            <button class="filter-chip" type="button" data-platform="web">Web</button>
-          </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="hero-orbit orbit-a"></div>
+        <div class="hero-orbit orbit-b"></div>
+        <div class="device-card device-main">
+          <div class="device-top"><span></span><span></span><span></span><small>HENDY / STORE</small></div>
+          <div class="device-symbol">H</div>
+          <b>TOOLS & APPS</b>
+          <small>One place. Multiple platforms.</small>
+          <div class="device-platforms"><i>W</i><i>◈</i><i>●</i></div>
         </div>
-        <div class="catalog-meta"><span id="catalog-count">Đang tải danh mục…</span><button id="refresh-catalog" class="refresh-button" type="button"><i class="fa-solid fa-rotate"></i> Làm mới</button></div>
+        <div class="floating-chip chip-windows"><span>⊞</span> Windows</div>
+        <div class="floating-chip chip-android"><span>◈</span> Android APK</div>
+        <div class="floating-chip chip-ios"><span>●</span> iOS</div>
       </div>
-      <div id="app-grid" class="app-grid" aria-live="polite">
-        <div class="catalog-state"><i class="fa-solid fa-spinner fa-spin"></i><b>Đang tải kho ứng dụng HENDY</b><span>Đang lấy thông tin bản phát hành từ máy chủ quản trị.</span></div>
-      </div>
-    </section>
-    <section class="trust-section">
-      <div class="trust-card"><span><i class="fa-solid fa-shield-halved"></i></span><div><b>Quản lý bản phát hành</b><small>Binary được lưu trong kho riêng và chỉ công khai sau khi hoàn tất kiểm duyệt.</small></div></div>
-      <div class="trust-card"><span><i class="fa-solid fa-fingerprint"></i></span><div><b>SHA-256 checksum</b><small>Kiểm tra tính toàn vẹn của tệp tải xuống trước khi cài đặt.</small></div></div>
-      <div class="trust-card"><span><i class="fa-solid fa-mobile-screen-button"></i></span><div><b>Đa nền tảng</b><small>Hướng dẫn tải được điều chỉnh theo Android, Windows, macOS, iOS và Linux.</small></div></div>
     </section>
 
+    <section class="platform-section" aria-label="Chọn hệ điều hành">
+      <div class="section-heading">
+        <div><span class="section-kicker">BẮT ĐẦU TỪ THIẾT BỊ</span><h2>Tải đúng phiên bản</h2></div>
+        <p>Mỗi ứng dụng chỉ hiện gói đã được Admin duyệt và công khai.</p>
+      </div>
+      <div class="platform-grid">
+        <button class="platform-tile active" type="button" data-platform="all">
+          <span class="platform-icon icon-all">✦</span><span><b>Tất cả nền tảng</b><small>Toàn bộ ứng dụng</small></span><span class="tile-arrow">→</span>
+        </button>
+        <button class="platform-tile" type="button" data-platform="windows">
+          <span class="platform-icon icon-windows">⊞</span><span><b>Windows</b><small>EXE · MSI · MSIX</small></span><span class="tile-arrow">→</span>
+        </button>
+        <button class="platform-tile" type="button" data-platform="android">
+          <span class="platform-icon icon-android">◈</span><span><b>Android</b><small>APK · ARM</small></span><span class="tile-arrow">→</span>
+        </button>
+        <button class="platform-tile" type="button" data-platform="ios">
+          <span class="platform-icon icon-ios">●</span><span><b>iPhone / iPad</b><small>App Store · TestFlight · IPA</small></span><span class="tile-arrow">→</span>
+        </button>
+      </div>
+    </section>
+
+    <section id="catalog" class="catalog-section">
+      <div class="section-heading catalog-heading">
+        <div><span class="section-kicker">HENDY SOFTWARE LIBRARY</span><h2>Khám phá ứng dụng</h2><p>Thông tin phiên bản và gói tải xuống được lấy trực tiếp từ API HENDY.</p></div>
+        <div class="catalog-controls">
+          <label class="sort-label" for="sort-select">Sắp xếp</label>
+          <select id="sort-select">
+            <option value="default">Mới cập nhật</option>
+            <option value="name">Tên A–Z</option>
+            <option value="version">Phiên bản</option>
+            <option value="platform">Nền tảng</option>
+          </select>
+          <button id="refresh-catalog" class="refresh-button" type="button" aria-label="Làm mới danh mục">↻</button>
+        </div>
+      </div>
+      <div class="filter-row" aria-label="Lọc theo danh mục">
+        <button class="filter-chip active" type="button" data-category="all">Tất cả</button>
+        <button class="filter-chip" type="button" data-category="tools">Công cụ</button>
+        <button class="filter-chip" type="button" data-category="codes">Code</button>
+        <button class="filter-chip" type="button" data-category="vip">VIP</button>
+        <button class="filter-chip" type="button" data-category="minigame">Mini Game</button>
+        <button class="filter-chip" type="button" data-category="otp">OTP</button>
+        <button class="filter-chip" type="button" data-category="proxy">Proxy</button>
+      </div>
+      <div class="catalog-topline">
+        <span id="catalog-count">Đang tải danh mục…</span>
+        <span class="catalog-live"><i></i> DỮ LIỆU TRỰC TIẾP</span>
+      </div>
+      <div id="app-grid" class="app-grid" aria-live="polite">
+        <div class="catalog-state"><span class="loading-ring"></span><b>Đang tải kho ứng dụng</b><span>Đang đồng bộ các bản phát hành đã được công khai.</span></div>
+      </div>
+    </section>
+
+    <section id="install-guide" class="install-guide">
+      <div class="guide-intro">
+        <span class="section-kicker">INSTALLATION NOTES</span>
+        <h2>Tải về an toàn.<br><em>Cài đặt đúng cách.</em></h2>
+        <p>HENDY cung cấp đúng tệp và hướng dẫn theo hệ điều hành. Việc cài đặt còn phụ thuộc chữ ký số, chứng thư phân phối và xác nhận của thiết bị.</p>
+      </div>
+      <div class="guide-list">
+        <article class="guide-item"><span class="guide-icon guide-win">⊞</span><div><b>Windows</b><p>Tải EXE/MSI/MSIX, mở bộ cài và xem kỹ thông tin nhà phát hành. MSIX cần chữ ký được Windows tin cậy.</p></div></article>
+        <article class="guide-item"><span class="guide-icon guide-android">◈</span><div><b>Android</b><p>Tải APK, mở tệp trong Downloads và chỉ cho phép cài từ nguồn đó khi bạn tin tưởng nhà phát hành. Giữ Play Protect bật.</p></div></article>
+        <article class="guide-item"><span class="guide-icon guide-ios">●</span><div><b>iOS / iPadOS</b><p>Ưu tiên App Store hoặc TestFlight. IPA không phải tệp có thể chạm để cài trên mọi iPhone; cần đúng chữ ký và hồ sơ phân phối.</p></div></article>
+      </div>
+    </section>
+
+    <section class="trust-strip">
+      <div><span class="trust-mark">✓</span><div><b>Phát hành có kiểm duyệt</b><small>Chỉ sản phẩm đạt điều kiện mới hiển thị công khai.</small></div></div>
+      <div><span class="trust-mark">#</span><div><b>SHA-256 checksum</b><small>Đối chiếu tính toàn vẹn của gói tải xuống.</small></div></div>
+      <div><span class="trust-mark">↻</span><div><b>Kiểm tra cập nhật</b><small>Tra cứu phiên bản mới theo từng nền tảng.</small></div></div>
+    </section>
   </main>
-  <footer class="footer"><div class="footer-inner">
-    <a class="brand footer-brand" href="/app-store/"><span class="brand-mark">H</span><span class="brand-copy"><b>HENDY</b><small>APP STORE</small></span></a>
-    <p>© <span id="year"></span> HENDY Digital Ecosystem. Bản phát hành được quản lý bởi HENDY.</p>
-    <div><a href="/privacy/">Quyền riêng tư</a><a href="/terms/">Điều khoản</a><a href="/">Trang chủ HENDY</a><a href="/miniapp/">Mini App</a></div>
-  </div></footer>
+
+  <footer class="site-footer">
+    <a class="brand" href="/app-store/"><span class="brand-mark">H</span><span><b>HENDY</b><small>APP STORE</small></span></a>
+    <p>© <span id="year"></span> HENDY Digital Ecosystem</p>
+    <div><a href="/privacy/">Quyền riêng tư</a><a href="/terms/">Điều khoản</a><a href="/">Trang chủ</a></div>
+  </footer>
+
   <div id="release-modal" class="modal" hidden>
     <button class="modal-backdrop" type="button" data-close-modal aria-label="Đóng chi tiết"></button>
     <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <div class="modal-head"><span class="eyebrow">HENDY APP STORE / RELEASE DETAILS</span><button class="modal-close" type="button" data-close-modal aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-topline"><span>HENDY APP STORE / DETAILS</span><button class="modal-close" type="button" data-close-modal aria-label="Đóng">×</button></div>
       <div id="modal-content"></div>
     </section>
   </div>
-  <script src="/app-store/config.js" defer></script><script src="/app-store/security.js" defer></script><script src="/app-store/api-client.js" defer></script><script src="/app-store/app.js" defer></script>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/app-store/config.js" defer></script>
+  <script src="/app-store/security.js" defer></script>
+  <script src="/app-store/api-client.js" defer></script>
+  <script src="/app-store/app.js" defer></script>
 </body>
 </html>

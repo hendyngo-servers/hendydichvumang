@@ -136,7 +136,25 @@ final class ApiController
 
             try {
                 $metadata = self::jsonArray($product['metadata'] ?? []);
-                $previous = is_array($metadata['storeRelease'] ?? null) ? $metadata['storeRelease'] : null;
+                $platformReleases = is_array($metadata['storeReleases'] ?? null) ? $metadata['storeReleases'] : [];
+                $legacyRelease = is_array($metadata['storeRelease'] ?? null) ? $metadata['storeRelease'] : null;
+                if ($legacyRelease !== null && !$platformReleases) {
+                    $legacyPlatform = strtolower(trim((string) ($legacyRelease['platform'] ?? '')));
+                    if (in_array($legacyPlatform, ['android','windows','macos','ios','linux','web'], true)) {
+                        $platformReleases[$legacyPlatform] = $legacyRelease;
+                    }
+                }
+                $previous = is_array($platformReleases[$platform] ?? null) ? $platformReleases[$platform] : null;
+                $manifestUrl = self::safeReleaseUrl($this->text($input['manifestUrl'] ?? '', 1000));
+                $storeListingUrl = self::safeStoreListingUrl($this->text($input['storeListingUrl'] ?? ($previous['storeListingUrl'] ?? ''), 1000));
+                $packageId = trim($this->text($input['packageId'] ?? ($previous['packageId'] ?? ''), 120));
+                if ($packageId !== '' && !preg_match('/\A[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+\z/D', $packageId)) {
+                    throw new HttpException(400, 'Package ID / Bundle ID không hợp lệ.');
+                }
+                $architecture = strtolower(trim($this->text($input['architecture'] ?? ($previous['architecture'] ?? 'universal'), 32)));
+                if (!in_array($architecture, ['universal','x86','x64','arm64','arm64-v8a','armeabi-v7a','ios-arm64'], true)) {
+                    throw new HttpException(400, 'Kiến trúc CPU không hợp lệ.');
+                }
                 $release = [
                     'platform' => $platform,
                     'version' => $version,
@@ -149,20 +167,30 @@ final class ApiController
                     'releaseNotes' => $releaseNotes,
                     'published' => false,
                     'uploadedAt' => gmdate(DATE_ATOM),
-                    'manifestUrl' => is_array($previous) ? (string) ($previous['manifestUrl'] ?? '') : '',
+                    'manifestUrl' => $manifestUrl,
+                    'storeListingUrl' => $storeListingUrl,
+                    'iosOtaVerified' => $platform === 'ios' && $this->toBool($input['iosOtaVerified'] ?? false),
+                    'packageId' => $packageId,
+                    'architecture' => $architecture,
+                    'minimumOs' => mb_substr(trim($this->text($input['minimumOs'] ?? ($previous['minimumOs'] ?? ''), 64)), 0, 64),
+                    'publisherName' => mb_substr(trim($this->text($input['publisherName'] ?? ($previous['publisherName'] ?? ''), 120)), 0, 120),
+                    'installNotes' => mb_substr(trim($this->text($input['installNotes'] ?? ($previous['installNotes'] ?? ''), 1000)), 0, 1000),
                 ];
                 if ($previous !== null && !empty($previous['objectKey'])) {
                     $history = is_array($metadata['storeReleaseHistory'] ?? null) ? $metadata['storeReleaseHistory'] : [];
                     array_unshift($history, [
                         'version' => (string) ($previous['version'] ?? ''),
-                        'platform' => (string) ($previous['platform'] ?? ''),
+                        'platform' => (string) ($previous['platform'] ?? $platform),
                         'objectKey' => (string) $previous['objectKey'],
                         'sha256' => (string) ($previous['sha256'] ?? ''),
                         'uploadedAt' => (string) ($previous['uploadedAt'] ?? ''),
                         'published' => (bool) ($previous['published'] ?? false),
                     ]);
-                    $metadata['storeReleaseHistory'] = array_slice($history, 0, 10);
+                    $metadata['storeReleaseHistory'] = array_slice($history, 0, 20);
                 }
+                $platformReleases[$platform] = $release;
+                $metadata['storeReleases'] = $platformReleases;
+                // Keep a compatibility pointer for older Admin views.
                 $metadata['storeRelease'] = $release;
                 Database::run(
                     'UPDATE products SET metadata = ?::jsonb, updated_at = NOW() WHERE id = ?',
@@ -201,6 +229,103 @@ final class ApiController
                 'published' => false,
             ],
             'message' => 'Đã lưu bản phát hành ở trạng thái nháp. Hãy rà soát và bật công khai trong hồ sơ sản phẩm sau khi kiểm tra.',
+        ], 201);
+    }
+
+    /**
+     * Store a private source-code ZIP for Admin review/build workflows.
+     * It is not a public install package and HENDY never executes it.
+     */
+    public function uploadProductSourceArchive(array $file, array $input, string $productId): array
+    {
+        try {
+            $this->user = TelegramAuth::authenticateRequest();
+        } catch (Throwable $error) {
+            throw new HttpException(401, 'Yêu cầu phiên Admin hợp lệ.');
+        }
+        $this->requireAdmin();
+        if (!preg_match('/\A[1-9][0-9]{0,17}\z/D', $productId)) {
+            throw new HttpException(400, 'Mã sản phẩm không hợp lệ.');
+        }
+        $product = Database::one('SELECT * FROM products WHERE id = ?', [$productId]);
+        if ($product === null) throw new HttpException(404, 'Không tìm thấy sản phẩm.');
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new HttpException(400, 'Tải source archive thất bại.');
+        }
+        $tmp = (string) ($file['tmp_name'] ?? '');
+        $size = (int) ($file['size'] ?? 0);
+        if ($tmp === '' || !is_uploaded_file($tmp) || $size < 16 || $size > 104857600) {
+            throw new HttpException(413, 'Source ZIP phải từ 16 byte đến 100 MB.');
+        }
+        $filename = basename(str_replace('\\', '/', (string) ($file['name'] ?? '')));
+        if (!preg_match('/\A[a-zA-Z0-9][a-zA-Z0-9._+-]{0,159}\.zip\z/iD', $filename)) {
+            throw new HttpException(400, 'Source archive phải là tệp ZIP có tên hợp lệ.');
+        }
+        $header = file_get_contents($tmp, false, null, 0, 8);
+        if (!is_string($header) || !(str_starts_with($header, "PK\x03\x04") || str_starts_with($header, "PK\x05\x06") || str_starts_with($header, "PK\x07\x08"))) {
+            throw new HttpException(400, 'Tệp không có chữ ký ZIP hợp lệ.');
+        }
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($tmp) ?: 'application/octet-stream';
+        if (!in_array($mime, ['application/zip','application/x-zip-compressed','application/octet-stream'], true)) {
+            throw new HttpException(400, 'Tệp source ZIP có MIME type không hợp lệ.');
+        }
+        $storedMime = $mime === 'application/x-zip-compressed' ? 'application/zip' : $mime;
+        $sha256 = hash_file('sha256', $tmp);
+        if (!is_string($sha256) || !preg_match('/\A[a-f0-9]{64}\z/D', $sha256)) {
+            throw new HttpException(400, 'Không thể tính SHA-256 cho source archive.');
+        }
+        $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            random_int(0, 0xffff), random_int(0, 0xffff),
+            random_int(0, 0xffff),
+            (random_int(0, 0x0fff) | 0x4000),
+            (random_int(0, 0x3fff) | 0x8000),
+            random_int(0, 0xffff), random_int(0, 0xffff), random_int(0, 0xffff)
+        );
+        $objectKey = 'store-releases/' . $productId . '/' . $uuid . '.zip';
+        try {
+            if (!NeonStorage::configured()) throw new RuntimeException('Neon Object Storage chưa được cấu hình.');
+            NeonStorage::uploadFile($tmp, $objectKey, $storedMime);
+            $metadata = self::jsonArray($product['metadata'] ?? []);
+            $previous = is_array($metadata['storeSourceArchive'] ?? null) ? $metadata['storeSourceArchive'] : null;
+            if ($previous !== null && !empty($previous['objectKey'])) {
+                $history = is_array($metadata['storeSourceHistory'] ?? null) ? $metadata['storeSourceHistory'] : [];
+                array_unshift($history, [
+                    'filename' => (string) ($previous['filename'] ?? ''),
+                    'sha256' => (string) ($previous['sha256'] ?? ''),
+                    'uploadedAt' => (string) ($previous['uploadedAt'] ?? ''),
+                ]);
+                $metadata['storeSourceHistory'] = array_slice($history, 0, 5);
+            }
+            $metadata['storeSourceArchive'] = [
+                'filename' => $filename,
+                'objectKey' => $objectKey,
+                'sha256' => $sha256,
+                'sizeBytes' => $size,
+                'uploadedAt' => gmdate(DATE_ATOM),
+                'notes' => $this->text($input['notes'] ?? '', 1000),
+                'visibility' => 'admin_private',
+            ];
+            Database::run('UPDATE products SET metadata = ?::jsonb, updated_at = NOW() WHERE id = ?', [
+                json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                $productId,
+            ]);
+        } catch (HttpException $error) {
+            try { NeonStorage::deleteObject($objectKey); } catch (Throwable $cleanupError) {
+                error_log('[store-source-orphan] ' . $cleanupError::class);
+            }
+            throw $error;
+        } catch (Throwable $error) {
+            try { NeonStorage::deleteObject($objectKey); } catch (Throwable $cleanupError) {
+                error_log('[store-source-orphan] ' . $cleanupError::class);
+            }
+            error_log('[store-source-upload] product=' . $productId . ' ' . $error::class);
+            throw new HttpException(503, 'Không thể lưu source archive vào Neon Object Storage.');
+        }
+        $this->audit('store.source.upload', $productId, ['filename' => $filename, 'sha256' => $sha256, 'sizeBytes' => $size]);
+        return self::response([
+            'ok' => true,
+            'sourceArchive' => ['filename' => $filename, 'sha256' => $sha256, 'sizeBytes' => $size, 'visibility' => 'admin_private'],
+            'message' => 'Đã lưu source ZIP ở chế độ riêng tư. Tệp chưa được giải nén, thực thi hoặc phát hành cho người dùng.',
         ], 201);
     }
 
@@ -376,8 +501,9 @@ final class ApiController
             $products = $this->listProducts($category !== '' ? $category : null, false);
             $releases = [];
             foreach ($products as $product) {
-                $release = self::publicStoreRelease($product);
-                if ($release !== null) $releases[] = $release;
+                foreach (self::publicStoreReleases($product) as $release) {
+                    $releases[] = $release;
+                }
             }
             return self::response(['ok' => true, 'releases' => $releases, 'generatedAt' => gmdate(DATE_ATOM)]);
         }
@@ -396,7 +522,14 @@ final class ApiController
             );
             if ($product === null) throw new HttpException(404, 'Ứng dụng không tồn tại hoặc chưa đủ điều kiện công khai.');
             $mapped = self::publicProduct($product);
-            $release = self::publicStoreRelease($mapped);
+            $metadata = self::jsonArray($mapped['metadata'] ?? []);
+            $variants = is_array($metadata['storeReleases'] ?? null) ? $metadata['storeReleases'] : [];
+            $variant = is_array($variants[$platform] ?? null) ? $variants[$platform] : null;
+            if ($variant === null && is_array($metadata['storeRelease'] ?? null)
+                && strtolower((string) ($metadata['storeRelease']['platform'] ?? '')) === $platform) {
+                $variant = $metadata['storeRelease'];
+            }
+            $release = self::publicStoreRelease($mapped, $variant);
             if ($release === null || $release['platform'] !== $platform) {
                 throw new HttpException(404, 'Chưa có bản phát hành công khai cho nền tảng này.');
             }
@@ -1108,6 +1241,28 @@ final class ApiController
 
     private function handleAdmin(string $method, string $path): array
     {
+        if ($method === 'GET' && preg_match('#^/api/admin/products/([1-9][0-9]{0,17})/source-download$#', $path, $sourceMatch)) {
+            $product = Database::one('SELECT id, metadata FROM products WHERE id = ?', [$sourceMatch[1]]);
+            if ($product === null) throw new HttpException(404, 'Không tìm thấy sản phẩm.');
+            $metadata = self::jsonArray($product['metadata'] ?? []);
+            $source = is_array($metadata['storeSourceArchive'] ?? null) ? $metadata['storeSourceArchive'] : [];
+            $objectKey = trim((string) ($source['objectKey'] ?? ''));
+            if ($objectKey === '') throw new HttpException(404, 'Chưa có source archive riêng tư.');
+            try {
+                $url = NeonStorage::presignedDownloadUrl($objectKey, 300);
+            } catch (Throwable $error) {
+                error_log('[store-source-download] ' . $error::class);
+                throw new HttpException(503, 'Không thể cấp liên kết tải source archive.');
+            }
+            $this->audit('store.source.download_link', (string) $product['id'], ['filename' => (string) ($source['filename'] ?? '')]);
+            return self::response([
+                'ok' => true,
+                'downloadUrl' => $url,
+                'filename' => (string) ($source['filename'] ?? 'source.zip'),
+                'sha256' => (string) ($source['sha256'] ?? ''),
+                'expiresIn' => 300,
+            ]);
+        }
         if ($method === 'POST' && $path === '/api/admin/source-control/workflows/dispatch') {
             $result = SourceControlService::dispatchWorkflow();
             if (empty($result['dispatched'])) {
@@ -1894,8 +2049,20 @@ final class ApiController
                 $this->audit('product.update', $id, ['isActive' => $active, 'category' => $category, 'price' => $price, 'sourcePermissionStatus' => $provider['source_permission_status'], 'supplierAccessStatus' => $provider['supplier_access_status'], 'fulfillmentMode' => $provider['fulfillment_mode']]);
                 if (!$active || !ProductReadinessService::isSellable($product)) {
                     $updatedMetadata = self::jsonArray($product['metadata'] ?? []);
+                    $changedPublishState = false;
+                    $variants = is_array($updatedMetadata['storeReleases'] ?? null) ? $updatedMetadata['storeReleases'] : [];
+                    foreach ($variants as $variantPlatform => $variant) {
+                        if (is_array($variant) && ($variant['published'] ?? false) === true) {
+                            $variants[$variantPlatform]['published'] = false;
+                            $changedPublishState = true;
+                        }
+                    }
                     if (is_array($updatedMetadata['storeRelease'] ?? null) && ($updatedMetadata['storeRelease']['published'] ?? false) === true) {
                         $updatedMetadata['storeRelease']['published'] = false;
+                        $changedPublishState = true;
+                    }
+                    if ($changedPublishState) {
+                        $updatedMetadata['storeReleases'] = $variants;
                         Database::run('UPDATE products SET metadata = ?::jsonb WHERE id = ?', [
                             json_encode($updatedMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                             $id,
@@ -1915,8 +2082,13 @@ final class ApiController
                 $disabledProduct = Database::one('SELECT metadata FROM products WHERE id = ?', [$id]);
                 if ($disabledProduct !== null) {
                     $disabledMetadata = self::jsonArray($disabledProduct['metadata'] ?? []);
-                    if (is_array($disabledMetadata['storeRelease'] ?? null)) {
-                        $disabledMetadata['storeRelease']['published'] = false;
+                    $variants = is_array($disabledMetadata['storeReleases'] ?? null) ? $disabledMetadata['storeReleases'] : [];
+                    foreach ($variants as $variantPlatform => $variant) {
+                        if (is_array($variant)) $variants[$variantPlatform]['published'] = false;
+                    }
+                    if ($variants) $disabledMetadata['storeReleases'] = $variants;
+                    if (is_array($disabledMetadata['storeRelease'] ?? null)) $disabledMetadata['storeRelease']['published'] = false;
+                    if ($variants || is_array($disabledMetadata['storeRelease'] ?? null)) {
                         Database::run('UPDATE products SET metadata = ?::jsonb WHERE id = ?', [
                             json_encode($disabledMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                             $id,
@@ -2482,13 +2654,33 @@ final class ApiController
 
     private function applyStoreReleasePublishMetadata(array &$metadata, array $candidate): void
     {
-        if (!array_key_exists('storeReleasePublished', $this->body)
-            && !array_key_exists('storeReleaseManifestUrl', $this->body)) {
-            return;
+        $hasReleaseChange = array_key_exists('storeReleasePublished', $this->body)
+            || array_key_exists('storeReleaseManifestUrl', $this->body)
+            || array_key_exists('storeReleaseStoreListingUrl', $this->body)
+            || array_key_exists('storeReleaseIosOtaVerified', $this->body);
+        if (!$hasReleaseChange) return;
+
+        $variants = is_array($metadata['storeReleases'] ?? null) ? $metadata['storeReleases'] : [];
+        $legacy = is_array($metadata['storeRelease'] ?? null) ? $metadata['storeRelease'] : [];
+        if (!$variants && $legacy) {
+            $legacyPlatform = strtolower((string) ($legacy['platform'] ?? ''));
+            if ($legacyPlatform !== '') $variants[$legacyPlatform] = $legacy;
         }
-        $release = is_array($metadata['storeRelease'] ?? null) ? $metadata['storeRelease'] : [];
+        $platform = strtolower($this->text($this->body['storeReleasePlatform'] ?? ($legacy['platform'] ?? ''), 16));
+        if (!in_array($platform, ['android','windows','macos','ios','linux','web'], true)) {
+            throw new HttpException(400, 'Cần chọn đúng nền tảng bản phát hành.');
+        }
+        $release = is_array($variants[$platform] ?? null) ? $variants[$platform] : [];
+        if (!$release && strtolower((string) ($legacy['platform'] ?? '')) === $platform) $release = $legacy;
+        if (!$release) throw new HttpException(404, 'Không tìm thấy bản phát hành cho nền tảng đã chọn.');
         if (array_key_exists('storeReleaseManifestUrl', $this->body)) {
             $release['manifestUrl'] = self::safeReleaseUrl($this->text($this->body['storeReleaseManifestUrl'], 1000));
+        }
+        if (array_key_exists('storeReleaseStoreListingUrl', $this->body)) {
+            $release['storeListingUrl'] = self::safeStoreListingUrl($this->text($this->body['storeReleaseStoreListingUrl'], 1000));
+        }
+        if (array_key_exists('storeReleaseIosOtaVerified', $this->body)) {
+            $release['iosOtaVerified'] = $platform === 'ios' && $this->toBool($this->body['storeReleaseIosOtaVerified']);
         }
         if (array_key_exists('storeReleasePublished', $this->body)) {
             $published = $this->toBool($this->body['storeReleasePublished']);
@@ -2516,6 +2708,12 @@ final class ApiController
             }
             $release['published'] = $published;
         }
+        $release['otaAvailable'] = $platform === 'ios'
+            && trim((string) ($release['manifestUrl'] ?? '')) !== ''
+            && ($release['iosOtaVerified'] ?? false) === true;
+        $variants[$platform] = $release;
+        $metadata['storeReleases'] = $variants;
+        // Keep the latest variant as a compatibility alias for legacy clients.
         $metadata['storeRelease'] = $release;
     }
 
@@ -2722,10 +2920,10 @@ final class ApiController
         return in_array(strtolower((string) $value), ['1', 't', 'true', 'yes', 'on'], true);
     }
 
-    private static function publicStoreRelease(array $product): ?array
+    private static function publicStoreRelease(array $product, ?array $releaseOverride = null): ?array
     {
         $metadata = is_array($product['metadata'] ?? null) ? $product['metadata'] : [];
-        $release = is_array($metadata['storeRelease'] ?? null) ? $metadata['storeRelease'] : [];
+        $release = $releaseOverride ?? (is_array($metadata['storeRelease'] ?? null) ? $metadata['storeRelease'] : []);
         if (($release['published'] ?? false) !== true) return null;
 
         $platform = strtolower(trim((string) ($release['platform'] ?? '')));
@@ -2768,12 +2966,49 @@ final class ApiController
             'sizeBytes' => max(0, (int) ($release['sizeBytes'] ?? 0)),
             'releaseNotes' => mb_substr((string) ($release['releaseNotes'] ?? ''), 0, 2000),
             'manifestUrl' => $manifestUrl,
-            'otaAvailable' => $platform === 'ios' && $manifestUrl !== '',
+            'otaAvailable' => $platform === 'ios'
+                && ($release['iosOtaVerified'] ?? false) === true
+                && ($release['otaAvailable'] ?? false) === true
+                && $manifestUrl !== '',
+            'storeListingUrl' => self::safeStoreListingUrl((string) ($release['storeListingUrl'] ?? '')),
+            'packageId' => mb_substr(trim((string) ($release['packageId'] ?? '')), 0, 120),
+            'architecture' => in_array((string) ($release['architecture'] ?? ''), ['universal','x86','x64','arm64','arm64-v8a','armeabi-v7a','ios-arm64'], true) ? (string) $release['architecture'] : 'universal',
+            'minimumOs' => mb_substr(trim((string) ($release['minimumOs'] ?? '')), 0, 64),
+            'publisherName' => mb_substr(trim((string) ($release['publisherName'] ?? '')), 0, 120),
+            'installNotes' => mb_substr(trim((string) ($release['installNotes'] ?? '')), 0, 1000),
             'screenshots' => array_values(array_filter(
                 array_slice(is_array($metadata['screenshots'] ?? null) ? $metadata['screenshots'] : [], 0, 8),
                 static fn($url): bool => is_string($url) && self::safePublicHttpsUrl($url) !== ''
             )),
         ];
+    }
+
+    private static function safeStoreListingUrl(string $url): string
+    {
+        $url = self::safePublicHttpsUrl($url);
+        if ($url === '') return '';
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        foreach (['apps.apple.com','testflight.apple.com','play.google.com','apps.microsoft.com'] as $domain) {
+            if ($host === $domain || str_ends_with($host, '.' . $domain)) return $url;
+        }
+        return '';
+    }
+
+    private static function publicStoreReleases(array $product): array
+    {
+        $metadata = is_array($product['metadata'] ?? null) ? $product['metadata'] : [];
+        $variants = is_array($metadata['storeReleases'] ?? null) ? $metadata['storeReleases'] : [];
+        if (!$variants) {
+            $legacy = is_array($metadata['storeRelease'] ?? null) ? $metadata['storeRelease'] : [];
+            $variants = $legacy ? [strtolower((string) ($legacy['platform'] ?? '')) => $legacy] : [];
+        }
+        $releases = [];
+        foreach ($variants as $variant) {
+            if (!is_array($variant)) continue;
+            $release = self::publicStoreRelease($product, $variant);
+            if ($release !== null) $releases[] = $release;
+        }
+        return $releases;
     }
 
     private static function safePublicHttpsUrl(string $url): string

@@ -9,8 +9,9 @@
     linux: ['appimage', 'deb', 'rpm', 'tar.gz'],
     web: ['zip']
   });
+  const STORE_HOSTS = ['apps.apple.com', 'testflight.apple.com', 'play.google.com', 'apps.microsoft.com'];
   const CHECKSUM = /^[a-f0-9]{64}$/i;
-  const SAFE_FILENAME = /^[a-z0-9][a-z0-9._-]{0,159}$/i;
+  const SAFE_FILENAME = /^[a-z0-9][a-z0-9._+-]{0,179}$/i;
 
   function safeHttps(value) {
     const raw = String(value || '').trim();
@@ -19,9 +20,14 @@
       const url = new URL(raw);
       if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return '';
       return url.href;
-    } catch (_) {
-      return '';
-    }
+    } catch (_) { return ''; }
+  }
+
+  function safeStoreListing(value) {
+    const href = safeHttps(value);
+    if (!href) return '';
+    const host = new URL(href).hostname.toLowerCase();
+    return STORE_HOSTS.some(domain => host === domain || host.endsWith('.' + domain)) ? href : '';
   }
 
   function fileExtension(filename) {
@@ -44,6 +50,7 @@
 
   window.HENDY_RELEASE_POLICY = Object.freeze({
     safeHttps,
+    safeStoreListing,
     fileExtension,
     validRelease
   });

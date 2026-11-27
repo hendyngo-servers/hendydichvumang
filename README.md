@@ -18,6 +18,8 @@ Everything under `website/public/` is public static content: HTML, CSS, JavaScri
 
 The App Store's separated frontend/API/security boundary, versioned API contract, release validation rules and Render deployment constraints are documented in [docs/APP-STORE-REBUILD.md](docs/APP-STORE-REBUILD.md).
 
+Platform-specific binary uploads, private source archives, Admin release procedures and Windows/Android/iOS signing requirements are documented in [docs/APP-STORE-DISTRIBUTION-GUIDE.md](docs/APP-STORE-DISTRIBUTION-GUIDE.md).
+
 Public tabs: Trang chủ, App Store, Dịch vụ mạng, AI Studio, Code Telegram, Giới thiệu. The public navigation intentionally does not expose "Trung tâm khách hàng".
 
 ## Telegram Bot

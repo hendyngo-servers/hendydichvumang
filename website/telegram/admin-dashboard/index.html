@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="hendy-build" content="2026.11.26.1">
-  <meta name="theme-color" content="#05050a">
+  <meta name="theme-color" content="#f4f6fb">
   <meta name="description" content="HENDY Commerce Workspace — không gian vận hành sản phẩm, ứng dụng và dịch vụ số.">
-  <title>HENDY COMMERCE WORKSPACE</title>
+  <title>HENDY ADMIN · CONTROL CENTER</title>
   <style>
     :root {
       color-scheme: light;
@@ -518,43 +518,153 @@
       body.sidebar-open:after{background:rgba(3,2,5,.76)}
     }
   </style>
-</head>
+  <style id="hendy-admin-modern-layout">
+    /* HENDY ADMIN CONTROL CENTER — compact, calm and responsive */
+    :root{color-scheme:light;--bg-color:#f4f6fb;--panel-bg:#fff;--panel-border:#e4e9f2;--primary:#315efb;--secondary:#647cf5;--success:#13845f;--warning:#a96b12;--danger:#d44861;--text-main:#182338;--text-muted:#6e7a90}
+    html,body{min-height:100%;background:#f4f6fb!important;color:var(--text-main)!important}
+    body{padding-bottom:0;background:radial-gradient(ellipse at 85% 0%,rgba(86,124,245,.07),transparent 35%),#f4f6fb!important;color:var(--text-main)!important}
+    body:before{display:none!important}
+    .sidebar{width:248px;height:100dvh;background:#fff;border-right:1px solid #e6ebf3;box-shadow:8px 0 26px rgba(26,42,72,.035);backdrop-filter:none}
+    .sidebar-header{min-height:68px;padding:13px 16px;border-bottom:1px solid #edf0f5;gap:11px}
+    .logo-icon{width:38px;height:38px;border-radius:11px;transform:none;background:linear-gradient(145deg,#3868f5,#5c83ff);color:#fff;border:0;box-shadow:0 6px 14px rgba(49,94,251,.17);font-size:19px}
+    .logo-icon span{transform:none}.sidebar-header h2{font-size:14px;letter-spacing:.015em;color:#182338}
+    .sidebar-header h2 span{background:none;color:#315efb;-webkit-text-fill-color:#315efb}
+    .sidebar-header small{font-size:8px;letter-spacing:.12em;color:#8792a5}
+    .sidebar-menu{padding:10px 11px 18px;overflow-y:auto}.menu-overview{margin-bottom:9px!important}
+    .nav-group{margin:5px 0 7px;border:1px solid transparent;border-radius:11px}
+    .nav-group[open]{background:#f8faff;border-color:#edf1f8;padding-bottom:4px}
+    .nav-group-title{display:flex;align-items:center;gap:9px;min-height:35px;padding:7px 9px;color:#748098;font-size:10px;font-weight:850;letter-spacing:.035em;list-style:none;cursor:pointer;user-select:none;border-radius:9px}
+    .nav-group-title::-webkit-details-marker{display:none}
+    .nav-group-title::after{content:"⌄";margin-left:auto;color:#98a2b4;font-size:13px;transition:transform .15s ease}
+    .nav-group[open]>.nav-group-title::after{transform:rotate(180deg)}
+    .group-mark{display:inline-grid;place-items:center;width:21px;height:19px;border-radius:6px;background:#eef2fb;color:#71809a;font-size:8px;font-weight:900;letter-spacing:0}
+    .menu-item{display:flex;align-items:center;width:calc(100% - 10px);min-height:33px;margin:2px 5px;padding:7px 9px;gap:9px;border:0;border-left:3px solid transparent;border-radius:8px;background:transparent;color:#56637a;text-align:left;font-size:10.5px;font-weight:680;line-height:1.3;box-shadow:none;transition:background .15s ease,color .15s ease}
+    .menu-item .menu-icon{width:19px;flex:none;text-align:center;font-size:14px;filter:none}
+    .menu-item:hover,.menu-item.active{color:#234ed3;background:#edf2ff;border-left-color:#315efb;box-shadow:none}
+    .menu-item.active .menu-icon{color:#315efb;filter:none}
+    .sidebar-footer{padding:11px 14px;border-top:1px solid #edf0f5}
+    .sidebar-footer a{display:block;padding:9px 10px;border:1px solid #e5eaf3;border-radius:9px;background:#f8faff;color:#5c6880;font-size:10px}
+    .sidebar-footer a:hover{border-color:#b9c8ff;background:#f0f4ff;color:#244ed3}
+    .main-content{margin-left:248px;min-width:0;background:transparent}body.auth-required .main-content{margin-left:0}
+    .top-header{height:62px;padding:0 25px;background:rgba(255,255,255,.92);border-bottom:1px solid #e7ebf2;backdrop-filter:blur(16px)}
+    .top-header-title{font-size:11px;font-weight:900;letter-spacing:.08em;color:#23314c}
+    .top-header-subtitle{font-size:9px;color:#8490a4;letter-spacing:.04em}
+    .menu-toggle{border:1px solid #e2e8f2;background:#fff;color:#4c5b74;border-radius:10px}
+    .admin-profile{padding:5px 10px;border:1px solid #e7ebf2;border-radius:11px;background:#fff;border-left:1px solid #e7ebf2}
+    .admin-avatar{width:32px;height:32px;border-radius:9px;background:linear-gradient(145deg,#426df4,#5a9af7);font-size:12px}
+    .admin-info strong{font-size:10px;color:#26344c}.admin-info small{font-size:9px;color:#16835f}
+    .content-body{width:min(100%,1460px);padding:21px 26px 44px}
+    .page-title{margin:0 0 3px}.page-title h1{font-size:21px;font-weight:850;letter-spacing:-.035em;color:#17243a}
+    .page-title p{font-size:11px;line-height:1.5;color:#7b879b;margin-top:5px}
+    .live-indicator{display:inline-flex;margin:8px 0 5px;padding:6px 10px;border:1px solid #dcefe7;border-radius:30px;background:#f0faf5;color:#19845f;font-size:9px;font-weight:750}
+    #app{min-height:260px;margin-top:12px}
+    .admin-heading{margin:0 0 13px;padding:15px 17px;border:1px solid #e3e9f3;border-radius:15px;background:linear-gradient(110deg,#fff,#f6f8ff);box-shadow:0 5px 18px rgba(33,54,93,.035)}
+    .admin-heading h2,.admin-heading h1{font-size:16px;color:#1b2940;margin:0 0 5px}.admin-heading p{font-size:10px;color:#78859b;margin:0}
+    .admin-shortcuts{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 13px}
+    .admin-shortcut{min-height:52px;padding:10px;border:1px solid #e4eaf3;border-radius:11px;background:#fff;color:#3b4a64;text-align:left;font-size:10px;font-weight:760;box-shadow:0 3px 10px rgba(35,53,86,.025)}
+    .admin-shortcut span{font-size:16px;margin-right:6px}.admin-shortcut:hover{border-color:#c8d5ff;background:#f7f9ff}
+    .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:11px 0}
+    .stat,.card,.record,.panel,.chart-card,.shortcut-card{color:#26344c;background:#fff;border:1px solid #e5eaf2;border-radius:13px;box-shadow:0 4px 14px rgba(31,49,81,.035);backdrop-filter:none}
+    .stat{padding:13px}.stat small{font-size:9px;color:#8290a5}.stat b{font-size:19px;color:#1c2a42;margin-top:5px}
+    .card{padding:14px;margin:0 0 10px}.record{padding:12px;margin:0 0 9px}
+    .record b,.card b{color:#26344c}.record p{font-size:10.5px;line-height:1.5;color:#718098}.record small,.muted{color:#7b879a}
+    .section-head{margin:17px 1px 9px;color:#22314b}.section-head h3{font-size:12px;font-weight:850;color:#25344f}.section-head span{font-size:9px;color:#8792a5}
+    .app-banner{padding:14px 16px;margin-bottom:11px;border:1px solid #dfe7f5;border-radius:13px;background:linear-gradient(110deg,#f0f5ff,#f8faff);color:#263a61;box-shadow:none}
+    .app-banner b{font-size:13px;color:#223352}.app-banner small{font-size:9px;color:#71809a;opacity:1}.app-banner .banner-icon{font-size:25px}
+    .form{gap:10px}.field{gap:5px}.field label{font-size:10px;color:#56657e;font-weight:780}
+    .field input,.field select,.field textarea,input:not([type=checkbox]),textarea,select{width:100%;min-width:0;border:1px solid #dbe3ef!important;border-radius:9px!important;background:#fbfcfe!important;color:#24334d!important;padding:9px 10px;font-size:11px;box-shadow:none}
+    .field textarea{min-height:75px}input::placeholder,textarea::placeholder{color:#9aa5b5}
+    input:focus,textarea:focus,select:focus{border-color:#91a9ff!important;box-shadow:0 0 0 3px rgba(49,94,251,.09)!important;outline:none}
+    input[type=checkbox]{accent-color:#315efb}
+    button.primary,.primary{border:1px solid #315efb;border-radius:9px;background:#315efb;color:#fff;box-shadow:0 4px 10px rgba(49,94,251,.15);padding:9px 12px;font-size:10px}
+    button.primary:hover,.primary:hover{background:#254fdf;filter:none}
+    button.secondary,.secondary,.tiny-btn{border:1px solid #dce4f0;background:#f7f9fc;color:#4e5f7b;box-shadow:none;padding:8px 10px;font-size:10px}
+    .danger{border:1px solid #f2d7dd;background:#fff5f6;color:#c33f58}
+    .notice{border:1px solid #dce7fa;border-radius:10px;background:#f2f7ff;color:#47628e;padding:10px 12px;font-size:10px;line-height:1.55}
+    .notice.warn{border-color:#f0dfbd;background:#fff9ed;color:#93631f}.notice.good{border-color:#cdebdc;background:#f0faf5;color:#217653}.notice.error{border-color:#f1cdd4;background:#fff4f5;color:#b83b52}
+    .empty{padding:20px;border:1px dashed #cdd7e6;border-radius:13px;background:#fff;color:#78869b;font-size:11px}.empty b{color:#34435e;font-size:12px}
+    .status{padding:4px 7px;border:1px solid #e2e8f1;border-radius:30px;background:#f3f6fa;color:#66748a;font-size:9px}
+    .status.pending{border-color:#f1e0bd;background:#fff8ea;color:#996515}.status.processing{border-color:#d5e2ff;background:#eff4ff;color:#3b61b9}
+    .status.completed,.status.resolved{border-color:#caeadb;background:#eff9f3;color:#187650}.status.rejected,.status.cancelled,.status.closed{border-color:#f0d1d8;background:#fff2f4;color:#b83f57}
+    .list-row{padding:10px 0;border-bottom:1px solid #edf0f5;color:#34435c}.list-row b{font-size:10px;color:#2c3b55}.list-row small{font-size:9px;color:#8490a4}
+    .price{color:#2459d5}.vip-pill{border:1px solid #f0dfb0;background:#fff8e8;color:#95620c}
+    table{width:100%;border-collapse:collapse;color:#35445d;font-size:10px}th{background:#f4f7fc;color:#50617c;border-bottom:1px solid #e2e8f1;font-size:9px}
+    td{border-bottom:1px solid #edf0f5;color:#465671;padding:8px}
+    code{background:#f1f4fa;color:#31517c;border-radius:4px;padding:2px 4px;overflow-wrap:anywhere}
+    .source-panel{border-color:#dae2ed;background:#fff}.source-panel-head{background:#f6f8fc;color:#43536d;border-bottom-color:#e4eaf2}
+    .source-file{color:#4b5d78}.source-file:hover,.source-file.active{background:#eef3ff;border-color:#d6e1ff;color:#244fcb}
+    .source-toolbar button,.source-action{border-color:#dbe4f1;background:#f6f8fc;color:#425773}
+    .source-editor-area{background:#101827;color:#e3ecff}.source-diff pre{background:#101827;color:#d6e2f7;border-color:#2b3a52}
+    .source-pill{border-color:#dfe6f0;color:#64748b}.audit-event{border-bottom-color:#edf0f5}.audit-event b{color:#33435f}.audit-event small{color:#8390a5}
+    .admin-tabs{display:none}.bottom-nav,#bottom-navigation{display:none!important}
+    #toast{bottom:20px;max-width:min(94vw,520px);border:1px solid #22314a;border-radius:10px;background:#18243a;color:#fff;box-shadow:0 10px 28px rgba(25,41,68,.2);font-size:10px}
+    .sidebar-footer a:focus-visible,.menu-item:focus-visible,.menu-toggle:focus-visible,.nav-group-title:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #7b9bff;outline-offset:2px}
+    @media(min-width:1500px){.sidebar{width:260px}.main-content{margin-left:260px}.content-body{padding-left:32px;padding-right:32px}}
+    @media(max-width:1050px){.sidebar{width:238px}.main-content{margin-left:238px}.content-body{padding-left:19px;padding-right:19px}.admin-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:760px){
+      .sidebar{width:min(292px,88vw);transform:translateX(-105%);z-index:120;box-shadow:20px 0 50px rgba(22,35,61,.2)}
+      .main-content{margin-left:0}.top-header{height:60px;padding:0 13px}.content-body{padding:17px 13px 34px}
+      .admin-profile{padding:4px 7px}.admin-info small{font-size:8px}.admin-heading{align-items:flex-start;flex-direction:column}
+      .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      body.sidebar-open .sidebar{transform:translateX(0)}
+      body.sidebar-open:after{content:"";position:fixed;inset:0;background:rgba(18,29,49,.25);backdrop-filter:blur(1px);z-index:110}
+    }
+    @media(max-width:430px){
+      .top-header-title{font-size:10px}.top-header-subtitle{font-size:8px}.content-body{padding-left:10px;padding-right:10px}
+      .stat-grid{gap:7px}.stat{padding:10px}.stat b{font-size:17px}.two-col{grid-template-columns:1fr}
+      .record-top{align-items:flex-start;flex-direction:column}.admin-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+  </style>
+  </head>
 <body>
   <aside class="sidebar" id="admin-sidebar" aria-label="Điều hướng quản trị HENDY">
     <div class="sidebar-header">
-      <div class="logo-icon" aria-hidden="true"><span>🤖</span></div>
-      <div><h2>HENDY <span>COMMERCE</span></h2><small>PRIVATE OPERATIONS WORKSPACE</small></div>
+      <div class="logo-icon" aria-hidden="true"><span>H</span></div>
+      <div><h2>HENDY <span>ADMIN</span></h2><small>CONTROL CENTER · PRIVATE</small></div>
     </div>
-    <nav class="sidebar-menu">
-      <div class="menu-title">TỔNG QUAN</div>
-      <button class="menu-item active" type="button" data-admin-tab="overview"><span class="menu-icon">📊</span>Tổng quan</button>
-
-      <div class="menu-title">THƯƠNG MẠI & PHÁT HÀNH</div>
-      <button class="menu-item" type="button" data-admin-tab="users"><span class="menu-icon">👥</span>User & tài khoản liên kết</button>
-      <button class="menu-item" type="button" data-admin-tab="orders"><span class="menu-icon">🧾</span>Duyệt & xử lý đơn hàng</button>
-      <button class="menu-item" type="button" data-admin-tab="payments"><span class="menu-icon">💳</span>Duyệt nạp tiền</button>
-      <button class="menu-item" type="button" data-admin-tab="products"><span class="menu-icon">📦</span>Dịch vụ & sản phẩm</button>
-      <button class="menu-item" type="button" data-admin-tab="store-releases"><span class="menu-icon">🚀</span>HENDY App Store · Releases</button>
-      <button class="menu-item" type="button" data-admin-tab="service-readiness"><span class="menu-icon">🧭</span>Nguồn & tình trạng dịch vụ</button>
-      <button class="menu-item" type="button" data-admin-tab="provider-registry"><span class="menu-icon">🔌</span>Provider & Service Registry</button>
-      <button class="menu-item" type="button" data-admin-tab="tickets"><span class="menu-icon">🎧</span>Ticket khách hàng</button>
-      <button class="menu-item" type="button" data-admin-tab="vouchers"><span class="menu-icon">🎟️</span>Voucher 72H</button>
-      <button class="menu-item" type="button" data-admin-tab="giftcodes"><span class="menu-icon">🎁</span>Giftcode</button>
-
-      <div class="menu-title">VẬN HÀNH NỀN TẢNG</div>
-      <button class="menu-item" type="button" data-admin-tab="bot-menus"><span class="menu-icon">🎛️</span>Trình tạo Menu Bot</button>
-      <button class="menu-item" type="button" data-admin-tab="runtime"><span class="menu-icon">🛰️</span>Trạng thái hệ thống</button>
-      <button class="menu-item" type="button" data-admin-tab="operations"><span class="menu-icon">🛠️</span>Bảo trì & nâng cấp</button>
-      <button class="menu-item" type="button" data-admin-tab="proxy"><span class="menu-icon">🌐</span>Proxy / HomeProxy</button>
-      <button class="menu-item" type="button" data-admin-tab="modules"><span class="menu-icon">🧩</span>Tệp & module</button>
-      <button class="menu-item" type="button" data-admin-tab="source-control"><span class="menu-icon">🧑‍💻</span>Quản lý toàn bộ mã nguồn</button>
-      <button class="menu-item" type="button" data-admin-tab="video-jobs"><span class="menu-icon">🎬</span>Video Jobs</button>
-      <button class="menu-item" type="button" data-admin-tab="code-telegram"><span class="menu-icon">📡</span>Code Telegram</button>
-      <button class="menu-item" type="button" data-admin-tab="ai-media"><span class="menu-icon">🤖</span>AI Studio · Music & Image</button>
-      <button class="menu-item" type="button" data-admin-tab="ai-cover"><span class="menu-icon">🎤</span>AI Cover / RVC</button>
-      <button class="menu-item" type="button" data-admin-tab="multi-agent"><span class="menu-icon">🧠</span>Phòng điều hành Multi-Agent</button>
-      <button class="menu-item" type="button" data-admin-tab="settings"><span class="menu-icon">⚙️</span>Cấu hình chung</button>
-      <button class="menu-item" type="button" data-admin-tab="audit"><span class="menu-icon">🧾</span>Nhật ký quản trị</button>
+    <nav class="sidebar-menu" aria-label="Các khu vực quản trị">
+      <button class="menu-item menu-overview active" type="button" data-admin-tab="overview"><span class="menu-icon">⌂</span>Tổng quan</button>
+      <details class="nav-group" open>
+        <summary class="nav-group-title"><span class="group-mark">01</span>Kinh doanh & khách hàng</summary>
+        <button class="menu-item" type="button" data-admin-tab="users"><span class="menu-icon">👥</span>Thành viên & tài khoản</button>
+        <button class="menu-item" type="button" data-admin-tab="orders"><span class="menu-icon">🧾</span>Đơn hàng</button>
+        <button class="menu-item" type="button" data-admin-tab="payments"><span class="menu-icon">💳</span>Nạp tiền</button>
+        <button class="menu-item" type="button" data-admin-tab="tickets"><span class="menu-icon">🎧</span>Ticket hỗ trợ</button>
+        <button class="menu-item" type="button" data-admin-tab="products"><span class="menu-icon">📦</span>Sản phẩm & dịch vụ</button>
+        <button class="menu-item" type="button" data-admin-tab="vouchers"><span class="menu-icon">🎟️</span>Voucher 72H</button>
+        <button class="menu-item" type="button" data-admin-tab="giftcodes"><span class="menu-icon">🎁</span>Giftcode</button>
+      </details>
+      <details class="nav-group" open>
+        <summary class="nav-group-title"><span class="group-mark">02</span>App Store</summary>
+        <button class="menu-item" type="button" data-admin-tab="store-releases"><span class="menu-icon">🚀</span>Quản lý bản phát hành</button>
+      </details>
+      <details class="nav-group">
+        <summary class="nav-group-title"><span class="group-mark">03</span>Nguồn & nhà cung cấp</summary>
+        <button class="menu-item" type="button" data-admin-tab="service-readiness"><span class="menu-icon">🧭</span>Kiểm tra sẵn sàng</button>
+        <button class="menu-item" type="button" data-admin-tab="provider-registry"><span class="menu-icon">🔌</span>Provider Registry</button>
+      </details>
+      <details class="nav-group">
+        <summary class="nav-group-title"><span class="group-mark">04</span>Vận hành Bot</summary>
+        <button class="menu-item" type="button" data-admin-tab="bot-menus"><span class="menu-icon">🎛️</span>Trình tạo Menu Bot</button>
+        <button class="menu-item" type="button" data-admin-tab="operations"><span class="menu-icon">🛠️</span>Bảo trì & nâng cấp</button>
+        <button class="menu-item" type="button" data-admin-tab="proxy"><span class="menu-icon">🌐</span>Proxy / HomeProxy</button>
+        <button class="menu-item" type="button" data-admin-tab="modules"><span class="menu-icon">🧩</span>Tệp & module</button>
+      </details>
+      <details class="nav-group">
+        <summary class="nav-group-title"><span class="group-mark">05</span>Studio & tự động hóa</summary>
+        <button class="menu-item" type="button" data-admin-tab="code-telegram"><span class="menu-icon">📡</span>Code Telegram</button>
+        <button class="menu-item" type="button" data-admin-tab="video-jobs"><span class="menu-icon">🎬</span>Video Jobs</button>
+        <button class="menu-item" type="button" data-admin-tab="ai-media"><span class="menu-icon">✨</span>AI Studio</button>
+        <button class="menu-item" type="button" data-admin-tab="ai-cover"><span class="menu-icon">🎤</span>AI Cover / RVC</button>
+        <button class="menu-item" type="button" data-admin-tab="multi-agent"><span class="menu-icon">🧠</span>Multi-Agent</button>
+      </details>
+      <details class="nav-group">
+        <summary class="nav-group-title"><span class="group-mark">06</span>Hệ thống & cấu hình</summary>
+        <button class="menu-item" type="button" data-admin-tab="runtime"><span class="menu-icon">🛰️</span>Trạng thái hệ thống</button>
+        <button class="menu-item" type="button" data-admin-tab="source-control"><span class="menu-icon">🧑‍💻</span>Mã nguồn</button>
+        <button class="menu-item" type="button" data-admin-tab="settings"><span class="menu-icon">⚙️</span>Cấu hình chung</button>
+        <button class="menu-item" type="button" data-admin-tab="audit"><span class="menu-icon">📋</span>Nhật ký quản trị</button>
+      </details>
     </nav>
     <div class="sidebar-footer">
       <a href="/">↗ Trang chủ HENDY</a>
@@ -566,8 +676,8 @@
       <div class="top-header-left">
         <button class="menu-toggle" id="menu-button" type="button" aria-label="Mở menu quản trị">☰</button>
         <div>
-          <div class="top-header-title">HENDY COMMERCE WORKSPACE</div>
-          <small class="top-header-subtitle" id="brand-name">STORE · PRODUCT · RELEASE OPERATIONS</small>
+          <div class="top-header-title">HENDY CONTROL CENTER</div>
+          <small class="top-header-subtitle" id="brand-name">ADMIN WORKSPACE · LIVE OPERATIONS</small>
         </div>
       </div>
       <div class="admin-profile" id="profile-chip">
@@ -1791,6 +1901,7 @@
       field('homepage_title','Tên thương hiệu') +
       '<div class="field"><label>Thông báo trang chủ</label><textarea name="announcement">' + escapeHtml(s.announcement || '') + '</textarea></div>' +
       field('website_url','Website chính thức (HTTPS)','url') +
+      field('primary_bot_url','Liên kết Telegram Bot công khai (HTTPS)','url') +
       field('VIETQR_BANK_ID','Mã ngân hàng VietQR') +
       field('VIETQR_ACCOUNT_NO','Số tài khoản nhận tiền') +
       field('VIETQR_ACCOUNT_NAME','Tên chủ tài khoản') +
@@ -1802,7 +1913,7 @@
       '<div class="field"><label>Điểm nhận khi điểm danh VIP mỗi ngày (0–1.000)</label><input name="vip_checkin_points" type="number" min="0" max="1000" step="1" value="' + escapeHtml(s.vip_checkin_points || '1') + '"></div>' +
       '<div class="field"><label>Lời nhắn CSKH</label><textarea name="support_message">' + escapeHtml(s.support_message || '') + '</textarea></div>' +
       '<button class="primary">Lưu cấu hình</button></form>' +
-      '<div class="notice">Website được hiển thị trong lời chào Telegram và trang chủ Website HENDY. URL kết nối ABCVIP phải là cổng OAuth/SSO chính thức của nhà cung cấp và hỗ trợ callback; không nhập mật khẩu hoặc OTP tại đây.</div>' +
+      '<div class="notice">Liên kết Telegram Bot công khai dùng cho nút truy cập và link giới thiệu. Admin có thể đặt URL HTTPS dạng <code>https://t.me/ten_bot</code>; nếu Render có <code>BOT1_PUBLIC_URL</code> hợp lệ thì biến môi trường này được ưu tiên. URL kết nối ABCVIP phải là cổng OAuth/SSO chính thức của nhà cung cấp.</div>' +
       '<div class="notice warn">Các trường còn lại là cấu hình nghiệp vụ không phải secret. BOT1_TOKEN, DATABASE_URL, WEBHOOK_SECRET và API key chỉ thay đổi trong Render Environment, không lưu ở cơ sở dữ liệu ứng dụng.</div>';
   }
 

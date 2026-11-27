@@ -50,23 +50,15 @@ foreach ($bots as $key => $config) {
 
     try {
         $api = new Hendy\TelegramApi($config['token']);
-        $identity = $api->call('getMe', [], 8, 4);
-        if ($key === 'primary') {
-            $username = trim((string) ($identity['username'] ?? ''));
-            if (preg_match('/\\A[A-Za-z0-9_]{5,32}\\z/D', $username) === 1) {
-                $publicUrl = 'https://t.me/' . $username;
-                Hendy\Database::run(
-                    'INSERT INTO app_settings (key, value, is_public) VALUES (?, ?, TRUE) ' .
-                    'ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, is_public = TRUE, updated_at = NOW()',
-                    ['primary_bot_url', $publicUrl]
-                );
-                fwrite(STDOUT, "Telegram getMe(): đã cập nhật public Bot URL https://t.me/{$username}.\n");
-            } else {
-                fwrite(STDERR, "Telegram getMe() không trả về username công khai hợp lệ.\n");
-            }
+        $webhookUrl = $baseUrl . $config['path'];
+        $api->setWebhook($webhookUrl, $config['secret']);
+        $info = $api->call('getWebhookInfo', [], 8, 4);
+        $registeredUrl = rtrim((string) ($info['url'] ?? ''), '/');
+        if (!hash_equals($webhookUrl, $registeredUrl)) {
+            throw new RuntimeException('Telegram chưa xác nhận đúng webhook URL của Bot.');
         }
-        $api->setWebhook($baseUrl . $config['path'], $config['secret']);
-        fwrite(STDOUT, "Đã đăng ký webhook {$config['path']} cho {$config['label']}.\n");
+        $pending = max(0, (int) ($info['pending_update_count'] ?? 0));
+        fwrite(STDOUT, "Đã đăng ký và xác minh webhook {$config['path']} cho {$config['label']}; pending updates={$pending}.\\n");
     } catch (Throwable $error) {
         $message = $error->getMessage();
         if (preg_match('/(?:Telegram API lỗi )?401\b|Unauthorized/i', $message)) {

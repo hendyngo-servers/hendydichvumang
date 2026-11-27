@@ -1363,6 +1363,11 @@
     document.querySelectorAll('.sidebar .menu-item[data-admin-tab]').forEach(item => {
       item.classList.toggle('active', item.dataset.adminTab === state.adminTab);
     });
+    document.querySelectorAll('.sidebar details.nav-group').forEach(group => {
+      const containsActiveTab = Array.from(group.querySelectorAll('.menu-item[data-admin-tab]'))
+        .some(item => item.dataset.adminTab === state.adminTab);
+      if (containsActiveTab) group.open = true;
+    });
     return '';
   }
 

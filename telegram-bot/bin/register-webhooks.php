@@ -58,7 +58,7 @@ foreach ($bots as $key => $config) {
             throw new RuntimeException('Telegram chưa xác nhận đúng webhook URL của Bot.');
         }
         $pending = max(0, (int) ($info['pending_update_count'] ?? 0));
-        fwrite(STDOUT, "Đã đăng ký và xác minh webhook {$config['path']} cho {$config['label']}; pending updates={$pending}.\\n");
+        fwrite(STDOUT, "Đã đăng ký và xác minh webhook {$config['path']} cho {$config['label']}; pending updates={$pending}.\n");
     } catch (Throwable $error) {
         $message = $error->getMessage();
         if (preg_match('/(?:Telegram API lỗi )?401\b|Unauthorized/i', $message)) {

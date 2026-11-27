@@ -25,8 +25,8 @@ Public tabs: Trang chủ, App Store, Dịch vụ mạng, AI Studio, Code Telegra
 ## Telegram Bot
 
 - Exactly one production Bot is supported; only `BOT1_TOKEN` is read.
-- The webhook bootstrap calls Telegram `getMe()`, registers and verifies the webhook at the Bot service's own Render URL, then stores the public Bot username in `app_settings.primary_bot_url`.
-- `BOT1_PUBLIC_URL` is an optional override; referral links otherwise use the auto-detected Bot URL.
+- The webhook bootstrap registers and verifies the webhook at the Bot service's own Render URL. It never calls `getMe()` to overwrite the public Bot URL.
+- Admin manages the public Telegram Bot URL in **Cấu hình chung → Liên kết Telegram Bot công khai** (`app_settings.primary_bot_url`). A valid `BOT1_PUBLIC_URL` in Render Environment takes precedence; remove that variable to manage the URL from Admin.
 - One-time login tickets are short-lived, stored hashed, consumed atomically, and exchanged for a signed HttpOnly website-session cookie.
 - Admin access requires the user's Telegram numeric ID to be in `ADMIN_ID` or `ADMIN_IDS`.
 

@@ -5,12 +5,10 @@ use Hendy\Database;
 use Hendy\Env;
 use Hendy\TelegramApi;
 use Hendy\TelegramAuth;
-use Hendy\TelegramLink;
 
 require dirname(__DIR__) . '/app/Env.php';
 require dirname(__DIR__) . '/app/Database.php';
 require dirname(__DIR__) . '/app/TelegramApi.php';
-require dirname(__DIR__) . '/app/TelegramLink.php';
 require dirname(__DIR__) . '/app/TelegramAuth.php';
 
 Env::load(dirname(__DIR__) . '/.env');
@@ -50,9 +48,6 @@ try {
     $secret = TelegramAuth::webhookSecret('primary');
     $telegram = new TelegramApi($token);
 
-    $me = $telegram->call('getMe', [], 15, 5);
-    $username = trim((string) ($me['username'] ?? ''));
-
     // The same persisted secret is used by the webhook route to authenticate updates.
     // drop_pending_updates=false preserves messages that Telegram has not delivered yet.
     $telegram->setWebhook($webhookUrl, $secret);
@@ -63,20 +58,8 @@ try {
         throw new RuntimeException('Telegram chưa xác nhận đúng webhook URL của Bot.');
     }
 
-    if ($username !== '' && preg_match('/^[A-Za-z0-9_]{5,32}$/', $username)) {
-        $botUrl = TelegramLink::normalize('https://t.me/' . $username);
-        if ($botUrl !== '') {
-            Database::run(
-                'INSERT INTO app_settings (key, value, is_public) VALUES (?, ?, TRUE) ' .
-                'ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, is_public = TRUE, updated_at = NOW()',
-                ['primary_bot_url', $botUrl]
-            );
-        }
-    }
-
     $pending = max(0, (int) ($info['pending_update_count'] ?? 0));
-    $identity = $username !== '' ? '@' . $username : 'Bot chính';
-    fwrite(STDOUT, "Telegram webhook đã đăng ký và xác minh cho {$identity}; pending updates={$pending}.\n");
+    fwrite(STDOUT, "Telegram webhook đã đăng ký và xác minh cho Bot chính; pending updates={$pending}.\n");
 } catch (Throwable $error) {
     error_log('[telegram-webhook-registration] ' . $error::class . ': ' . $error->getMessage());
     fwrite(STDERR, "Không thể đăng ký webhook Telegram. Kiểm tra BOT1_TOKEN, PostgreSQL và URL HTTPS trong Render Environment; xem log để biết chi tiết.\n");

@@ -21,7 +21,7 @@ final class ApiController
     private const MINIGAME_BRANDS = ['QQ88', 'HI88', '78WIN', 'RR88', 'MM88', 'GG88', 'ABCVIP', 'XX8', 'U888', 'J88', 'ABC8', '88CLB', 'AD88', 'SC88', 'C168', 'CM88', 'F8BET'];
     private const ORDER_STATUSES = ['pending', 'processing', 'completed', 'rejected', 'cancelled', 'refunded'];
     private const SETTINGS = [
-        'homepage_title', 'announcement', 'website_url', 'VIETQR_BANK_ID', 'VIETQR_ACCOUNT_NO',
+        'homepage_title', 'announcement', 'website_url', 'primary_bot_url', 'VIETQR_BANK_ID', 'VIETQR_ACCOUNT_NO',
         'VIETQR_ACCOUNT_NAME', 'GROUP_URL', 'CHANNEL_URL', 'ABCVIP_CONNECT_URL',
         'referral_commission_percent', 'support_message', 'vip_checkin_points', 'replay_live_url',
     ];
@@ -2247,16 +2247,32 @@ final class ApiController
         }
 
         if ($method === 'GET' && $path === '/api/admin/settings') {
-            return self::response(['settings' => $this->settings(self::SETTINGS, false)]);
+            $settings = $this->settings(self::SETTINGS, false);
+            $environmentBotUrl = TelegramLink::normalize((string) Env::get('BOT1_PUBLIC_URL', ''));
+            if ($environmentBotUrl !== '') {
+                $settings['primary_bot_url'] = $environmentBotUrl;
+            }
+            return self::response(['settings' => $settings]);
         }
         if ($method === 'PATCH' && $path === '/api/admin/settings') {
             $keys = array_keys($this->body);
             if ($keys === [] || array_diff($keys, self::SETTINGS) !== []) {
                 throw new HttpException(400, 'Có khóa cấu hình không được phép cập nhật. Secret hệ thống chỉ quản lý trong Environment.');
             }
+            if (in_array('primary_bot_url', $keys, true)
+                && TelegramLink::normalize((string) Env::get('BOT1_PUBLIC_URL', '')) !== '') {
+                throw new HttpException(409, 'BOT1_PUBLIC_URL đang được cấu hình trong Render Environment và được ưu tiên. Hãy bỏ biến này khỏi Render để quản lý liên kết Bot trong Admin.');
+            }
             $values = [];
             foreach ($this->body as $key => $value) {
                 $text = $this->text($value, 500);
+                if ($key === 'primary_bot_url') {
+                    $normalizedBotUrl = TelegramLink::normalize($text);
+                    if ($text !== '' && $normalizedBotUrl === '') {
+                        throw new HttpException(400, 'Liên kết Telegram Bot phải là URL HTTPS hợp lệ trên t.me.');
+                    }
+                    $text = $normalizedBotUrl;
+                }
                 if ($key === 'vip_checkin_points') {
                     $points = filter_var($text, FILTER_VALIDATE_INT);
                     if ($points === false || $points < 0 || $points > 1000) {

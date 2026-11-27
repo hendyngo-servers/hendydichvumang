@@ -1,23 +1,23 @@
-# Tich hop website nguon bundles1.zip
+# Tích hợp website nguồn bundles1.zip
 
-## Ket qua
+## Kết quả
 
-Noi dung phu hop tu website Webcard trong bundles1.zip da duoc chuyen thanh trang tinh HENDY tai /dich-vu/. Trang su dung bo nhan dien, mau sac, dieu huong, footer va component dung chung cua website/public/.
+Nội dung phù hợp từ website Webcard trong bundles1.zip đã được chuyển thành trang tĩnh HENDY tại /dich-vu/. Trang sử dụng bộ nhận diện, màu sắc, điều hướng, footer và component dùng chung của website/public/.
 
-Cac nhom dich vu giu theo noi dung nguon: phat trien phan mem theo yeu cau, tu van cong nghe, bao tri phan mem, phat trien ung dung di dong, quan ly du an va ho tro khach hang.
+Các nhóm dịch vụ được giữ theo nội dung nguồn: phát triển phần mềm theo yêu cầu, tư vấn công nghệ, bảo trì phần mềm, phát triển ứng dụng di động, quản lý dự án và hỗ trợ khách hàng.
 
-## Nhung phan khong sao chep nguyen trang
+## Những phần không sao chép nguyên trạng
 
-- Khong dua api.php vao website/public/: ma nay la PHP handler cua Webcard va phu thuoc moi truong PHP/mail server.
-- Khong giu domain icof5p1f.cloudfly.vn, dia chi, so dien thoai, email va ten doanh nghiep mau trong ban public HENDY.
-- Khong giu noi dung testimonials chua duoc xac minh.
-- Khong nhap toan bo bo thu vien Webcard/flag assets du thua; anh trong goi nguon la placeholder, khong phai anh minh hoa su dung duoc.
-- Khong them mot bieu mau HTML gia khong co backend. CTA hien dan den Telegram Bot va nhom ho tro da co trong website.
+- Không đưa api.php vào website/public/: mã này là PHP handler của Webcard và phụ thuộc môi trường PHP/mail server.
+- Không giữ domain icof5p1f.cloudfly.vn, địa chỉ, số điện thoại, email và tên doanh nghiệp mẫu trong bản public HENDY.
+- Không giữ nội dung testimonials chưa được xác minh.
+- Không nhập toàn bộ bộ thư viện Webcard/flag assets dư thừa; ảnh trong gói nguồn là placeholder, không phải ảnh minh họa sử dụng được.
+- Không thêm biểu mẫu HTML giả không có backend. CTA hiện dẫn đến Telegram Bot và nhóm hỗ trợ đã có trong website.
 
-## Kiem tra
+## Kiểm tra
 
-- Trang moi: website/public/dich-vu/index.html
-- CSS rieng: website/public/dich-vu/services.css
-- Trang chu va sitemap co lien ket den /dich-vu/.
-- CI kiem tra su ton tai cua trang, stylesheet va cac chuoi nhan dien cu can loai bo.
-- Toan bo giao dien moi van la static HTML/CSS/JS, khong them PHP hay thong tin bi mat.
+- Trang mới: website/public/dich-vu/index.html
+- CSS riêng: website/public/dich-vu/services.css
+- Trang chủ và sitemap có liên kết đến /dich-vu/.
+- CI kiểm tra sự tồn tại của trang, stylesheet và các chuỗi nhận diện cũ cần loại bỏ.
+- Toàn bộ giao diện mới vẫn là static HTML/CSS/JS, không thêm PHP hay thông tin bí mật.

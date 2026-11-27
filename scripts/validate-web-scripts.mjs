@@ -5,6 +5,7 @@ const files = [
   'website/telegram/admin-dashboard/index.html',
   'website/telegram/admin-dashboard/legacy-login.html',
   'website/public/index.html',
+  'website/public/dich-vu/index.html',
   'website/public/app-store/index.html',
   'website/public/miniapp/index.html',
 ];
@@ -53,6 +54,7 @@ for (const file of externalScripts) {
 }
 const styleFiles = [
   'website/public/assets/site.css',
+  'website/public/dich-vu/services.css',
   'website/public/app-store/style.css',
   'website/public/miniapp/style.css',
 ];

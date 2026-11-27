@@ -16,6 +16,8 @@ The clean hostname `https://hendydichvumang.onrender.com` currently resolves to 
 
 Everything under `website/public/` is public static content: HTML, CSS, JavaScript, SVG, robots, sitemap and legal pages. It does not connect to PostgreSQL, process payments, or contain Bot credentials.
 
+The /dich-vu/ page adapts the service-company content from the supplied bundles1.zip into the HENDY design system. The original Webcard PHP form handler, placeholder Berlin identity/contact details and redundant vendor bundle were not copied to the public site. Project enquiries are routed to the configured Telegram Bot; no public PHP endpoint is required.
+
 The App Store's separated frontend/API/security boundary, versioned API contract, release validation rules and Render deployment constraints are documented in [docs/APP-STORE-REBUILD.md](docs/APP-STORE-REBUILD.md).
 
 Platform-specific binary uploads, private source archives, Admin release procedures and Windows/Android/iOS signing requirements are documented in [docs/APP-STORE-DISTRIBUTION-GUIDE.md](docs/APP-STORE-DISTRIBUTION-GUIDE.md).

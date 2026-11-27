@@ -98,7 +98,7 @@ test('App Store API client rejects malformed or oversized catalog payloads', asy
       ok: true,
       status: 200,
       headers: { get: () => 'application/json' },
-      json: async () => ({ ok: true, releases: Array.from({ length: 251 }, () => ({})) })
+      json: async () => ({ ok: true, releases: Array.from({ length: 501 }, () => ({})) })
     })
   });
   await assert.rejects(() => oversizedApi.listReleases(), /Dữ liệu danh mục App Store không hợp lệ/);
